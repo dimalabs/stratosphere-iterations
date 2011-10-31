@@ -97,6 +97,7 @@
         <module>pact-clients</module>
       	<module>pact-examples</module>
       	<module>pact-tests</module>
+	<module>pact-iter</module>
 
     </modules>
 </project>
