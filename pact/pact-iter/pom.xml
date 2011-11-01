@@ -18,10 +18,22 @@
   <packaging>jar</packaging>
 
   <dependencies>
+  
+  <dependency>
+    	<groupId>eu.stratosphere</groupId>
+    	<artifactId>nephele-common</artifactId>
+    	<version>${version}</version>
+    </dependency>
 
     <dependency>
     	<groupId>eu.stratosphere</groupId>
     	<artifactId>pact-common</artifactId>
+    	<version>${version}</version>
+    </dependency>
+    
+    <dependency>
+    	<groupId>eu.stratosphere</groupId>
+    	<artifactId>pact-compiler</artifactId>
     	<version>${version}</version>
     </dependency>
     
