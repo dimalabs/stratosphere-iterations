@@ -61,6 +61,10 @@ public class ParallelTriangleEntry
 			this.degrees[pos] = degree;
 		}
 		else {
+			System.out.println(id);
+			System.out.println("Array star");
+			Arrays.toString(this.ids);
+			System.out.println("arrad end");
 			throw new IllegalStateException("ID not found!");
 		}
 	}
@@ -139,12 +143,12 @@ public class ParallelTriangleEntry
 			
 			if (thisId == otherId) {
 				this.numTriangles++;
-				out.print(firstId);
-				out.print(',');
-				out.print(secondId);
-				out.print(',');
-				out.print(thisId);
-				out.print('\n');
+//				out.print(firstId);
+//				out.print(',');
+//				out.print(secondId);
+//				out.print(',');
+//				out.print(thisId);
+//				out.print('\n');
 				otherIndex++;
 			}
 			thisIndex++;

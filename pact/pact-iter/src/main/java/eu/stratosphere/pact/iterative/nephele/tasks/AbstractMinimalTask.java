@@ -1,5 +1,7 @@
 package eu.stratosphere.pact.iterative.nephele.tasks;
 
+import java.io.IOException;
+
 import eu.stratosphere.nephele.io.BipartiteDistributionPattern;
 import eu.stratosphere.nephele.io.DistributionPattern;
 import eu.stratosphere.nephele.io.MutableRecordReader;
@@ -76,6 +78,13 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 	protected void initOutputs()
 	{
 		this.output = AbstractPactTask.getOutputCollector(this, this.config, getClass().getClassLoader(), this.config.getNumOutputs());
+	}
+	
+	protected void waitForPreviousTask(MutableObjectIterator<PactRecord> input) throws IOException {
+		PactRecord tmp = new PactRecord();
+		while(input.next(tmp)) {
+			
+		}
 	}
 	
 	/**
