@@ -27,7 +27,12 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 		
 		initInputs();
 		initOutputs();
+		initInternal();
 		initTask();
+	}
+	
+	protected void initInternal() {
+		
 	}
 	
 	protected abstract void initTask();

@@ -86,6 +86,7 @@ public class NepheleUtil {
 			channelType = ChannelType.INMEMORY;
 			break;
 		case PARTITION_HASH:
+		case PARTITION_RANGE:
 		case BROADCAST:
 		case SFR:
 			channelType = ChannelType.NETWORK;

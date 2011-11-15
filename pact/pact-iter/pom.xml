@@ -43,6 +43,11 @@
     	<version>${version}</version>
     	<scope>test</scope>
     </dependency>
+    <dependency>
+    	<groupId>eu.stratosphere</groupId>
+    	<artifactId>pact-clients</artifactId>
+    	<version>${version}</version>
+    </dependency>
   </dependencies>
 
   <reporting>
