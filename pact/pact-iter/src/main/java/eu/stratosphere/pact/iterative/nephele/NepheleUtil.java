@@ -20,7 +20,7 @@ import eu.stratosphere.pact.common.io.FileOutputFormat;
 import eu.stratosphere.pact.common.io.InputFormat;
 import eu.stratosphere.pact.common.io.OutputFormat;
 import eu.stratosphere.pact.common.type.Key;
-import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
+import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
 import eu.stratosphere.pact.runtime.task.DataSinkTask;
 import eu.stratosphere.pact.runtime.task.DataSourceTask;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;

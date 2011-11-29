@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks;
+package eu.stratosphere.pact.iterative.nephele.tasks.core;
 
 import java.io.IOException;
 
@@ -32,7 +32,7 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 	}
 	
 	protected void initInternal() {
-		
+		//Default implementation does nothing
 	}
 	
 	protected abstract void initTask();

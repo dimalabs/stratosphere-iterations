@@ -3,6 +3,7 @@ package eu.stratosphere.pact.iterative.nephele.tasks;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
+import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
 import eu.stratosphere.pact.iterative.nephele.tasks.util.IntegerHashPartitioner;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter;
 

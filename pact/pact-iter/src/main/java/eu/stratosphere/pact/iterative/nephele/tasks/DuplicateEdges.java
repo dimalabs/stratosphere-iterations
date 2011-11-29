@@ -3,6 +3,7 @@ package eu.stratosphere.pact.iterative.nephele.tasks;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
+import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
 
 public class DuplicateEdges extends AbstractMinimalTask {
 

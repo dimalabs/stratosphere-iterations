@@ -1,5 +1,7 @@
 package eu.stratosphere.pact.iterative.nephele.tasks;
 
+import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
+
 public class KtrussFiltering extends AbstractMinimalTask {
 	
 	public static final String KTRUSS_K_VALUE = "ktrusses.k";

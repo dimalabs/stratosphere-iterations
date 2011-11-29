@@ -8,6 +8,7 @@ import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.iterative.ParallelTriangleEntry;
 import eu.stratosphere.pact.iterative.nephele.cache.CacheStore;
+import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
 
 public class CountTriangles extends AbstractMinimalTask {
 
