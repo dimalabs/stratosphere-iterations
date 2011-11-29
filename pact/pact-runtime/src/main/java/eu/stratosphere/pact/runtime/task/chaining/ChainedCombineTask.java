@@ -15,7 +15,6 @@
 
 package eu.stratosphere.pact.runtime.task.chaining;
 
-import java.io.IOException;
 import java.util.Comparator;
 
 import eu.stratosphere.nephele.services.iomanager.IOManager;
@@ -138,6 +137,7 @@ public class ChainedCombineTask implements ChainedTask
 			case COMBININGSORT:
 				this.sorter = new AsynchronousPartialSorterCollector(memoryManager,
 						ioManager, availableMemory, comparators, keyPositions, keyClasses, this.parent);
+				this.inputCollector = this.sorter.getInputCollector();
 				break;
 			default:
 				throw new RuntimeException("Invalid local strategy provided for CombineTask.");
@@ -147,6 +147,9 @@ public class ChainedCombineTask implements ChainedTask
 		
 		this.combinerThread = new CombinerThread(this.sorter, keyPositions, keyClasses, this.combiner, this.outputCollector);
 		this.combinerThread.start();
+		if (this.parent != null) {
+			this.parent.userThreadStarted(this.combinerThread);
+		}
 	}
 	
 	/* (non-Javadoc)
@@ -162,6 +165,12 @@ public class ChainedCombineTask implements ChainedTask
 			}
 			catch (InterruptedException iex) {}
 		}
+		
+		if (this.parent != null && this.combinerThread != null) {
+			this.parent.userThreadFinished(this.combinerThread);
+		}
+		
+		this.sorter.close();
 		
 		if (this.canceled)
 			return;
@@ -252,6 +261,7 @@ public class ChainedCombineTask implements ChainedTask
 			this.keyClasses = keyClasses;
 			this.stub = stub;
 			this.output = output;
+			this.running = true;
 		}
 
 		public void run()
@@ -280,7 +290,7 @@ public class ChainedCombineTask implements ChainedTask
 				}
 			}
 			catch (Throwable t) {
-				ChainedCombineTask.this.exception = new IOException("The combiner thread failed due to an exception.", t);
+				ChainedCombineTask.this.exception = new Exception("The combiner failed due to an exception.", t);
 			}
 		}
 		
