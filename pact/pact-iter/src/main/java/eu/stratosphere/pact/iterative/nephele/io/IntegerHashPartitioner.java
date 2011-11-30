@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.util;
+package eu.stratosphere.pact.iterative.nephele.io;
 
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactInteger;

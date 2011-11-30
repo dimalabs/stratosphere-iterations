@@ -1,21 +1,14 @@
-package eu.stratosphere.pact.iterative.nephele.tasks;
+package eu.stratosphere.pact.iterative.nephele.tasks.triangle;
 
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.IntegerHashPartitioner;
-import eu.stratosphere.pact.runtime.task.util.OutputEmitter;
 
-public class DuplicateEdgesHashPartitioning extends AbstractMinimalTask {
+public class DuplicateEdges extends AbstractMinimalTask {
 
 	@Override
 	public void invoke() throws Exception {
-		//Fix output emitter to use simple hash partitioning
-		OutputEmitter oe = 
-				(OutputEmitter) output.getWriters().get(0).getOutputGate().getChannelSelector();
-		oe.setPartitionFunction(new IntegerHashPartitioner());
-		
 		PactRecord original = new PactRecord();
 		PactRecord swapped = new PactRecord();
 		

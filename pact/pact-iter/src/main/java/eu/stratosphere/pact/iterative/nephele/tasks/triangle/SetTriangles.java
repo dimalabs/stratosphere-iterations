@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks;
+package eu.stratosphere.pact.iterative.nephele.tasks.triangle;
 
 import java.util.concurrent.ConcurrentMap;
 

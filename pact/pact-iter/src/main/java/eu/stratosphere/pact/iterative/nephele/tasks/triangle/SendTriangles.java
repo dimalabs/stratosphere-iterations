@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks;
+package eu.stratosphere.pact.iterative.nephele.tasks.triangle;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -9,9 +9,10 @@ import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.iterative.ParallelTriangleEntry;
 import eu.stratosphere.pact.iterative.nephele.cache.CacheStore;
+import eu.stratosphere.pact.iterative.nephele.io.PactIntArray;
 import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
 
-public class SendDegrees extends AbstractMinimalTask {
+public class SendTriangles extends AbstractMinimalTask {
 
 	public static final String CACHE_ID_PARAM = "iter.cache.cacheid";
 	
@@ -44,22 +45,29 @@ public class SendDegrees extends AbstractMinimalTask {
 				CacheStore.getCachePartition(cacheId, subTaskIndex, Integer.class, ParallelTriangleEntry.class);
 		
 		while (iterator.hasNext()) {
-			final Map.Entry<Integer, ParallelTriangleEntry> entry = iterator.next();
-			final int key = entry.getKey().intValue();
-			final ParallelTriangleEntry tEntry = entry.getValue();
-			final int degree = tEntry.size();
+			final Map.Entry<Integer, ParallelTriangleEntry> kv = iterator.next();
+			final ParallelTriangleEntry entry = kv.getValue();
+			final int key = kv.getKey().intValue();
+			final int degree = entry.size();
 			
+			// notify all that have a larger degree of our neighbors with a lower degree than them
 			for (int i = 0; i < degree; i++) {
-				Integer id = Integer.valueOf(tEntry.getId(i));
+				final int toNotifyId = entry.getId(i);
+				final int toNotifyDegree = entry.getDegree(i);
 				
-				// tell that id about this key's degree
-				ParallelTriangleEntry other = cache.get(id);
-				if(other != null) {
-					other.setDegree(key, degree);
+				// rule out which ones not to notify
+				if (toNotifyDegree < degree || (toNotifyDegree == degree && toNotifyId > key))
+					continue;
+				
+				// tell it all our neighbors with a smaller id than that one itself has
+				final ParallelTriangleEntry toNotify = cache.get(Integer.valueOf(toNotifyId));
+				if(toNotify != null) {
+					toNotify.addTriangles(entry.getAllIds(), i, key, toNotifyId, null);
 				} else {
-					out.setField(0, new PactInteger(id));
-					out.setField(1, new PactInteger(key));
-					out.setField(2, new PactInteger(degree));
+					out.setField(0, new PactInteger(toNotifyId));
+					out.setField(1, new PactInteger(i));
+					out.setField(2, new PactInteger(key));
+					out.setField(3, new PactIntArray(entry.getAllIds()));
 					output.collect(out);
 				}
 			}

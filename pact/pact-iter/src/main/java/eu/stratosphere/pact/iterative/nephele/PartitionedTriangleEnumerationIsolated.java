@@ -21,14 +21,14 @@ import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.iterative.nephele.cache.CacheStore.CacheType;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeInput;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeOutput;
-import eu.stratosphere.pact.iterative.nephele.tasks.AdjacencyListOrdering;
-import eu.stratosphere.pact.iterative.nephele.tasks.CacheBuild;
-import eu.stratosphere.pact.iterative.nephele.tasks.CountTriangles;
-import eu.stratosphere.pact.iterative.nephele.tasks.DuplicateEdgesHashPartitioning;
-import eu.stratosphere.pact.iterative.nephele.tasks.SendDegreesHashPartitioned;
-import eu.stratosphere.pact.iterative.nephele.tasks.SendTrianglesHashPartitioned;
-import eu.stratosphere.pact.iterative.nephele.tasks.SetDegrees;
-import eu.stratosphere.pact.iterative.nephele.tasks.SetTriangles;
+import eu.stratosphere.pact.iterative.nephele.tasks.triangle.AdjacencyListOrdering;
+import eu.stratosphere.pact.iterative.nephele.tasks.triangle.CacheBuild;
+import eu.stratosphere.pact.iterative.nephele.tasks.triangle.CountTriangles;
+import eu.stratosphere.pact.iterative.nephele.tasks.triangle.DuplicateEdgesHashPartitioning;
+import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SendDegreesHashPartitioned;
+import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SendTrianglesHashPartitioned;
+import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SetDegrees;
+import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SetTriangles;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
 public class PartitionedTriangleEnumerationIsolated {
