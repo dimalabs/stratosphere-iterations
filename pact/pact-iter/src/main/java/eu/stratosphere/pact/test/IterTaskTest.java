@@ -27,6 +27,7 @@ import eu.stratosphere.pact.iterative.nephele.tasks.util.IterationIterator;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
 public class IterTaskTest {
+	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
 		final int dop = 2;

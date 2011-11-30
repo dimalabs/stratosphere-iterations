@@ -37,7 +37,7 @@ public class ChannelStateTracker implements EventListener {
 			if(nextState == ChannelState.OPEN && evtState == ChannelState.CLOSED) {
 				waitingStates.add(evtState);
 			} else {
-				//If one channel is switching to a different state then anthor
+				//If one channel is switching to a different state then another
 				//bad behavior it is.
 				throw new RuntimeException("Expected next state is " + nextState + " but channel changed to " + state);
 			}

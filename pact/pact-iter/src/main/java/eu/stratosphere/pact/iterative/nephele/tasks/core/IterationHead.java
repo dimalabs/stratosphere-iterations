@@ -77,6 +77,13 @@ public abstract class IterationHead extends AbstractMinimalTask {
 			}
 		}
 		
+		//Wait until previous iteration run is finished
+		try {
+			channelStateListener.waitForUpate();
+		} catch (InterruptedException ex) {
+			
+		}
+		
 		finished = true;
 		//Close output
 		output.close();

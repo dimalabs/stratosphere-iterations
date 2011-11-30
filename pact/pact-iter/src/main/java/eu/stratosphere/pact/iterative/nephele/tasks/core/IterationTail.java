@@ -32,8 +32,10 @@ public class IterationTail extends AbstractIterativeTask {
 				}
 			} catch (StateChangeException ex) {
 				//Can records be lost here which are not yet read??
-				if(stateListeners[0].getState() == ChannelState.CLOSED) {
-					gate.publishEvent(new ChannelStateEvent(ChannelState.CLOSED));
+				if(stateListeners[0].isChanged()) {
+					if(stateListeners[0].getState() == ChannelState.CLOSED) {
+						gate.publishEvent(new ChannelStateEvent(ChannelState.CLOSED));
+					}
 				}
 			}
 		}
