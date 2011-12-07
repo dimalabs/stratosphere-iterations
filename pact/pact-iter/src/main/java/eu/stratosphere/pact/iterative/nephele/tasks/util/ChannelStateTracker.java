@@ -28,6 +28,10 @@ public class ChannelStateTracker implements EventListener {
 		
 		if(nextState == null) {
 			nextState = evtState;
+			if(nextState == ChannelState.OPEN) {
+				state = nextState;
+				stateChanged = true;
+			}
 			nextStateCount = 1;
 		} else if(nextState == evtState) {
 			nextStateCount++;
@@ -55,10 +59,15 @@ public class ChannelStateTracker implements EventListener {
 				//the list
 				nextStateCount = waitingStates.size();
 				nextState = waitingStates.poll();
+				if(nextState != ChannelStateEvent.ChannelState.CLOSED) {
+					throw new RuntimeException("Impossible ");
+				}
 				waitingStates.clear();				
 			}
 			
-			stateChanged = true;
+			if(state != ChannelState.OPEN) {
+				stateChanged = true;
+			}
 		}
 		
 		throw new StateChangeException();

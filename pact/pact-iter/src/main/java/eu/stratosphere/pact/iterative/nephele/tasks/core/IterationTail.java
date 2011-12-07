@@ -1,32 +1,36 @@
 package eu.stratosphere.pact.iterative.nephele.tasks.core;
 
-import eu.stratosphere.nephele.io.InputGate;
+import java.util.Queue;
+
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.ChannelStateEvent;
+import eu.stratosphere.pact.iterative.nephele.tasks.util.BackTrafficQueueStore;
+import eu.stratosphere.pact.iterative.nephele.tasks.util.ChannelStateEvent.ChannelState;
 import eu.stratosphere.pact.iterative.nephele.tasks.util.IterationIterator;
 import eu.stratosphere.pact.iterative.nephele.tasks.util.StateChangeException;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.ChannelStateEvent.ChannelState;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.PactRecordEvent;
 
 
 public class IterationTail extends AbstractIterativeTask {
 
 	@Override
 	public void invoke() throws Exception {
-		//Read from input and forward backwards as events over the second inputgate (connects
-		//to the iteration start). Events like close are forwarded too (need to think about this).
-		InputGate<?> gate = getEnvironment().getInputGate(1);
+		//For the iteration internal state tracking, events like iteration close are forwarded using
+		//the nephele event mechanisms. The input data for this task should
+		//have the same partitioning as the iteration head.
 		MutableObjectIterator<PactRecord> input = inputs[0];
+		Queue<PactRecord> queue = null;
 		
 		while(true) {
 			try {
 				PactRecord rec = new PactRecord();
 				boolean success = input.next(rec);
 				if(success) {
-					gate.publishEvent(new PactRecordEvent(rec));
+					//Add record to queue for next iteration run
+					queue.add(rec);
 				}
+				
 				//Iterator is exhausted, when channel is closed = FINISHING
+				//TODO: Check that iteration state is closed
 				if(!success) {
 					break;
 				}
@@ -34,13 +38,24 @@ public class IterationTail extends AbstractIterativeTask {
 				//Can records be lost here which are not yet read??
 				if(stateListeners[0].isChanged()) {
 					if(stateListeners[0].getState() == ChannelState.CLOSED) {
-						gate.publishEvent(new ChannelStateEvent(ChannelState.CLOSED));
+						//Feed data into blocking queue, so it unblocks
+						BackTrafficQueueStore.getInstance().sendEnd(
+								getEnvironment().getJobID(),
+								getEnvironment().getIndexInSubtaskGroup());
+						//Signal synchronization task that we are finished 
+						publishState(ChannelState.CLOSED, getEnvironment().getOutputGate(1));
+					} else if(stateListeners[0].getState() == ChannelState.OPEN) {
+						//Get new queue to put items into
+						queue = BackTrafficQueueStore.getInstance().getRecordQueue(
+								getEnvironment().getJobID(),
+								getEnvironment().getIndexInSubtaskGroup());
 					}
 				}
 			}
 		}
 		
-		//Read input from second gate so that nephele is satisfied
+		//Read input from second gate so that nephele does not complain about unread
+		//channels and it can close this and the previous task.
 		inputs[1].next(new PactRecord());
 		
 		output.close();
@@ -58,6 +73,4 @@ public class IterationTail extends AbstractIterativeTask {
 	@Override
 	public void invokeIter(IterationIterator iterationIter) throws Exception {
 	}
-
-
 }

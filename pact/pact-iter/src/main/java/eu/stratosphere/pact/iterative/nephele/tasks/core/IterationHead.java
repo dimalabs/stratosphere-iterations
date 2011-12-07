@@ -1,32 +1,27 @@
 package eu.stratosphere.pact.iterative.nephele.tasks.core;
 
 import java.io.IOException;
-import java.util.LinkedList;
 import java.util.Queue;
 
 import eu.stratosphere.nephele.event.task.AbstractTaskEvent;
 import eu.stratosphere.nephele.event.task.EventListener;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
+import eu.stratosphere.pact.iterative.nephele.tasks.util.BackTrafficQueueStore;
 import eu.stratosphere.pact.iterative.nephele.tasks.util.ChannelStateEvent;
 import eu.stratosphere.pact.iterative.nephele.tasks.util.ChannelStateEvent.ChannelState;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.PactRecordEvent;
 
 public abstract class IterationHead extends AbstractMinimalTask {
 	
-	PactRecordEventListener recordListener;
 	ClosedListener channelStateListener;
-	Thread executionThread;
 	
 	volatile boolean finished = false;
 	
 	@Override
 	protected void initTask() {
-		recordListener = new PactRecordEventListener();
 		channelStateListener = new ClosedListener();
 		
-		getEnvironment().getOutputGate(1).subscribeToEvent(recordListener, PactRecordEvent.class);
-		getEnvironment().getOutputGate(1).subscribeToEvent(channelStateListener, ChannelStateEvent.class);
+		getEnvironment().getOutputGate(2).subscribeToEvent(channelStateListener, ChannelStateEvent.class);
 	}
 
 	@Override
@@ -36,33 +31,47 @@ public abstract class IterationHead extends AbstractMinimalTask {
 
 	@Override
 	public void invoke() throws Exception {
-		//Send iterative open event
+		BackTrafficQueueStore.getInstance().addStructures(
+				getEnvironment().getJobID(), 
+				getEnvironment().getIndexInSubtaskGroup());
+		
+		Thread.sleep(1000);
+		
+		//Start with a first iteration run using the input data
 		AbstractIterativeTask.publishState(ChannelState.OPEN, getEnvironment().getOutputGate(0));
 
-		//Forward input to stub function
+		//Process all input records by passing them to the processInput method (supplied by the user)
 		MutableObjectIterator<PactRecord> input = inputs[0];
 		processInput(input);
 		
-		//Send iterative close event
+		//Send iterative close event to indicate that this round is finished
 		AbstractIterativeTask.publishState(ChannelState.CLOSED, getEnvironment().getOutputGate(0));
 		
 		//Loop until iteration terminates
-		executionThread = Thread.currentThread();
 		int iterationCounter = 0;
-		
 		while(iterationCounter < 5) {
-			//Wait until previous iteration run is finished
+			//Wait until previous iteration run is finished for this subtask
 			try {
-				channelStateListener.waitForUpate();
-			} catch (InterruptedException ex) {
-				
+				BackTrafficQueueStore.getInstance().waitForIterationEnd(
+						getEnvironment().getJobID(), 
+						getEnvironment().getIndexInSubtaskGroup());
+			} catch (InterruptedException ex) {	
+				throw new RuntimeException("Internal Error");
 			}
 			
-			if(channelStateListener.isUpdated()) {
+			//Wait until all other parallel subtasks have terminated
+			try {
+				channelStateListener.waitForClose();
+			} catch (InterruptedException ex) {
+				throw new RuntimeException("Internal Error");
+			}
+			
+			
+			if(channelStateListener.isUpdated()) {			
 				//Retrieve buffered updates
-				Queue<PactRecord> queue = recordListener.getQueue();
-				//Create new queue for further updates
-				recordListener.useNewQueue();
+				Queue<PactRecord> queue = BackTrafficQueueStore.getInstance().retrieveAndReplaceRecordQueue(
+						getEnvironment().getJobID(), 
+						getEnvironment().getIndexInSubtaskGroup());
 				
 				//Start new iteration run
 				AbstractIterativeTask.publishState(ChannelState.OPEN, getEnvironment().getOutputGate(0));
@@ -71,15 +80,16 @@ public abstract class IterationHead extends AbstractMinimalTask {
 				processUpdates(new QueueIterator(queue));
 				
 				AbstractIterativeTask.publishState(ChannelState.CLOSED, getEnvironment().getOutputGate(0));
+				
 				iterationCounter++;
 			} else {
-				throw new RuntimeException("Should never happen!");
+				throw new RuntimeException("isUpdated() returned false even thoug waitForUpate() exited");
 			}
 		}
 		
-		//Wait until previous iteration run is finished
+		//Wait until last iteration run is finished
 		try {
-			channelStateListener.waitForUpate();
+			channelStateListener.waitForClose();
 		} catch (InterruptedException ex) {
 			
 		}
@@ -92,25 +102,6 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	public abstract void processInput(MutableObjectIterator<PactRecord> iter) throws Exception;
 	
 	public abstract void processUpdates(MutableObjectIterator<PactRecord> iter) throws Exception;
-
-	private static class PactRecordEventListener implements EventListener {
-		Queue<PactRecord> queue = new LinkedList<PactRecord>();
-		
-		@Override
-		public void eventOccurred(AbstractTaskEvent event) {
-			PactRecordEvent evt = (PactRecordEvent) event;
-			queue.add(evt.getRecord());
-		}
-
-		public void useNewQueue() {
-			queue = new LinkedList<PactRecord>();
-		}
-
-		public Queue<PactRecord> getQueue() {
-			return queue;
-		}
-		
-	}
 	
 	private static class QueueIterator implements MutableObjectIterator<PactRecord> {
 		Queue<PactRecord> queue;
@@ -133,6 +124,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	
 	private class ClosedListener implements EventListener {
 		volatile Object object = new Object();
+		volatile ChannelState state;
 		volatile boolean updated = false;
 		
 		@Override
@@ -140,12 +132,16 @@ public abstract class IterationHead extends AbstractMinimalTask {
 			if(!finished) {
 				synchronized(object) {
 					updated = true;
+					state = ((ChannelStateEvent) event).getState();
+					if(state != ChannelState.CLOSED) {
+						throw new RuntimeException("Impossible");
+					}
 					object.notifyAll();
 				}
 			}
 		}
 		
-		public void waitForUpate() throws InterruptedException {
+		public void waitForClose() throws InterruptedException {
 			synchronized (object) {
 				while(!updated) {
 					object.wait();

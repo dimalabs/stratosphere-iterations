@@ -11,12 +11,6 @@ public class EdgeInput extends DelimitedInputFormat {
 		String[] ids = new String(bytes).split(",");
 		target.setField(0, new PactInteger(Integer.parseInt(ids[0])));
 		target.setField(1, new PactInteger(Integer.parseInt(ids[1])));
-		try {
-			Thread.sleep(10000);
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
 		return true;
 	}
 
