@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.util;
+package eu.stratosphere.pact.iterative.nephele.util;
 
 @SuppressWarnings("serial")
 public class StateChangeException extends RuntimeException {

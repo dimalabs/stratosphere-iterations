@@ -1,11 +1,12 @@
 package eu.stratosphere.pact.programs;
 
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.connectJobVertices;
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.createInput;
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.createOutput;
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.createTask;
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.getConfiguration;
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.submit;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectJobVertices;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createDummyOutput;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createInput;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createOutput;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createTask;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.getConfiguration;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.submit;
 
 import java.io.IOException;
 
@@ -20,11 +21,9 @@ import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeInput;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeOutput;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractIterativeTask;
 import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationStateSynchronizer;
 import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationTail;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.IterationIterator;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
 public class SimpleIterTaskTest {
@@ -54,45 +53,26 @@ public class SimpleIterTaskTest {
 				new int[] {0}, new Class[] {PactInteger.class});
 		connectJobVertices(ShipStrategy.PARTITION_HASH, iterationStart, iterationEnd, 
 				new int[] {0}, new Class[] {PactInteger.class});
-		connectJobVertices(ShipStrategy.FORWARD, iterationEnd, sinkVertex, null, null);
+		connectJobVertices(ShipStrategy.FORWARD, iterationStart, sinkVertex, null, null);
 		
 		//Iteration specific (make sure that iterationStart and iterationEnd share the same 
 		//instance and subtask id structure. The synchronizer is required, so that a new
 		//iteration does not start before all other subtasks are finished.
+		JobOutputVertex dummySinkA = createDummyOutput(graph, dop);
+		dummySinkA.setVertexToShareInstancesWith(sourceVertex);
+		connectJobVertices(ShipStrategy.FORWARD, iterationEnd, dummySinkA, null, null);
 		JobTaskVertex iterationStateSynchronizer = createTask(IterationStateSynchronizer.class, graph, dop);
 		iterationStateSynchronizer.setVertexToShareInstancesWith(sourceVertex);
 		iterationStateSynchronizer.setNumberOfSubtasks(1);
 		connectJobVertices(ShipStrategy.FORWARD, iterationStart, iterationEnd, null, null);
 		connectJobVertices(ShipStrategy.BROADCAST, iterationEnd, iterationStateSynchronizer, null, null);
 		connectJobVertices(ShipStrategy.BROADCAST, iterationStart, iterationStateSynchronizer, null, null);
-		JobOutputVertex dummySink = createOutput(EdgeOutput.class, output, graph, dop);
-		dummySink.setVertexToShareInstancesWith(iterationStateSynchronizer);
-		dummySink.setNumberOfSubtasks(1);
-		connectJobVertices(ShipStrategy.FORWARD, iterationStateSynchronizer, dummySink, null, null);
+		JobOutputVertex dummySinkB = createDummyOutput(graph, dop);
+		dummySinkB.setVertexToShareInstancesWith(sourceVertex);
+		connectJobVertices(ShipStrategy.FORWARD, iterationStateSynchronizer, dummySinkB, null, null);
 		
 		//Submit job
 		submit(graph, getConfiguration());
-	}
-	
-	public static class DummyIterationStep extends AbstractIterativeTask {
-		@Override
-		protected void initTask() {
-			
-		}
-
-		@Override
-		public int getNumberOfInputs() {
-			return 1;
-		}
-
-		@Override
-		public void invokeIter(IterationIterator iter)
-				throws Exception {
-			PactRecord rec = new PactRecord();
-			while(iter.next(rec)) {
-				output.collect(rec);
-			}
-		}
 	}
 	
 	public static class DummyIterationHead extends IterationHead {
@@ -116,6 +96,14 @@ public class SimpleIterTaskTest {
 			while(iter.next(rec)) {
 				output.getWriters().get(0).emit(rec);
 			}
+		}
+
+		@Override
+		public void finish() throws Exception {
+			PactRecord rec = new PactRecord();
+			rec.setField(0, new PactInteger(0));
+			rec.setField(1, new PactInteger(1));
+			output.getWriters().get(1).emit(rec);
 		}
 		
 	}

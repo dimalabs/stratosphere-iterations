@@ -1,10 +1,10 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.util;
+package eu.stratosphere.pact.iterative.nephele.util;
 
 import java.io.IOException;
 
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.ChannelStateEvent.ChannelState;
+import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 
 public class IterationIterator implements MutableObjectIterator<PactRecord> {
 	private MutableObjectIterator<PactRecord> iter;

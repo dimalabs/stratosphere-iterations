@@ -1,11 +1,11 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.util;
+package eu.stratosphere.pact.iterative.nephele.util;
 
 import java.util.LinkedList;
 import java.util.Queue;
 
 import eu.stratosphere.nephele.event.task.AbstractTaskEvent;
 import eu.stratosphere.nephele.event.task.EventListener;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.ChannelStateEvent.ChannelState;
+import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 
 public class ChannelStateTracker implements EventListener {
 	private volatile ChannelState state = ChannelState.STARTED;

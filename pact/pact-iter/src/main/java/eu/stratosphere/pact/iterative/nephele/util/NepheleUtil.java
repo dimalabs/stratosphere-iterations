@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele;
+package eu.stratosphere.pact.iterative.nephele.util;
 
 import java.io.IOException;
 
@@ -6,6 +6,8 @@ import eu.stratosphere.nephele.client.JobClient;
 import eu.stratosphere.nephele.client.JobExecutionException;
 import eu.stratosphere.nephele.configuration.Configuration;
 import eu.stratosphere.nephele.configuration.GlobalConfiguration;
+import eu.stratosphere.nephele.io.MutableRecordReader;
+import eu.stratosphere.nephele.io.PointwiseDistributionPattern;
 import eu.stratosphere.nephele.io.channels.ChannelType;
 import eu.stratosphere.nephele.io.compression.CompressionLevel;
 import eu.stratosphere.nephele.jobgraph.AbstractJobVertex;
@@ -14,16 +16,19 @@ import eu.stratosphere.nephele.jobgraph.JobGraphDefinitionException;
 import eu.stratosphere.nephele.jobgraph.JobInputVertex;
 import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
+import eu.stratosphere.nephele.template.AbstractOutputTask;
 import eu.stratosphere.nephele.template.InputSplit;
 import eu.stratosphere.pact.common.io.FileInputFormat;
 import eu.stratosphere.pact.common.io.FileOutputFormat;
 import eu.stratosphere.pact.common.io.InputFormat;
 import eu.stratosphere.pact.common.io.OutputFormat;
 import eu.stratosphere.pact.common.type.Key;
+import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
 import eu.stratosphere.pact.runtime.task.DataSinkTask;
 import eu.stratosphere.pact.runtime.task.DataSourceTask;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
+import eu.stratosphere.pact.runtime.task.util.NepheleReaderIterator;
 import eu.stratosphere.pact.runtime.task.util.TaskConfig;
 import eu.stratosphere.pact.runtime.task.util.TaskConfig.LocalStrategy;
 
@@ -64,6 +69,15 @@ public class NepheleUtil {
 		sinkConfig.setStubClass(format);
 		sinkConfig.setLocalStrategy(LocalStrategy.NONE);
 		sinkConfig.setStubParameter(FileOutputFormat.FILE_PARAMETER_KEY, path);
+		
+		return sinkVertex;
+	}
+	
+	public static JobOutputVertex createDummyOutput(JobGraph graph, int dop) {
+		JobOutputVertex sinkVertex = new JobOutputVertex("Dummy output task", graph);
+		sinkVertex.setOutputClass(DummyNullOutput.class);
+		sinkVertex.setNumberOfSubtasks(dop);
+		sinkVertex.getConfiguration().setInteger(DataSinkTask.DEGREE_OF_PARALLELISM_KEY, dop);
 		
 		return sinkVertex;
 	}
@@ -130,5 +144,25 @@ public class NepheleUtil {
 	public static void submit(JobGraph graph, Configuration nepheleConfig) throws IOException, JobExecutionException {
 		JobClient client = new JobClient(graph, nepheleConfig);
 		client.submitJobAndWait();
+	}
+	
+	public static class DummyNullOutput extends AbstractOutputTask {
+
+		private NepheleReaderIterator input;
+
+		@Override
+		public void registerInputOutput() {
+			this.input = new NepheleReaderIterator(new MutableRecordReader<PactRecord>(this, 
+					new PointwiseDistributionPattern()));
+		}
+
+		@Override
+		public void invoke() throws Exception {
+			PactRecord rec = new PactRecord();
+			while(input.next(rec)) {
+				throw new RuntimeException("This task should not receive records");
+			}
+		}
+		
 	}
 }

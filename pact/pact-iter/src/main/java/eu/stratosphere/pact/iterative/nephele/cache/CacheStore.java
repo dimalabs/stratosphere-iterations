@@ -62,6 +62,7 @@ public class CacheStore {
 		}
 	}
 	
+	@SuppressWarnings("unchecked")
 	public static <K, V> Iterator<Entry<K, V>> getCachePartition(String cacheId, int subTaskId,
 			Class<K> keyClass, Class<V> valueClass) {
 		CacheType cacheType = cacheTypes.get(cacheId);
@@ -80,6 +81,7 @@ public class CacheStore {
 		}
 	}
 	
+	@SuppressWarnings("unchecked")
 	public static <K, V> ConcurrentMap<K, V> getLookupCache(String cacheId, int subTaskId,
 			Class<K> keyClass, Class<V> valueClass) {
 		CacheType cacheType = cacheTypes.get(cacheId);

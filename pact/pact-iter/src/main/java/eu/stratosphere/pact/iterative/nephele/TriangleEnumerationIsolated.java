@@ -23,7 +23,7 @@ import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SetDegrees;
 import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SetTriangles;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.*;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.*;
 
 public class TriangleEnumerationIsolated {
 	@SuppressWarnings("unchecked")

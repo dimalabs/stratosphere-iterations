@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.util;
+package eu.stratosphere.pact.iterative.nephele.util;
 
 import java.io.DataInput;
 import java.io.DataOutput;

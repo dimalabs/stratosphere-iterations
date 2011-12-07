@@ -753,10 +753,8 @@ public class AccessibleConcurrentHashMap<K, V> extends AbstractMap<K, V>
 
         // Try a few times without locking
         for (int k = 0; k < RETRIES_BEFORE_LOCK; ++k) {
-            int sum = 0;
             int mcsum = 0;
             for (int i = 0; i < segments.length; ++i) {
-                int c = segments[i].count;
                 mcsum += mc[i] = segments[i].modCount;
                 if (segments[i].containsValue(value))
                     return true;
@@ -764,7 +762,6 @@ public class AccessibleConcurrentHashMap<K, V> extends AbstractMap<K, V>
             boolean cleanSweep = true;
             if (mcsum != 0) {
                 for (int i = 0; i < segments.length; ++i) {
-                    int c = segments[i].count;
                     if (mc[i] != segments[i].modCount) {
                         cleanSweep = false;
                         break;
@@ -1078,7 +1075,8 @@ public class AccessibleConcurrentHashMap<K, V> extends AbstractMap<K, V>
      * Custom Entry class used by EntryIterator.next(), that relays
      * setValue changes to the underlying map.
      */
-    final class WriteThroughEntry
+    @SuppressWarnings("serial")
+	final class WriteThroughEntry
 	extends AbstractMap.SimpleEntry<K,V>
     {
         WriteThroughEntry(K k, V v) {
@@ -1208,7 +1206,8 @@ public class AccessibleConcurrentHashMap<K, V> extends AbstractMap<K, V>
      * stream (i.e., deserialize it).
      * @param s the stream
      */
-    private void readObject(java.io.ObjectInputStream s)
+    @SuppressWarnings("unchecked")
+	private void readObject(java.io.ObjectInputStream s)
         throws IOException, ClassNotFoundException  {
         s.defaultReadObject();
 

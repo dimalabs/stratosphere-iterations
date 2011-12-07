@@ -47,7 +47,6 @@ public class PageRankIteration extends IterationHead {
 	@Override
 	public void processUpdates(MutableObjectIterator<PactRecord> iter)
 			throws Exception {
-		ranks = null;
 		HashMap<String, Double> sumMap = new HashMap<String, Double>();
 		
 		PactRecord rec = new PactRecord();
@@ -64,7 +63,7 @@ public class PageRankIteration extends IterationHead {
 		
 		for (String page : sumMap.keySet()) {
 			double normalizedRank = 0.15 / NUM_VERTICES + 0.85 * sumMap.get(page);
-			sumMap.put(page, normalizedRank);
+			ranks.put(page, normalizedRank);
 		}
 		
 		for (String page : adjList.keySet()) {
@@ -72,7 +71,7 @@ public class PageRankIteration extends IterationHead {
 				continue;
 			}
 			
-			double rank = sumMap.get(page);
+			double rank = ranks.get(page);
 			Set<String> outgoing = adjList.get(page);
 			
 			PactDouble prank = new PactDouble(rank / outgoing.size());
@@ -81,6 +80,19 @@ public class PageRankIteration extends IterationHead {
 				rec.setField(1, prank);
 				output.getWriters().get(0).emit(rec);
 			}
+		}
+	}
+
+	@Override
+	public void finish() throws Exception {
+		PactRecord rec = new PactRecord();
+		
+		for (String page : adjList.keySet()) {
+			double rank = ranks.get(page);
+			
+			rec.setField(0, new PactString(page));
+			rec.setField(1, new PactDouble(rank));
+			output.getWriters().get(1).emit(rec);
 		}
 	}
 

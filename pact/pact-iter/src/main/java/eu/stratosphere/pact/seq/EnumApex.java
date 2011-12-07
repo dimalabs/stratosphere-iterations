@@ -43,7 +43,7 @@ import eu.stratosphere.pact.common.stubs.ReduceStub;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactLong;
 import eu.stratosphere.pact.compiler.CompilerException;
-import eu.stratosphere.pact.iterative.nephele.NepheleUtil;
+import eu.stratosphere.pact.iterative.nephele.util.NepheleUtil;
 
 /**
  * Implementation of the triangle enumeration example Pact program.
@@ -287,10 +287,12 @@ public class EnumApex implements PlanAssembler, PlanAssemblerDescription {
 		MatchContract buildTriads = new MatchContract(BuildTriads.class, PactLong.class, 0, 0, "Build Triads");
 		buildTriads.setDegreeOfParallelism(noSubTasks);
 
+		@SuppressWarnings("unchecked")
 		MatchContract closeTriads = new MatchContract(CloseTriadsBuildApex.class, new Class[] {PactLong.class, PactLong.class}, 
 				new int[] {1, 2}, new int[] {1, 2}, "Building Triangles and Apexes");
 		closeTriads.setDegreeOfParallelism(noSubTasks);
 		
+		@SuppressWarnings("unchecked")
 		ReduceContract neighbour = new ReduceContract(TriadNeighbours.class, new Class[] {PactLong.class, PactLong.class}, 
 				new int[] {0, 1}, "Build triad neighbours");
 		assignKeys.setDegreeOfParallelism(noSubTasks);

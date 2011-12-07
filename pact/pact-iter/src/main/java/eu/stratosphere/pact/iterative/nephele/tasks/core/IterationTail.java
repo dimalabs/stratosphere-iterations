@@ -4,10 +4,10 @@ import java.util.Queue;
 
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.BackTrafficQueueStore;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.ChannelStateEvent.ChannelState;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.IterationIterator;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.StateChangeException;
+import eu.stratosphere.pact.iterative.nephele.util.BackTrafficQueueStore;
+import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
+import eu.stratosphere.pact.iterative.nephele.util.StateChangeException;
+import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 
 
 public class IterationTail extends AbstractIterativeTask {

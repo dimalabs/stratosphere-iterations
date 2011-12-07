@@ -5,11 +5,11 @@ import eu.stratosphere.nephele.io.InputGate;
 import eu.stratosphere.nephele.io.OutputGate;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.ChannelStateTracker;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.ChannelStateEvent;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.IterationIterator;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.ChannelStateEvent.ChannelState;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.StateChangeException;
+import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent;
+import eu.stratosphere.pact.iterative.nephele.util.ChannelStateTracker;
+import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
+import eu.stratosphere.pact.iterative.nephele.util.StateChangeException;
+import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 
 public abstract class AbstractIterativeTask extends AbstractMinimalTask {
 	

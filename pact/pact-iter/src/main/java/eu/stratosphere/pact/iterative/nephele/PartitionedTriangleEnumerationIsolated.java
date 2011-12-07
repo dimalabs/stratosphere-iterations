@@ -1,12 +1,12 @@
 package eu.stratosphere.pact.iterative.nephele;
 
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.connectJobVertices;
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.createInput;
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.createOutput;
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.createTask;
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.getConfiguration;
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.setProperty;
-import static eu.stratosphere.pact.iterative.nephele.NepheleUtil.submit;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectJobVertices;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createInput;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createOutput;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createTask;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.getConfiguration;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.setProperty;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.submit;
 
 import java.io.IOException;
 

@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.util;
+package eu.stratosphere.pact.iterative.nephele.util;
 
 import java.util.ArrayDeque;
 import java.util.HashMap;
@@ -8,7 +8,7 @@ import java.util.concurrent.BlockingQueue;
 
 import eu.stratosphere.nephele.jobgraph.JobID;
 import eu.stratosphere.pact.common.type.PactRecord;
-import eu.stratosphere.pact.iterative.nephele.tasks.util.ChannelStateEvent.ChannelState;
+import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 
 public class BackTrafficQueueStore {
 
