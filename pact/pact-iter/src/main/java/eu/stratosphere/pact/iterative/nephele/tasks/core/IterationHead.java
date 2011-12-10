@@ -74,7 +74,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 						getEnvironment().getIndexInSubtaskGroup());
 				
 				//Check termination criterion
-				if(iterationCounter == 5) {
+				if(iterationCounter == 9) {
 					break;
 				} else {
 					//Start new iteration run

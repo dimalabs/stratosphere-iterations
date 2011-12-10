@@ -11,7 +11,7 @@ import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationHead;
 
 public class PageRankIteration extends IterationHead {
 
-	private static final int NUM_VERTICES = 92260;
+	private static final int NUM_VERTICES = 14052;
 	
 	private HashMap<String, Set<String>> adjList;
 	private HashMap<String, Double> ranks;
