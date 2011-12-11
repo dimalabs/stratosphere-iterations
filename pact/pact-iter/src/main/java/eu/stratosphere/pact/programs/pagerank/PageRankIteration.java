@@ -35,7 +35,7 @@ public class PageRankIteration extends IterationHead {
 		for (String page : adjList.keySet()) {
 			Set<String> outgoing = adjList.get(page);
 			
-			PactDouble prank = new PactDouble(ranks.get(page));
+			PactDouble prank = new PactDouble(ranks.get(page) / outgoing.size());
 			for (String neighbour : outgoing) {
 				rec.setField(0, new PactString(neighbour));
 				rec.setField(1, prank);
@@ -67,9 +67,9 @@ public class PageRankIteration extends IterationHead {
 		}
 		
 		for (String page : adjList.keySet()) {
-			if(!sumMap.containsKey(page)) {
-				continue;
-			}
+			//if(!sumMap.containsKey(page)) {
+			//	continue;
+			//}
 			
 			double rank = ranks.get(page);
 			Set<String> outgoing = adjList.get(page);
