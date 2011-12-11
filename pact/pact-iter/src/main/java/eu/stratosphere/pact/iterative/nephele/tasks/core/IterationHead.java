@@ -34,8 +34,10 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		BackTrafficQueueStore.getInstance().addStructures(
 				getEnvironment().getJobID(), 
 				getEnvironment().getIndexInSubtaskGroup());
-		
-		Thread.sleep(1000);
+		BackTrafficQueueStore.getInstance().publishUpdateQueue(
+				getEnvironment().getJobID(), 
+				getEnvironment().getIndexInSubtaskGroup(),
+				100);
 		
 		//Start with a first iteration run using the input data
 		AbstractIterativeTask.publishState(ChannelState.OPEN, getEnvironment().getOutputGate(0));
@@ -50,9 +52,11 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		//Loop until iteration terminates
 		int iterationCounter = 0;
 		while(true) {
+			Queue<PactRecord> updateQueue = null;
 			//Wait until previous iteration run is finished for this subtask
+			//and retrieve buffered updates
 			try {
-				BackTrafficQueueStore.getInstance().waitForIterationEnd(
+				updateQueue = BackTrafficQueueStore.getInstance().receiveIterationEnd(
 						getEnvironment().getJobID(), 
 						getEnvironment().getIndexInSubtaskGroup());
 			} catch (InterruptedException ex) {	
@@ -68,23 +72,24 @@ public abstract class IterationHead extends AbstractMinimalTask {
 			
 			
 			if(channelStateListener.isUpdated()) {
-				//Retrieve buffered updates
-				Queue<PactRecord> queue = BackTrafficQueueStore.getInstance().retrieveAndReplaceRecordQueue(
+				BackTrafficQueueStore.getInstance().publishUpdateQueue(
 						getEnvironment().getJobID(), 
-						getEnvironment().getIndexInSubtaskGroup());
+						getEnvironment().getIndexInSubtaskGroup(),
+						updateQueue.size()>0?updateQueue.size():100);
 				
 				//Check termination criterion
-				if(iterationCounter == 9) {
+				if(iterationCounter == 10) {
 					break;
 				} else {
 					//Start new iteration run
 					AbstractIterativeTask.publishState(ChannelState.OPEN, getEnvironment().getOutputGate(0));
 					
 					//Call stub function to process updates
-					processUpdates(new QueueIterator(queue));
+					processUpdates(new QueueIterator(updateQueue));
 					
 					AbstractIterativeTask.publishState(ChannelState.CLOSED, getEnvironment().getOutputGate(0));
 					
+					updateQueue = null;
 					iterationCounter++;
 				}				
 			} else {

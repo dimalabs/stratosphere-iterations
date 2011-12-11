@@ -8,14 +8,12 @@ import java.util.concurrent.BlockingQueue;
 
 import eu.stratosphere.nephele.jobgraph.JobID;
 import eu.stratosphere.pact.common.type.PactRecord;
-import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 
 public class BackTrafficQueueStore {
-
-	private volatile HashMap<String, Queue<PactRecord>> queueMap =
-			new HashMap<String, Queue<PactRecord>>();
-	private volatile HashMap<String, BlockingQueue<ChannelState>> blockingMap =
-			new HashMap<String, BlockingQueue<ChannelState>>();
+	private volatile HashMap<String, BlockingQueue<Queue<PactRecord>>> iterOpenMap =
+			new HashMap<String, BlockingQueue<Queue<PactRecord>>>();
+	private volatile HashMap<String, BlockingQueue<Queue<PactRecord>>> iterEndMap =
+			new HashMap<String, BlockingQueue<Queue<PactRecord>>>();
 	
 	private static BackTrafficQueueStore store = new BackTrafficQueueStore();
 	
@@ -23,54 +21,68 @@ public class BackTrafficQueueStore {
 		return store;
 	}
 
-	public synchronized void addStructures(JobID jobID, int subTaskId) {
-		if(queueMap.containsKey(getIdentifier(jobID, subTaskId))) {
-			throw new RuntimeException("Internal Error");
+	public void addStructures(JobID jobID, int subTaskId) {
+		synchronized(iterOpenMap) {
+			synchronized(iterEndMap) {
+				if(iterOpenMap.containsKey(getIdentifier(jobID, subTaskId))) {
+					throw new RuntimeException("Internal Error");
+				}
+				
+				BlockingQueue<Queue<PactRecord>> openQueue = 
+						new ArrayBlockingQueue<Queue<PactRecord>>(1);
+				BlockingQueue<Queue<PactRecord>> endQueue = 
+						new ArrayBlockingQueue<Queue<PactRecord>>(1);
+				
+				iterOpenMap.put(getIdentifier(jobID, subTaskId), openQueue);
+				iterEndMap.put(getIdentifier(jobID, subTaskId), endQueue);
+			}
 		}
-		
-		BlockingQueue<ChannelState> blockingQueue = new ArrayBlockingQueue<ChannelState>(1);
-		Queue<PactRecord> queue = new ArrayDeque<PactRecord>(100);
-		
-		queueMap.put(getIdentifier(jobID, subTaskId), queue);
-		blockingMap.put(getIdentifier(jobID, subTaskId), blockingQueue);
 	}
 	
-	public synchronized Queue<PactRecord> retrieveAndReplaceRecordQueue(JobID jobID, int subTaskId) {
-		Queue<PactRecord> queue = queueMap.get(getIdentifier(jobID, subTaskId));
+	public void publishUpdateQueue(JobID jobID, int subTaskId, int initialSize) {
+		BlockingQueue<Queue<PactRecord>> queue = 
+				 safeRetrieval(iterOpenMap, getIdentifier(jobID, subTaskId));
 		if(queue == null) {
 			throw new RuntimeException("Internal Error");
 		}
 		
-		//Use new queue for next run, so that records don't mix
-		queueMap.put(getIdentifier(jobID, subTaskId), new ArrayDeque<PactRecord>(queue.size()+1));
-		return queue;
+		queue.add(new ArrayDeque<PactRecord>(initialSize));
 	}
 	
-	public synchronized Queue<PactRecord> getRecordQueue(JobID jobID, int subTaskId) {
-		Queue<PactRecord> queue = queueMap.get(getIdentifier(jobID, subTaskId));
+	public synchronized Queue<PactRecord> receiveUpdateQueue(JobID jobID, int subTaskId) throws InterruptedException {
+		BlockingQueue<Queue<PactRecord>> queue = 
+				 safeRetrieval(iterOpenMap, getIdentifier(jobID, subTaskId));
 		if(queue == null) {
 			throw new RuntimeException("Internal Error");
 		}
 		
-		return queue;
+		return queue.take();
 	}
 	
-	public void waitForIterationEnd(JobID jobID, int subTaskId) throws InterruptedException {
-		BlockingQueue<ChannelState> queue = blockingMap.get(getIdentifier(jobID, subTaskId));
+	public void publishIterationEnd(JobID jobID, int subTaskId, Queue<PactRecord> outputQueue) {
+		BlockingQueue<Queue<PactRecord>> queue = 
+				 safeRetrieval(iterEndMap, getIdentifier(jobID, subTaskId));
 		if(queue == null) {
 			throw new RuntimeException("Internal Error");
 		}
 		
-		queue.take();
+		queue.add(outputQueue);
 	}
 	
-	public void sendEnd(JobID jobID, int subTaskId) {
-		BlockingQueue<ChannelState> queue = blockingMap.get(getIdentifier(jobID, subTaskId));
+	public Queue<PactRecord> receiveIterationEnd(JobID jobID, int subTaskId) throws InterruptedException {
+		BlockingQueue<Queue<PactRecord>> queue = 
+				 safeRetrieval(iterEndMap, getIdentifier(jobID, subTaskId));
 		if(queue == null) {
 			throw new RuntimeException("Internal Error");
 		}
 		
-		queue.add(ChannelState.CLOSED);
+		return queue.take();
+	}
+	
+	private <K,V> V safeRetrieval(HashMap<K, V> map, K key) {
+		synchronized(map) {
+			return map.get(key);
+		}
 	}
 	
 	private String getIdentifier(JobID jobID, int subTaskId) {

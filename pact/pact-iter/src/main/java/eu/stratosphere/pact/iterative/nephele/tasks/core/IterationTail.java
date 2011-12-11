@@ -39,14 +39,18 @@ public class IterationTail extends AbstractIterativeTask {
 				if(stateListeners[0].isChanged()) {
 					if(stateListeners[0].getState() == ChannelState.CLOSED) {
 						//Feed data into blocking queue, so it unblocks
-						BackTrafficQueueStore.getInstance().sendEnd(
+						BackTrafficQueueStore.getInstance().publishIterationEnd(
 								getEnvironment().getJobID(),
-								getEnvironment().getIndexInSubtaskGroup());
+								getEnvironment().getIndexInSubtaskGroup(),
+								queue);
+						queue = null;
 						//Signal synchronization task that we are finished 
 						publishState(ChannelState.CLOSED, getEnvironment().getOutputGate(1));
-					} else if(stateListeners[0].getState() == ChannelState.OPEN) {
+					}
+					
+					if(stateListeners[0].getState() == ChannelState.OPEN && queue == null) {
 						//Get new queue to put items into
-						queue = BackTrafficQueueStore.getInstance().getRecordQueue(
+						queue = BackTrafficQueueStore.getInstance().receiveUpdateQueue(
 								getEnvironment().getJobID(),
 								getEnvironment().getIndexInSubtaskGroup());
 					}
