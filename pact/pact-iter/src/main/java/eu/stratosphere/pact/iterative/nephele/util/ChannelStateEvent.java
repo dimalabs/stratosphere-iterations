@@ -33,6 +33,10 @@ public class ChannelStateEvent extends AbstractTaskEvent {
 
 	private ChannelState state;
 	
+	public ChannelStateEvent() {
+		
+	}
+	
 	public ChannelStateEvent(ChannelState state) {
 		this.state = state;
 	}
