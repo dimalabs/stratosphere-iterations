@@ -43,6 +43,13 @@ public class NepheleUtil {
 		taskConfig.setStubParameter(key, value);
 		
 	}
+	
+	public static JobInputVertex createInput(Class<? extends InputFormat<? extends InputSplit>> format, 
+			String path, JobGraph graph, int dop, int spi) {
+		JobInputVertex vertex = createInput(format, path, graph, dop);
+		vertex.setNumberOfSubtasksPerInstance(spi);
+		return vertex;
+	}
 
 	public static JobInputVertex createInput(Class<? extends InputFormat<? extends InputSplit>> format, 
 			String path, JobGraph graph, int dop) {
@@ -56,6 +63,13 @@ public class NepheleUtil {
 		sourceConfig.setStubParameter(FileInputFormat.FILE_PARAMETER_KEY, path);
 		
 		return sourceVertex;
+	}
+	
+	public static JobOutputVertex createOutput(Class<? extends OutputFormat> format, 
+			String path, JobGraph graph, int dop, int spi) {
+		JobOutputVertex vertex = createOutput(format, path, graph, dop);
+		vertex.setNumberOfSubtasksPerInstance(spi);
+		return vertex;
 	}
 	
 	public static JobOutputVertex createOutput(Class<? extends OutputFormat> format, String path,
@@ -73,6 +87,12 @@ public class NepheleUtil {
 		return sinkVertex;
 	}
 	
+	public static JobOutputVertex createDummyOutput(JobGraph graph, int dop, int spi) {
+		JobOutputVertex vertex = createDummyOutput(graph, dop);
+		vertex.setNumberOfSubtasksPerInstance(spi);
+		return vertex;
+	}
+	
 	public static JobOutputVertex createDummyOutput(JobGraph graph, int dop) {
 		JobOutputVertex sinkVertex = new JobOutputVertex("Dummy output task", graph);
 		sinkVertex.setOutputClass(DummyNullOutput.class);
@@ -80,6 +100,12 @@ public class NepheleUtil {
 		sinkVertex.getConfiguration().setInteger(DataSinkTask.DEGREE_OF_PARALLELISM_KEY, dop);
 		
 		return sinkVertex;
+	}
+	
+	public static JobTaskVertex createTask(Class<? extends AbstractMinimalTask> task, JobGraph graph, int dop, int spi) {
+		JobTaskVertex vertex = createTask(task, graph, dop);
+		vertex.setNumberOfSubtasksPerInstance(spi);
+		return vertex;
 	}
 	
 	public static JobTaskVertex createTask(Class<? extends AbstractMinimalTask> task, JobGraph graph, int dop) {

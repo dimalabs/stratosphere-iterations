@@ -30,9 +30,13 @@ public class SimpleIterTaskTest {
 	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
-		final int dop = 2;
-		final String input = "file:///home/mkaufmann/dummy";
-		final String output = "file:///home/mkaufmann/iter-test";
+		if(args.length != 3) {
+			System.exit(-1);
+		}
+		
+		final int dop = Integer.parseInt(args[0]);
+		final String input = args[1];
+		final String output = args[2];
 		
 		JobGraph graph = new JobGraph("Iterative Test");
 		
@@ -84,7 +88,7 @@ public class SimpleIterTaskTest {
 			}
 			
 			//Inject two dummy records in the iteration process
-			for (int i = 0; i < 10000; i++) {
+			for (int i = 0; i < 100000; i++) {
 				rec.setField(0, new PactInteger(i));
 				output.getWriters().get(0).emit(rec);
 			}

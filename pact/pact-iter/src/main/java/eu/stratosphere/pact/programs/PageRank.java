@@ -29,26 +29,30 @@ public class PageRank {
 	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
-		final int dop = 2;
-		//final String input = "file:///home/mkaufmann/data/page_links_el.nt";
-		final String input = "file:///home/mkaufmann/data/xaa";
-		final String output = "file:///home/mkaufmann/iter-test";
+		if(args.length != 4) {
+			System.exit(-1);
+		}
+		
+		final int dop = Integer.valueOf(args[0]);
+		final String input = args[1];
+		final String output = args[2];
+		final int spi = Integer.valueOf(args[3]);
 		
 		JobGraph graph = new JobGraph("PageRank Test");
 		
 		//Create tasks
-		JobInputVertex sourceVertex = createInput(DBPediaPageLinkInput.class, input, graph, dop);
+		JobInputVertex sourceVertex = createInput(DBPediaPageLinkInput.class, input, graph, dop, spi);
 		
-		JobTaskVertex adjList = createTask(GroupTask.class, graph, dop);
+		JobTaskVertex adjList = createTask(GroupTask.class, graph, dop, spi);
 		adjList.setVertexToShareInstancesWith(sourceVertex);
 		
-		JobTaskVertex iterationStart = createTask(PageRankIteration.class, graph, dop);
+		JobTaskVertex iterationStart = createTask(PageRankIteration.class, graph, dop, spi);
 		iterationStart.setVertexToShareInstancesWith(sourceVertex);
 		
-		JobTaskVertex iterationEnd = createTask(IterationTail.class, graph, dop);
+		JobTaskVertex iterationEnd = createTask(IterationTail.class, graph, dop, spi);
 		iterationEnd.setVertexToShareInstancesWith(sourceVertex);
 		
-		JobOutputVertex sinkVertex = createOutput(RankOutput.class, output, graph, dop);
+		JobOutputVertex sinkVertex = createOutput(RankOutput.class, output, graph, dop, spi);
 		sinkVertex.setVertexToShareInstancesWith(sourceVertex);
 		
 		//Connect tasks
@@ -62,16 +66,16 @@ public class PageRank {
 		//Iteration specific (make sure that iterationStart and iterationEnd share the same 
 		//instance and subtask id structure. The synchronizer is required, so that a new
 		//iteration does not start before all other subtasks are finished.
-		JobOutputVertex dummySinkA = createDummyOutput(graph, dop);
+		JobOutputVertex dummySinkA = createDummyOutput(graph, dop, spi);
 		dummySinkA.setVertexToShareInstancesWith(sourceVertex);
 		connectJobVertices(ShipStrategy.FORWARD, iterationEnd, dummySinkA, null, null);
-		JobTaskVertex iterationStateSynchronizer = createTask(IterationStateSynchronizer.class, graph, dop);
+		JobTaskVertex iterationStateSynchronizer = createTask(IterationStateSynchronizer.class, graph, dop, spi);
 		iterationStateSynchronizer.setVertexToShareInstancesWith(sourceVertex);
 		iterationStateSynchronizer.setNumberOfSubtasks(1);
 		connectJobVertices(ShipStrategy.FORWARD, iterationStart, iterationEnd, null, null);
 		connectJobVertices(ShipStrategy.BROADCAST, iterationEnd, iterationStateSynchronizer, null, null);
 		connectJobVertices(ShipStrategy.BROADCAST, iterationStart, iterationStateSynchronizer, null, null);
-		JobOutputVertex dummySinkB = createDummyOutput(graph, dop);
+		JobOutputVertex dummySinkB = createDummyOutput(graph, dop, spi);
 		dummySinkB.setVertexToShareInstancesWith(sourceVertex);
 		connectJobVertices(ShipStrategy.FORWARD, iterationStateSynchronizer, dummySinkB, null, null);
 		
