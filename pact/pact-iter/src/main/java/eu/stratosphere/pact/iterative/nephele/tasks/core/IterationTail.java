@@ -20,9 +20,9 @@ public class IterationTail extends AbstractIterativeTask {
 		MutableObjectIterator<PactRecord> input = inputs[0];
 		Queue<PactRecord> queue = null;
 		
+		PactRecord rec = new PactRecord();
 		while(true) {
 			try {
-				PactRecord rec = new PactRecord();
 				boolean success = input.next(rec);
 				if(success) {
 					//Add record to queue for next iteration run

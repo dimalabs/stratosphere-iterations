@@ -1,6 +1,7 @@
 package eu.stratosphere.pact.iterative.nephele.util;
 
 import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -11,7 +12,7 @@ import eu.stratosphere.nephele.services.memorymanager.MemoryManager;
 import eu.stratosphere.nephele.services.memorymanager.spi.DefaultMemoryManager;
 import eu.stratosphere.pact.common.type.PactRecord;
 
-public class BackTrafficQueueStore {
+public abstract class BackTrafficQueueStore {
 	private volatile HashMap<String, BlockingQueue<Queue<PactRecord>>> iterOpenMap =
 			new HashMap<String, BlockingQueue<Queue<PactRecord>>>();
 	private volatile HashMap<String, BlockingQueue<Queue<PactRecord>>> iterEndMap =
@@ -24,7 +25,7 @@ public class BackTrafficQueueStore {
 	
 	private static final int ALL_SUBTASK_ID = -1;
 	
-	private static BackTrafficQueueStore store = new BackTrafficQueueStore();
+	private static BackTrafficQueueStore store = new ObjectQueueStore();
 	
 	public static BackTrafficQueueStore getInstance() {
 		return store;
@@ -89,7 +90,7 @@ public class BackTrafficQueueStore {
 			throw new RuntimeException("Internal Error");
 		}
 		
-		queue.add(new ArrayDeque<PactRecord>(initialSize));
+		queue.add(createQueue(jobID, subTaskId, initialSize));
 	}
 	
 	public synchronized Queue<PactRecord> receiveUpdateQueue(JobID jobID, int subTaskId) throws InterruptedException {
@@ -132,6 +133,8 @@ public class BackTrafficQueueStore {
 		return manager;
 	}
 	
+	protected abstract Queue<PactRecord> createQueue(JobID id, int subTaskId, int initialSize);
+	
 	private <K,V> V safeRetrieval(HashMap<K, V> map, K key) {
 		synchronized(map) {
 			return map.get(key);
@@ -140,5 +143,26 @@ public class BackTrafficQueueStore {
 	
 	private String getIdentifier(JobID jobID, int subTaskId) {
 		return jobID.toString() + "#" + subTaskId;
+	}
+	
+	private static class ObjectQueueStore extends BackTrafficQueueStore {
+		@Override
+		@SuppressWarnings("serial")
+		protected Queue<PactRecord> createQueue(JobID id, int subTaskId, int initialSize) {
+			return new ArrayDeque<PactRecord>(initialSize) {
+				@Override
+				public boolean add(PactRecord rec) {
+					PactRecord copy = new PactRecord(rec.getNumFields());
+					rec.copyTo(copy);
+					
+					return super.add(copy);
+				}
+				
+				@Override
+				public boolean addAll(Collection<? extends PactRecord> c) {
+					throw new UnsupportedOperationException("Not implemented");
+				}
+			};
+		}
 	}
 }
