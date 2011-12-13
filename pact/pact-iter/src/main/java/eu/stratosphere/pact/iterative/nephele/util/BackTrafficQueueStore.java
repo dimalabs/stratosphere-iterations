@@ -7,6 +7,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
 import eu.stratosphere.nephele.jobgraph.JobID;
+import eu.stratosphere.nephele.services.memorymanager.MemoryManager;
+import eu.stratosphere.nephele.services.memorymanager.spi.DefaultMemoryManager;
 import eu.stratosphere.pact.common.type.PactRecord;
 
 public class BackTrafficQueueStore {
@@ -15,13 +17,20 @@ public class BackTrafficQueueStore {
 	private volatile HashMap<String, BlockingQueue<Queue<PactRecord>>> iterEndMap =
 			new HashMap<String, BlockingQueue<Queue<PactRecord>>>();
 	
+	private volatile HashMap<String, MemoryManager> memoryManagerMap =
+			new HashMap<String, MemoryManager>();
+	private volatile HashMap<String, Integer> memoryManagerMapCounter =
+			new HashMap<String, Integer>();
+	
+	private static final int ALL_SUBTASK_ID = -1;
+	
 	private static BackTrafficQueueStore store = new BackTrafficQueueStore();
 	
 	public static BackTrafficQueueStore getInstance() {
 		return store;
 	}
 
-	public void addStructures(JobID jobID, int subTaskId) {
+	public void addStructures(JobID jobID, int subTaskId, long memorySize) {
 		synchronized(iterOpenMap) {
 			synchronized(iterEndMap) {
 				if(iterOpenMap.containsKey(getIdentifier(jobID, subTaskId))) {
@@ -35,6 +44,40 @@ public class BackTrafficQueueStore {
 				
 				iterOpenMap.put(getIdentifier(jobID, subTaskId), openQueue);
 				iterEndMap.put(getIdentifier(jobID, subTaskId), endQueue);
+				
+				synchronized(memoryManagerMap) {
+					memoryManagerMap.put(getIdentifier(jobID, ALL_SUBTASK_ID), new DefaultMemoryManager(memorySize));
+					if(memoryManagerMapCounter.containsKey(getIdentifier(jobID, ALL_SUBTASK_ID))) {
+						memoryManagerMapCounter.put(getIdentifier(jobID, ALL_SUBTASK_ID), 
+								memoryManagerMapCounter.get(getIdentifier(jobID, ALL_SUBTASK_ID)) + 1);
+					} else {
+						memoryManagerMapCounter.put(getIdentifier(jobID, ALL_SUBTASK_ID), 1);
+					}
+				}
+			}
+		}
+	}
+	
+	public void releaseStructures(JobID jobID, int subTaskId) {
+		synchronized(iterOpenMap) {
+			synchronized(iterEndMap) {
+				if(!iterOpenMap.containsKey(getIdentifier(jobID, subTaskId))) {
+					throw new RuntimeException("Internal Error");
+				}
+				
+				iterOpenMap.remove(getIdentifier(jobID, subTaskId));
+				iterEndMap.remove(getIdentifier(jobID, subTaskId));
+				
+				synchronized(memoryManagerMap) {
+					int newCount = memoryManagerMapCounter.get(getIdentifier(jobID, ALL_SUBTASK_ID)) - 1;
+					
+					if(newCount == 0) {
+						memoryManagerMap.remove(getIdentifier(jobID, ALL_SUBTASK_ID));
+						memoryManagerMapCounter.remove(getIdentifier(jobID, ALL_SUBTASK_ID));
+					} else {
+						memoryManagerMapCounter.put(getIdentifier(jobID, ALL_SUBTASK_ID), newCount);
+					}
+				}
 			}
 		}
 	}
@@ -77,6 +120,16 @@ public class BackTrafficQueueStore {
 		}
 		
 		return queue.take();
+	}
+	
+	public MemoryManager getMemoryManager(JobID jobID) {
+		MemoryManager manager =
+				safeRetrieval(memoryManagerMap, getIdentifier(jobID, ALL_SUBTASK_ID));
+		if(manager == null) {
+			throw new RuntimeException("Internal Error");
+		}
+		
+		return manager;
 	}
 	
 	private <K,V> V safeRetrieval(HashMap<K, V> map, K key) {

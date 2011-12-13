@@ -19,7 +19,10 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	
 	protected static final Log LOG = LogFactory.getLog(IterationHead.class);
 	
+	public static String MEMORY_SIZE = "page.rank.memory.size";
+	
 	ClosedListener channelStateListener;
+	long memorySize;
 	
 	volatile boolean finished = false;
 	
@@ -28,6 +31,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		channelStateListener = new ClosedListener();
 		
 		getEnvironment().getOutputGate(3).subscribeToEvent(channelStateListener, ChannelStateEvent.class);
+		memorySize = getRuntimeConfiguration().getLong(MEMORY_SIZE, 16*1024);
 	}
 
 	@Override
@@ -39,7 +43,8 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	public void invoke() throws Exception {
 		BackTrafficQueueStore.getInstance().addStructures(
 				getEnvironment().getJobID(), 
-				getEnvironment().getIndexInSubtaskGroup());
+				getEnvironment().getIndexInSubtaskGroup(),
+				memorySize);
 		BackTrafficQueueStore.getInstance().publishUpdateQueue(
 				getEnvironment().getJobID(), 
 				getEnvironment().getIndexInSubtaskGroup(),
@@ -109,6 +114,11 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		
 		//Call stub so that it can finish its code
 		finish(); 
+		
+		//Release the structures for this iteration
+		BackTrafficQueueStore.getInstance().releaseStructures(
+				getEnvironment().getJobID(), 
+				getEnvironment().getIndexInSubtaskGroup());
 		
 		finished = true;
 		//Close output
