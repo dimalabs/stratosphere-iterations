@@ -155,7 +155,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		@Override
 		public boolean next(PactRecord target) throws IOException {
 			if(!queue.isEmpty()) {
-				queue.poll().copyTo(target);
+				queue.remove().copyTo(target);
 				return true;
 			} else {
 				return false;
