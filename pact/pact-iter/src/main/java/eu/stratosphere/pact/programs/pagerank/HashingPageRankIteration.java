@@ -9,33 +9,44 @@ import eu.stratosphere.pact.common.type.base.PactString;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationHead;
 
-public class PageRankIteration extends IterationHead {
+public class HashingPageRankIteration extends IterationHead {
 
-	private static final int NUM_VERTICES = 14052;
+	private static final int NUM_VERTICES_APPROX = 14052;
 	
-	private HashMap<String, Set<String>> adjList;
+	private HashMap<String, String[]> adjList;
 	private HashMap<String, Double> ranks;
+	
+	private int numVertices = -1;
 	
 	@Override
 	public void processInput(MutableObjectIterator<PactRecord> iter)
 			throws Exception {
-		adjList = new HashMap<String, Set<String>>(NUM_VERTICES);
-		ranks = new HashMap<String, Double>(NUM_VERTICES);
+		adjList = new HashMap<String, String[]>(NUM_VERTICES_APPROX);
 		
 		PactRecord rec = new PactRecord();
 		while(iter.next(rec)) {
 			String page = rec.getField(0, PactString.class).getValue();
-			double rank = 1d / NUM_VERTICES;
-			Set<String> outgoing = rec.getField(1, StringSet.class).getValue();
+			
+			Set<String> outgoingSet = rec.getField(1, StringSet.class).getValue();
+			String[] outgoing = new String[outgoingSet.size()];
+			
+			int i = 0;
+			for (String neighbour : outgoingSet) {
+				outgoing[i++] = neighbour;
+			}
 			
 			adjList.put(page, outgoing);
-			ranks.put(page, rank);
 		}
 		
+		numVertices = adjList.size();
+		ranks = new HashMap<String, Double>(numVertices);
+		double initialRank = 1.0 / numVertices;
+		
 		for (String page : adjList.keySet()) {
-			Set<String> outgoing = adjList.get(page);
+			ranks.put(page, initialRank);
 			
-			PactDouble prank = new PactDouble(ranks.get(page) / outgoing.size());
+			String[] outgoing = adjList.get(page);
+			PactDouble prank = new PactDouble(ranks.get(page) / outgoing.length);
 			for (String neighbour : outgoing) {
 				rec.setField(0, new PactString(neighbour));
 				rec.setField(1, prank);
@@ -47,7 +58,7 @@ public class PageRankIteration extends IterationHead {
 	@Override
 	public void processUpdates(MutableObjectIterator<PactRecord> iter)
 			throws Exception {
-		HashMap<String, Double> sumMap = new HashMap<String, Double>();
+		HashMap<String, Double> sumMap = new HashMap<String, Double>(numVertices);
 		
 		PactRecord rec = new PactRecord();
 		while(iter.next(rec)) {
@@ -62,19 +73,16 @@ public class PageRankIteration extends IterationHead {
 		}
 		
 		for (String page : sumMap.keySet()) {
-			double normalizedRank = 0.15 / NUM_VERTICES + 0.85 * sumMap.get(page);
+			double normalizedRank = 0.15 / NUM_VERTICES_APPROX + 0.85 * sumMap.get(page);
 			ranks.put(page, normalizedRank);
 		}
+		sumMap = null; //Help garbage collection
 		
-		for (String page : adjList.keySet()) {
-			//if(!sumMap.containsKey(page)) {
-			//	continue;
-			//}
-			
+		for (String page : adjList.keySet()) {			
 			double rank = ranks.get(page);
-			Set<String> outgoing = adjList.get(page);
+			String[] outgoing = adjList.get(page);
 			
-			PactDouble prank = new PactDouble(rank / outgoing.size());
+			PactDouble prank = new PactDouble(rank / outgoing.length);
 			for (String neighbour : outgoing) {
 				rec.setField(0, new PactString(neighbour));
 				rec.setField(1, prank);

@@ -21,11 +21,11 @@ import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationStateSynchroni
 import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationTail;
 import eu.stratosphere.pact.programs.pagerank.DBPediaPageLinkInput;
 import eu.stratosphere.pact.programs.pagerank.GroupTask;
-import eu.stratosphere.pact.programs.pagerank.HashingPageRankIteration;
 import eu.stratosphere.pact.programs.pagerank.RankOutput;
+import eu.stratosphere.pact.programs.pagerank.SortingPageRankIteration;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
-public class PageRank {
+public class PageRankSorting {
 	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
@@ -46,7 +46,7 @@ public class PageRank {
 		JobTaskVertex adjList = createTask(GroupTask.class, graph, dop, spi);
 		adjList.setVertexToShareInstancesWith(sourceVertex);
 		
-		JobTaskVertex iterationStart = createTask(HashingPageRankIteration.class, graph, dop, spi);
+		JobTaskVertex iterationStart = createTask(SortingPageRankIteration.class, graph, dop, spi);
 		iterationStart.setVertexToShareInstancesWith(sourceVertex);
 		
 		JobTaskVertex iterationEnd = createTask(IterationTail.class, graph, dop, spi);

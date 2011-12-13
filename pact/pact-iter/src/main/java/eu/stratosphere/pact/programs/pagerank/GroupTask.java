@@ -11,12 +11,9 @@ import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
 
 public class GroupTask extends AbstractMinimalTask {
-
-	HashMap<String, Set<String>> grouped;
 	
 	@Override
 	protected void initTask() {
-		grouped = new HashMap<String, Set<String>>();
 	}
 
 	@Override
@@ -27,6 +24,7 @@ public class GroupTask extends AbstractMinimalTask {
 	@Override
 	public void invoke() throws Exception {
 		MutableObjectIterator<PactRecord> input = inputs[0];
+		HashMap<String, Set<String>> grouped = new HashMap<String, Set<String>>();
 		PactRecord rec = new PactRecord();
 		
 		//Group all records
