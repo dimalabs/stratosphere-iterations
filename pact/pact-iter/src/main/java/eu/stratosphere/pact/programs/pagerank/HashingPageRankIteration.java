@@ -11,17 +11,17 @@ import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationHead;
 
 public class HashingPageRankIteration extends IterationHead {
 
-	private static final int NUM_VERTICES_APPROX = 14052;
+	private static final int NUM_VERTICES = 14052;
 	
 	private HashMap<String, String[]> adjList;
 	private HashMap<String, Double> ranks;
 	
-	private int numVertices = -1;
+	private int numLocalVertices = -1;
 	
 	@Override
 	public void processInput(MutableObjectIterator<PactRecord> iter)
 			throws Exception {
-		adjList = new HashMap<String, String[]>(NUM_VERTICES_APPROX);
+		adjList = new HashMap<String, String[]>(NUM_VERTICES/getEnvironment().getCurrentNumberOfSubtasks());
 		
 		PactRecord rec = new PactRecord();
 		while(iter.next(rec)) {
@@ -38,9 +38,9 @@ public class HashingPageRankIteration extends IterationHead {
 			adjList.put(page, outgoing);
 		}
 		
-		numVertices = adjList.size();
-		ranks = new HashMap<String, Double>(numVertices);
-		double initialRank = 1.0 / numVertices;
+		numLocalVertices = adjList.size();
+		ranks = new HashMap<String, Double>(numLocalVertices);
+		double initialRank = 1.0 / NUM_VERTICES;
 		
 		for (String page : adjList.keySet()) {
 			ranks.put(page, initialRank);
@@ -58,7 +58,7 @@ public class HashingPageRankIteration extends IterationHead {
 	@Override
 	public void processUpdates(MutableObjectIterator<PactRecord> iter)
 			throws Exception {
-		HashMap<String, Double> sumMap = new HashMap<String, Double>(numVertices);
+		HashMap<String, Double> sumMap = new HashMap<String, Double>(numLocalVertices);
 		
 		PactRecord rec = new PactRecord();
 		while(iter.next(rec)) {
@@ -73,7 +73,7 @@ public class HashingPageRankIteration extends IterationHead {
 		}
 		
 		for (String page : sumMap.keySet()) {
-			double normalizedRank = 0.15 / NUM_VERTICES_APPROX + 0.85 * sumMap.get(page);
+			double normalizedRank = 0.15 / NUM_VERTICES + 0.85 * sumMap.get(page);
 			ranks.put(page, normalizedRank);
 		}
 		sumMap = null; //Help garbage collection
