@@ -1,15 +1,21 @@
 package eu.stratosphere.pact.iterative.nephele.util;
 
+import java.util.AbstractQueue;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
 import eu.stratosphere.nephele.jobgraph.JobID;
 import eu.stratosphere.nephele.services.memorymanager.MemoryManager;
+import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
 import eu.stratosphere.nephele.services.memorymanager.spi.DefaultMemoryManager;
+import eu.stratosphere.nephele.template.AbstractTask;
 import eu.stratosphere.pact.common.type.PactRecord;
 
 public abstract class BackTrafficQueueStore {
@@ -25,7 +31,8 @@ public abstract class BackTrafficQueueStore {
 	
 	private static final int ALL_SUBTASK_ID = -1;
 	
-	private static BackTrafficQueueStore store = new ObjectQueueStore();
+	//private static BackTrafficQueueStore store = new ObjectQueueStore();
+	private static BackTrafficQueueStore store = new SerializingQueueStore();
 	
 	public static BackTrafficQueueStore getInstance() {
 		return store;
@@ -83,14 +90,14 @@ public abstract class BackTrafficQueueStore {
 		}
 	}
 	
-	public void publishUpdateQueue(JobID jobID, int subTaskId, int initialSize) {
+	public void publishUpdateQueue(JobID jobID, int subTaskId, int initialSize, AbstractTask task) {
 		BlockingQueue<Queue<PactRecord>> queue = 
 				 safeRetrieval(iterOpenMap, getIdentifier(jobID, subTaskId));
 		if(queue == null) {
 			throw new RuntimeException("Internal Error");
 		}
 		
-		queue.add(createQueue(jobID, subTaskId, initialSize));
+		queue.add(createQueue(jobID, subTaskId, initialSize, task));
 	}
 	
 	public synchronized Queue<PactRecord> receiveUpdateQueue(JobID jobID, int subTaskId) throws InterruptedException {
@@ -123,17 +130,17 @@ public abstract class BackTrafficQueueStore {
 		return queue.take();
 	}
 	
-	public MemoryManager getMemoryManager(JobID jobID) {
+	public DefaultMemoryManager getMemoryManager(JobID jobID) {
 		MemoryManager manager =
 				safeRetrieval(memoryManagerMap, getIdentifier(jobID, ALL_SUBTASK_ID));
 		if(manager == null) {
 			throw new RuntimeException("Internal Error");
 		}
 		
-		return manager;
+		return (DefaultMemoryManager) manager;
 	}
 	
-	protected abstract Queue<PactRecord> createQueue(JobID id, int subTaskId, int initialSize);
+	protected abstract Queue<PactRecord> createQueue(JobID id, int subTaskId, int initialSize, AbstractTask task);
 	
 	private <K,V> V safeRetrieval(HashMap<K, V> map, K key) {
 		synchronized(map) {
@@ -141,14 +148,14 @@ public abstract class BackTrafficQueueStore {
 		}
 	}
 	
-	private String getIdentifier(JobID jobID, int subTaskId) {
+	private static String getIdentifier(JobID jobID, int subTaskId) {
 		return jobID.toString() + "#" + subTaskId;
 	}
 	
 	private static class ObjectQueueStore extends BackTrafficQueueStore {
 		@Override
 		@SuppressWarnings("serial")
-		protected Queue<PactRecord> createQueue(JobID id, int subTaskId, int initialSize) {
+		protected Queue<PactRecord> createQueue(JobID id, int subTaskId, int initialSize, final AbstractTask task) {
 			return new ArrayDeque<PactRecord>(initialSize) {
 				@Override
 				public boolean add(PactRecord rec) {
@@ -164,5 +171,129 @@ public abstract class BackTrafficQueueStore {
 				}
 			};
 		}
+	}
+	
+	private static class SerializingQueueStore extends BackTrafficQueueStore {
+		private static int DEFAULT_MEMORY_SEGMENT_SIZE = 8 * 1024 * 1024;
+		
+		@Override
+		protected Queue<PactRecord> createQueue(final JobID jobID, final int subTaskId,
+				int initialSize, final AbstractTask task) {
+			return new AbstractQueue<PactRecord>() {
+				List<MemorySegment> segments = new ArrayList<MemorySegment>();
+				List<MemorySegment> newSegments = new ArrayList<MemorySegment>();
+				MemorySegment currentWriteSegment;
+				MemorySegment currentReadSegment;
+				Iterator<MemorySegment> allocatingIterator;
+				final int CURRENT_READ_SEGMENT_INDEX = 0;
+				
+				{
+					allocatingIterator = new Iterator<MemorySegment>() {
+						@Override
+						public boolean hasNext() {
+							return true;
+						}
+
+						@Override
+						public MemorySegment next() {
+							try {
+								return getMemoryManager(jobID).allocate(task, DEFAULT_MEMORY_SEGMENT_SIZE);
+							} catch (Exception ex) {
+								throw new RuntimeException("Bad error during serialization", ex);
+							}
+						}
+
+						@Override
+						public void remove() {
+						}
+				
+					};
+					
+					currentWriteSegment = allocatingIterator.next();
+					currentReadSegment = currentWriteSegment;
+					segments.add(currentWriteSegment);
+				}
+				
+				PactRecord currentReadRecord = new PactRecord();
+				int currentReadOffset = 0;
+				boolean readNext = true;
+				
+				int count = 0;
+				
+				@Override
+				public boolean offer(PactRecord rec) {
+					try {
+						rec.serialize(null, currentWriteSegment.outputView, allocatingIterator, newSegments);
+					} catch (Exception ex) {
+						throw new RuntimeException("Bad error during serialization", ex);
+					}
+					
+					if(!newSegments.isEmpty()) {
+						segments.addAll(newSegments);
+						currentWriteSegment = segments.get(segments.size() - 1);
+						newSegments.clear();
+					}
+					
+					count++;
+					
+					return true;
+				}
+
+				@Override
+				public PactRecord peek() {
+					if(readNext) {
+						int bytesRead = currentReadRecord.deserialize(segments, CURRENT_READ_SEGMENT_INDEX, currentReadOffset);
+						while(bytesRead > 0) {
+							if(currentReadSegment.size() - currentReadOffset > bytesRead) {
+								currentReadOffset += bytesRead;
+								bytesRead = 0;
+							} else {
+								bytesRead -= (currentReadSegment.size() - currentReadOffset);
+								
+								//Remove old read segment from list & release in memory manager
+								MemorySegment unused = segments.remove(CURRENT_READ_SEGMENT_INDEX);
+								getMemoryManager(jobID).release(unused);
+								
+								//Update reference to new read segment
+								currentReadSegment = segments.get(CURRENT_READ_SEGMENT_INDEX);
+								currentReadOffset = 0;
+							}
+						}
+						readNext = false;
+					}
+					
+					return currentReadRecord;
+				}
+
+				@Override
+				public PactRecord poll() {
+					PactRecord rec = peek();
+					readNext = true;
+					count--;
+					return rec;
+				}
+
+				@Override
+				public Iterator<PactRecord> iterator() {
+					throw new UnsupportedOperationException();
+				}
+
+				@Override
+				public int size() {
+					if(count == 0) {
+						//A memory segment can be left if it was not completely full
+						if(segments.size() == 1) {
+							currentWriteSegment = null;
+							getMemoryManager(jobID).release(segments);
+						} else if(segments.size() > 1) {
+							throw new RuntimeException("Too many memory segments left");
+						}
+					}
+					return count;
+				}
+				
+			};
+		}
+		
 	}
 }

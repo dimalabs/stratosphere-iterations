@@ -31,7 +31,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		channelStateListener = new ClosedListener();
 		
 		getEnvironment().getOutputGate(3).subscribeToEvent(channelStateListener, ChannelStateEvent.class);
-		memorySize = getRuntimeConfiguration().getLong(MEMORY_SIZE, 16*1024);
+		memorySize = getRuntimeConfiguration().getLong(MEMORY_SIZE, -1) * 1024 * 1024;
 	}
 
 	@Override
@@ -48,7 +48,8 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		BackTrafficQueueStore.getInstance().publishUpdateQueue(
 				getEnvironment().getJobID(), 
 				getEnvironment().getIndexInSubtaskGroup(),
-				100);
+				100,
+				this);
 		
 		//Start with a first iteration run using the input data
 		AbstractIterativeTask.publishState(ChannelState.OPEN, getEnvironment().getOutputGate(0));
@@ -86,7 +87,8 @@ public abstract class IterationHead extends AbstractMinimalTask {
 				BackTrafficQueueStore.getInstance().publishUpdateQueue(
 						getEnvironment().getJobID(), 
 						getEnvironment().getIndexInSubtaskGroup(),
-						updateQueue.size()>0?updateQueue.size():100);
+						updateQueue.size()>0?updateQueue.size():100,
+						this);
 				
 				//Check termination criterion
 				if(iterationCounter == 10) {

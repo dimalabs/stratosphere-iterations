@@ -6,7 +6,6 @@ import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createInpu
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createOutput;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createTask;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.getConfiguration;
-import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.setProperty;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.submit;
 
 import java.io.IOException;
@@ -71,7 +70,7 @@ public class PageRank {
 		
 		JobTaskVertex iterationStart = createTask(pageRankClass, graph, dop, spi);
 		iterationStart.setVertexToShareInstancesWith(sourceVertex);
-		setProperty(iterationStart, IterationHead.MEMORY_SIZE, memorySize+"");
+		iterationStart.getConfiguration().setLong(IterationHead.MEMORY_SIZE, memorySize);
 		
 		JobTaskVertex iterationEnd = createTask(IterationTail.class, graph, dop, spi);
 		iterationEnd.setVertexToShareInstancesWith(sourceVertex);
