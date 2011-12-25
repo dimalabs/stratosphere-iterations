@@ -932,12 +932,14 @@ public final class PactRecord implements Value
 	 * @param segmentOffset
 	 * @throws IOException
 	 */
-	public void deserialize(List<MemorySegment> sources, int segmentNum, int segmentOffset)
+	public int deserialize(List<MemorySegment> sources, int segmentNum, int segmentOffset)
 	{
+		int bytesRead = 0;
 		MemorySegment seg = sources.get(segmentNum);
 		
 		if (seg.size() - segmentOffset > 5) {
 			int val = seg.get(segmentOffset++) & 0xff;
+			bytesRead++;
 			if (val >= MAX_BIT) {
 				int shift = 7;
 				int curr;
@@ -945,7 +947,9 @@ public final class PactRecord implements Value
 				while ((curr = seg.get(segmentOffset++) & 0xff) >= MAX_BIT) {
 					val |= (curr & 0x7f) << shift;
 					shift += 7;
+					bytesRead++;
 				}
+				bytesRead++;
 				val |= curr << shift;
 			}
 			this.binaryLen = val;
@@ -953,6 +957,7 @@ public final class PactRecord implements Value
 		else {
 			int end = seg.size();
 			int val = seg.get(segmentOffset++) & 0xff;
+			bytesRead++;
 			if (segmentOffset == end) {
 				segmentOffset = 0;
 				seg = sources.get(++segmentNum);
@@ -963,6 +968,7 @@ public final class PactRecord implements Value
 				int curr;
 				val = val & 0x7f;
 				while ((curr = seg.get(segmentOffset++) & 0xff) >= MAX_BIT) {
+					bytesRead++;
 					val |= (curr & 0x7f) << shift;
 					shift += 7;
 					if (segmentOffset == end) {
@@ -970,6 +976,7 @@ public final class PactRecord implements Value
 						seg = sources.get(++segmentNum);
 					}
 				}
+				bytesRead++;
 				val |= curr << shift;
 			}
 			this.binaryLen = val;
@@ -1005,7 +1012,10 @@ public final class PactRecord implements Value
 			}
 		}
 		
+		bytesRead += binaryLen;
 		initFields(this.binaryData, 0, this.binaryLen);
+		
+		return bytesRead;
 	}
 	
 	// --------------------------------------------------------------------------------------------
