@@ -18,7 +18,7 @@ import eu.stratosphere.nephele.services.memorymanager.spi.DefaultMemoryManager;
 import eu.stratosphere.nephele.template.AbstractTask;
 import eu.stratosphere.pact.common.type.PactRecord;
 
-public abstract class BackTrafficQueueStore {
+public class BackTrafficQueueStore {
 	private volatile HashMap<String, BlockingQueue<Queue<PactRecord>>> iterOpenMap =
 			new HashMap<String, BlockingQueue<Queue<PactRecord>>>();
 	private volatile HashMap<String, BlockingQueue<Queue<PactRecord>>> iterEndMap =
@@ -31,8 +31,10 @@ public abstract class BackTrafficQueueStore {
 	
 	private static final int ALL_SUBTASK_ID = -1;
 	
+	private static final BackTrafficQueueStore store = new BackTrafficQueueStore();
+	
 	//private static BackTrafficQueueStore store = new ObjectQueueStore();
-	private static BackTrafficQueueStore store = new SerializingQueueStore();
+	//private static BackTrafficQueueStore store = new SerializingQueueStore();
 	
 	public static BackTrafficQueueStore getInstance() {
 		return store;
@@ -91,13 +93,18 @@ public abstract class BackTrafficQueueStore {
 	}
 	
 	public void publishUpdateQueue(JobID jobID, int subTaskId, int initialSize, AbstractTask task) {
+		publishUpdateQueue(jobID, subTaskId, initialSize, task, UpdateQueueStrategy.IN_MEMORY_SERIALIZED);
+	}
+	
+	public void publishUpdateQueue(JobID jobID, int subTaskId, int initialSize, AbstractTask task, 
+			UpdateQueueStrategy strategy) {
 		BlockingQueue<Queue<PactRecord>> queue = 
 				 safeRetrieval(iterOpenMap, getIdentifier(jobID, subTaskId));
 		if(queue == null) {
 			throw new RuntimeException("Internal Error");
 		}
 		
-		queue.add(createQueue(jobID, subTaskId, initialSize, task));
+		queue.add(strategy.getUpdateQueueFactory().createQueue(jobID, subTaskId, initialSize, task));
 	}
 	
 	public synchronized Queue<PactRecord> receiveUpdateQueue(JobID jobID, int subTaskId) throws InterruptedException {
@@ -140,7 +147,6 @@ public abstract class BackTrafficQueueStore {
 		return (DefaultMemoryManager) manager;
 	}
 	
-	protected abstract Queue<PactRecord> createQueue(JobID id, int subTaskId, int initialSize, AbstractTask task);
 	
 	private <K,V> V safeRetrieval(HashMap<K, V> map, K key) {
 		synchronized(map) {
@@ -152,10 +158,29 @@ public abstract class BackTrafficQueueStore {
 		return jobID.toString() + "#" + subTaskId;
 	}
 	
-	private static class ObjectQueueStore extends BackTrafficQueueStore {
+	private interface UpdateQueueFactory {
+		public Queue<PactRecord> createQueue(JobID id, int subTaskId, int initialSize, AbstractTask task);
+	}
+	
+	public enum UpdateQueueStrategy {
+		IN_MEMORY_OBJECTS(getInstance().new ObjectQueueFactory()),
+		IN_MEMORY_SERIALIZED(getInstance().new SerializingQueueFactory());
+		
+		UpdateQueueFactory factory;
+		
+		UpdateQueueStrategy(UpdateQueueFactory factory) {
+			this.factory = factory;
+		}
+		
+		protected UpdateQueueFactory getUpdateQueueFactory() {
+			return factory;
+		}
+	}
+	
+	private class ObjectQueueFactory implements UpdateQueueFactory {
 		@Override
 		@SuppressWarnings("serial")
-		protected Queue<PactRecord> createQueue(JobID id, int subTaskId, int initialSize, final AbstractTask task) {
+		public Queue<PactRecord> createQueue(JobID id, int subTaskId, int initialSize, final AbstractTask task) {
 			return new ArrayDeque<PactRecord>(initialSize) {
 				@Override
 				public boolean add(PactRecord rec) {
@@ -173,11 +198,11 @@ public abstract class BackTrafficQueueStore {
 		}
 	}
 	
-	private static class SerializingQueueStore extends BackTrafficQueueStore {
-		private static int DEFAULT_MEMORY_SEGMENT_SIZE = 8 * 1024 * 1024;
+	private class SerializingQueueFactory implements UpdateQueueFactory {
+		private static final int DEFAULT_MEMORY_SEGMENT_SIZE = 8 * 1024 * 1024;
 		
 		@Override
-		protected Queue<PactRecord> createQueue(final JobID jobID, final int subTaskId,
+		public Queue<PactRecord> createQueue(final JobID jobID, final int subTaskId,
 				int initialSize, final AbstractTask task) {
 			return new AbstractQueue<PactRecord>() {
 				List<MemorySegment> segments = new ArrayList<MemorySegment>();

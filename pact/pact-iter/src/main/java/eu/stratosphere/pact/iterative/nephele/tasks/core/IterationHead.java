@@ -12,6 +12,7 @@ import eu.stratosphere.nephele.template.AbstractInvokable;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.util.BackTrafficQueueStore;
+import eu.stratosphere.pact.iterative.nephele.util.BackTrafficQueueStore.UpdateQueueStrategy;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 
@@ -49,7 +50,8 @@ public abstract class IterationHead extends AbstractMinimalTask {
 				getEnvironment().getJobID(), 
 				getEnvironment().getIndexInSubtaskGroup(),
 				100,
-				this);
+				this,
+				UpdateQueueStrategy.IN_MEMORY_SERIALIZED);		
 		
 		//Start with a first iteration run using the input data
 		AbstractIterativeTask.publishState(ChannelState.OPEN, getEnvironment().getOutputGate(0));
