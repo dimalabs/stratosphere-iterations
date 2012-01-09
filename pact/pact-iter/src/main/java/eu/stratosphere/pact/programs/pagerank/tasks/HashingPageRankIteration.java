@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.programs.pagerank;
+package eu.stratosphere.pact.programs.pagerank.tasks;
 
 import java.util.HashMap;
 import java.util.Set;
@@ -7,7 +7,7 @@ import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactDouble;
 import eu.stratosphere.pact.common.type.base.PactString;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationHead;
+import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 
 public class HashingPageRankIteration extends IterationHead {
 

@@ -1,10 +1,10 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.triangle;
+package eu.stratosphere.pact.programs.triangle.tasks;
 
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.io.IntegerHashPartitioner;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
+import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter;
 
 public class DuplicateEdgesHashPartitioning extends AbstractMinimalTask {

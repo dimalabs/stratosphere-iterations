@@ -1,4 +1,12 @@
-package eu.stratosphere.pact.iterative.nephele;
+package eu.stratosphere.pact.programs.triangle;
+
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectJobVertices;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createInput;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createOutput;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createTask;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.getConfiguration;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.setProperty;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.submit;
 
 import java.io.IOException;
 
@@ -13,19 +21,17 @@ import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.iterative.nephele.cache.CacheStore.CacheType;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeInput;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeOutput;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.AdjacencyListOrdering;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.CacheBuild;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.CountTriangles;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.DuplicateEdges;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SendDegrees;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SendTriangles;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SetDegrees;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SetTriangles;
+import eu.stratosphere.pact.programs.triangle.tasks.AdjacencyListOrdering;
+import eu.stratosphere.pact.programs.triangle.tasks.CacheBuild;
+import eu.stratosphere.pact.programs.triangle.tasks.CountTriangles;
+import eu.stratosphere.pact.programs.triangle.tasks.DuplicateEdgesHashPartitioning;
+import eu.stratosphere.pact.programs.triangle.tasks.SendDegreesHashPartitioned;
+import eu.stratosphere.pact.programs.triangle.tasks.SendTrianglesHashPartitioned;
+import eu.stratosphere.pact.programs.triangle.tasks.SetDegrees;
+import eu.stratosphere.pact.programs.triangle.tasks.SetTriangles;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
-import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.*;
-
-public class TriangleEnumerationSharedRead {
+public class PartitionedTriangleEnumerationIsolated {
 	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
@@ -41,19 +47,19 @@ public class TriangleEnumerationSharedRead {
 		//Create tasks
 		JobInputVertex sourceVertex = createInput(EdgeInput.class, input, graph, dop);
 		
-		JobTaskVertex emitDirectedEdges = createTask(DuplicateEdges.class, graph, dop);
+		JobTaskVertex emitDirectedEdges = createTask(DuplicateEdgesHashPartitioning.class, graph, dop);
 		emitDirectedEdges.setVertexToShareInstancesWith(sourceVertex);
 		
 		JobTaskVertex buildCache = createTask(CacheBuild.class, graph, dop);
 		buildCache.setVertexToShareInstancesWith(sourceVertex);
 		setProperty(buildCache, CacheBuild.CACHE_ID_PARAM, "edges");
-		setProperty(buildCache, CacheBuild.CACHE_TYPE_PARAM, CacheType.SHARED_READ.name());
+		setProperty(buildCache, CacheBuild.CACHE_TYPE_PARAM, CacheType.ISOLATED.name());
 		
 		JobTaskVertex orderCache = createTask(AdjacencyListOrdering.class, graph, dop);
 		orderCache.setVertexToShareInstancesWith(sourceVertex);
 		setProperty(orderCache, CacheBuild.CACHE_ID_PARAM, "edges");
 		
-		JobTaskVertex sendDegree = createTask(SendDegrees.class, graph, dop);
+		JobTaskVertex sendDegree = createTask(SendDegreesHashPartitioned.class, graph, dop);
 		sendDegree.setVertexToShareInstancesWith(sourceVertex);
 		setProperty(sendDegree, CacheBuild.CACHE_ID_PARAM, "edges");
 		
@@ -61,7 +67,7 @@ public class TriangleEnumerationSharedRead {
 		setDegree.setVertexToShareInstancesWith(sourceVertex);
 		setProperty(setDegree, CacheBuild.CACHE_ID_PARAM, "edges");
 		
-		JobTaskVertex sendTriangles = createTask(SendTriangles.class, graph, dop);
+		JobTaskVertex sendTriangles = createTask(SendTrianglesHashPartitioned.class, graph, dop);
 		sendTriangles.setVertexToShareInstancesWith(sourceVertex);
 		setProperty(sendTriangles, CacheBuild.CACHE_ID_PARAM, "edges");
 		
@@ -78,14 +84,14 @@ public class TriangleEnumerationSharedRead {
 		
 		//Connect tasks
 		connectJobVertices(ShipStrategy.FORWARD, sourceVertex, emitDirectedEdges, null, null);
-		connectJobVertices(ShipStrategy.PARTITION_HASH, emitDirectedEdges, buildCache, 
+		connectJobVertices(ShipStrategy.PARTITION_RANGE, emitDirectedEdges, buildCache, 
 				new int[] {0}, new Class[] {PactInteger.class});
 		connectJobVertices(ShipStrategy.BROADCAST, buildCache, orderCache, null, null);
 		connectJobVertices(ShipStrategy.BROADCAST, orderCache, sendDegree, null, null);
-		connectJobVertices(ShipStrategy.PARTITION_HASH, sendDegree, setDegree, 
+		connectJobVertices(ShipStrategy.PARTITION_RANGE, sendDegree, setDegree, 
 				new int[] {0}, new Class[] {PactInteger.class});
 		connectJobVertices(ShipStrategy.BROADCAST, setDegree, sendTriangles, null, null);
-		connectJobVertices(ShipStrategy.PARTITION_HASH, sendTriangles, setTriangles, 
+		connectJobVertices(ShipStrategy.PARTITION_RANGE, sendTriangles, setTriangles, 
 				new int[] {0}, new Class[] {PactInteger.class});
 		connectJobVertices(ShipStrategy.BROADCAST, setTriangles, countTriangles, null, null);
 		connectJobVertices(ShipStrategy.FORWARD, countTriangles, sinkVertex, null, null);

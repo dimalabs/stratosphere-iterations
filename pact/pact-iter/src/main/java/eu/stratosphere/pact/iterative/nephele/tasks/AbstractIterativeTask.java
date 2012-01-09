@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.core;
+package eu.stratosphere.pact.iterative.nephele.tasks;
 
 import eu.stratosphere.nephele.execution.Environment;
 import eu.stratosphere.nephele.io.InputGate;

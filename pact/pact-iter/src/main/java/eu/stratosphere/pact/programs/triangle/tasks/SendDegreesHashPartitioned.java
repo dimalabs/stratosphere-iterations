@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.triangle;
+package eu.stratosphere.pact.programs.triangle.tasks;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -10,7 +10,7 @@ import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.iterative.ParallelTriangleEntry;
 import eu.stratosphere.pact.iterative.nephele.cache.CacheStore;
 import eu.stratosphere.pact.iterative.nephele.io.IntegerHashPartitioner;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
+import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter;
 
 public class SendDegreesHashPartitioned extends AbstractMinimalTask {

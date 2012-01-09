@@ -1,14 +1,16 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.triangle;
+package eu.stratosphere.pact.programs.triangle.tasks;
 
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.iterative.ParallelTriangleEntry;
 import eu.stratosphere.pact.iterative.nephele.cache.CacheStore;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
+import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 
-public class AdjacencyListOrdering extends AbstractMinimalTask {
+public class CountTriangles extends AbstractMinimalTask {
 
 	public static final String CACHE_ID_PARAM = "iter.cache.cacheid";
 	
@@ -33,14 +35,21 @@ public class AdjacencyListOrdering extends AbstractMinimalTask {
 		waitForPreviousTask(inputs[0]);
 		
 		int subTaskIndex = this.getEnvironment().getIndexInSubtaskGroup();
+		
+		PactRecord out = new PactRecord();
+		int numTriangles = 0;
+		
 		Iterator<Entry<Integer, ParallelTriangleEntry>> iterator = 
 				CacheStore.getCachePartition(cacheId, subTaskIndex, Integer.class, ParallelTriangleEntry.class);
 		
 		while (iterator.hasNext()) {
-			final Map.Entry<Integer, ParallelTriangleEntry> entry = iterator.next();
-			entry.getValue().finalizeListBuilding();
+			final Map.Entry<Integer, ParallelTriangleEntry> kv = iterator.next();
+			numTriangles += kv.getValue().getNumTriangles();
 		}
 		
+		out.setField(0, new PactInteger(getIndexInSubtaskGroup()));
+		out.setField(1, new PactInteger(numTriangles));
+		output.collect(out);
 		output.close();
 	}
 

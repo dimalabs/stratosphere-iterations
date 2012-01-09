@@ -21,9 +21,9 @@ import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeInput;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeOutput;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationHead;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationStateSynchronizer;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationTail;
+import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
+import eu.stratosphere.pact.iterative.nephele.tasks.IterationStateSynchronizer;
+import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
 public class SimpleIterTaskTest {

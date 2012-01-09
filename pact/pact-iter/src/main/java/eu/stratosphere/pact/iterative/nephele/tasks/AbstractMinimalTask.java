@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.core;
+package eu.stratosphere.pact.iterative.nephele.tasks;
 
 import java.io.IOException;
 

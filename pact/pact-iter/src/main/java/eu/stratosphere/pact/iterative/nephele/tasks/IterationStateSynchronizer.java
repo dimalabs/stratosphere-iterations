@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.core;
+package eu.stratosphere.pact.iterative.nephele.tasks;
 
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;

@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.programs;
+package eu.stratosphere.pact.programs.pagerank;
 
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectJobVertices;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createDummyOutput;
@@ -17,15 +17,15 @@ import eu.stratosphere.nephele.jobgraph.JobInputVertex;
 import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.common.type.base.PactString;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationHead;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationStateSynchronizer;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.IterationTail;
-import eu.stratosphere.pact.programs.pagerank.DBPediaPageLinkInput;
-import eu.stratosphere.pact.programs.pagerank.GroupTask;
-import eu.stratosphere.pact.programs.pagerank.HashingPageRankIteration;
-import eu.stratosphere.pact.programs.pagerank.RankOutput;
-import eu.stratosphere.pact.programs.pagerank.SortingPageRankIteration;
+import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
+import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
+import eu.stratosphere.pact.iterative.nephele.tasks.IterationStateSynchronizer;
+import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
+import eu.stratosphere.pact.programs.pagerank.tasks.DBPediaPageLinkInput;
+import eu.stratosphere.pact.programs.pagerank.tasks.GroupTask;
+import eu.stratosphere.pact.programs.pagerank.tasks.HashingPageRankIteration;
+import eu.stratosphere.pact.programs.pagerank.tasks.RankOutput;
+import eu.stratosphere.pact.programs.pagerank.tasks.SortingPageRankIteration;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
 public class PageRank {

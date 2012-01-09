@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.triangle;
+package eu.stratosphere.pact.programs.triangle.tasks;
 
 import java.util.concurrent.ConcurrentMap;
 
@@ -8,7 +8,7 @@ import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.ParallelTriangleEntry;
 import eu.stratosphere.pact.iterative.nephele.cache.CacheStore;
 import eu.stratosphere.pact.iterative.nephele.io.PactIntArray;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
+import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 
 public class SetTriangles extends AbstractMinimalTask {
 

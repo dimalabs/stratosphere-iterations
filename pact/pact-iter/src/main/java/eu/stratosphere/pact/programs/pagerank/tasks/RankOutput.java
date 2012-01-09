@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.programs.pagerank;
+package eu.stratosphere.pact.programs.pagerank.tasks;
 
 import java.io.IOException;
 

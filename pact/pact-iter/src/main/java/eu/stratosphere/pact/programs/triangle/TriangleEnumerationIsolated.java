@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele;
+package eu.stratosphere.pact.programs.triangle;
 
 import java.io.IOException;
 
@@ -13,14 +13,14 @@ import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.iterative.nephele.cache.CacheStore.CacheType;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeInput;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeOutput;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.AdjacencyListOrdering;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.CacheBuild;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.CountTriangles;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.DuplicateEdges;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SendDegrees;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SendTriangles;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SetDegrees;
-import eu.stratosphere.pact.iterative.nephele.tasks.triangle.SetTriangles;
+import eu.stratosphere.pact.programs.triangle.tasks.AdjacencyListOrdering;
+import eu.stratosphere.pact.programs.triangle.tasks.CacheBuild;
+import eu.stratosphere.pact.programs.triangle.tasks.CountTriangles;
+import eu.stratosphere.pact.programs.triangle.tasks.DuplicateEdges;
+import eu.stratosphere.pact.programs.triangle.tasks.SendDegrees;
+import eu.stratosphere.pact.programs.triangle.tasks.SendTriangles;
+import eu.stratosphere.pact.programs.triangle.tasks.SetDegrees;
+import eu.stratosphere.pact.programs.triangle.tasks.SetTriangles;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.*;

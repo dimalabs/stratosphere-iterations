@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks.triangle;
+package eu.stratosphere.pact.programs.triangle.tasks;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -9,12 +9,10 @@ import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.iterative.ParallelTriangleEntry;
 import eu.stratosphere.pact.iterative.nephele.cache.CacheStore;
-import eu.stratosphere.pact.iterative.nephele.io.IntegerHashPartitioner;
 import eu.stratosphere.pact.iterative.nephele.io.PactIntArray;
-import eu.stratosphere.pact.iterative.nephele.tasks.core.AbstractMinimalTask;
-import eu.stratosphere.pact.runtime.task.util.OutputEmitter;
+import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 
-public class SendTrianglesHashPartitioned extends AbstractMinimalTask {
+public class SendTriangles extends AbstractMinimalTask {
 
 	public static final String CACHE_ID_PARAM = "iter.cache.cacheid";
 	
@@ -37,11 +35,6 @@ public class SendTrianglesHashPartitioned extends AbstractMinimalTask {
 	@Override
 	public void invoke() throws Exception {
 		waitForPreviousTask(inputs[0]);
-		
-		//Fix output emitter to use simple hash partitioning
-		OutputEmitter oe = 
-				(OutputEmitter) output.getWriters().get(0).getOutputGate().getChannelSelector();
-		oe.setPartitionFunction(new IntegerHashPartitioner());
 		
 		int subTaskIndex = this.getEnvironment().getIndexInSubtaskGroup();
 		ConcurrentMap<Integer, ParallelTriangleEntry> cache = 
