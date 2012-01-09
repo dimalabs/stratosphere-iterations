@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative;
+package eu.stratosphere.pact.standalone;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -9,7 +9,7 @@ import java.util.Iterator;
 import java.util.Map;
 
 
-public class SerialDriver
+public class SerialDriverNoDegrees
 {	
 	public static final int READ_BUFFER_CAPACITY = 64*1024;
 	
@@ -19,7 +19,7 @@ public class SerialDriver
 		final String filePath = args[0];
 		final long totalStart = System.nanoTime();
 		
-		final HashMap<Integer, SerialTriangleEntry> map = new HashMap<Integer, SerialTriangleEntry>(900000, 0.85f);
+		final HashMap<Integer, SerialTriangleEntryNoDegrees> map = new HashMap<Integer, SerialTriangleEntryNoDegrees>(900000, 0.85f);
 		
 		// ========================================================================================
 		//                           Phase 1: Read elements into Hash-Table
@@ -46,17 +46,17 @@ public class SerialDriver
 						if (next == '\n') {
 							// add an entry in both directions
 							Integer fi = Integer.valueOf(first);
-							SerialTriangleEntry firstEntry = map.get(fi);
+							SerialTriangleEntryNoDegrees firstEntry = map.get(fi);
 							if (firstEntry == null) {
-								firstEntry = new SerialTriangleEntry();
+								firstEntry = new SerialTriangleEntryNoDegrees();
 								map.put(fi, firstEntry);
 							}
 							firstEntry.add(current);
 							
 							Integer si = Integer.valueOf(current);
-							SerialTriangleEntry secondEntry = map.get(si);
+							SerialTriangleEntryNoDegrees secondEntry = map.get(si);
 							if (secondEntry == null) {
-								secondEntry = new SerialTriangleEntry();
+								secondEntry = new SerialTriangleEntryNoDegrees();
 								map.put(si, secondEntry);
 							}
 							secondEntry.add(first);
@@ -103,41 +103,13 @@ public class SerialDriver
 		{
 			long sortingStart = System.nanoTime();
 			
-			for (Map.Entry<Integer, SerialTriangleEntry> entry : map.entrySet()) {
-				SerialTriangleEntry tEntry = entry.getValue();
+			for (Map.Entry<Integer, SerialTriangleEntryNoDegrees> entry : map.entrySet()) {
+				SerialTriangleEntryNoDegrees tEntry = entry.getValue();
 				tEntry.finalizeListBuilding();
 			}
 			
 			long sortingElapsed = System.nanoTime() - sortingStart;
 			System.out.println("Finalizing took: " + (sortingElapsed / 1000000) + "msecs");
-		}
-		
-		// ========================================================================================
-		//                           Phase 3: Notify of vertex degrees
-		// ========================================================================================
-		{
-			long degreeComputationStart = System.nanoTime();
-			
-			final Iterator<Map.Entry<Integer, SerialTriangleEntry>> entryIter = map.entrySet().iterator();
-			
-			while (entryIter.hasNext())
-			{
-				final Map.Entry<Integer, SerialTriangleEntry> entry = entryIter.next();
-				final int key = entry.getKey().intValue();
-				final SerialTriangleEntry tEntry = entry.getValue();
-				final int degree = tEntry.size();
-				
-				for (int i = 0; i < degree; i++) {
-					Integer id = Integer.valueOf(tEntry.getId(i));
-					
-					// tell that id about this key's degree
-					final SerialTriangleEntry other = map.get(id);
-					other.setDegree(key, degree);
-				}
-			}
-			
-			long degreeComputationElapsed = System.nanoTime() - degreeComputationStart;
-			System.out.println("Degree computation took: " + (degreeComputationElapsed / 1000000) + "msecs");
 		}
 		
 		// ========================================================================================
@@ -149,26 +121,25 @@ public class SerialDriver
 			
 			long totalTriangles = 0;
 			
-			Iterator<Map.Entry<Integer, SerialTriangleEntry>> entryIter = map.entrySet().iterator();
+			Iterator<Map.Entry<Integer, SerialTriangleEntryNoDegrees>> entryIter = map.entrySet().iterator();
 			while (entryIter.hasNext())
 			{
-				final Map.Entry<Integer, SerialTriangleEntry> kv = entryIter.next();
-				final SerialTriangleEntry entry = kv.getValue();
+				final Map.Entry<Integer, SerialTriangleEntryNoDegrees> kv = entryIter.next();
+				final SerialTriangleEntryNoDegrees entry = kv.getValue();
 				final int key = kv.getKey().intValue();
 				final int degree = entry.size();
 				
 				// notify all that have a larger degree of our neighbors with a lower degree than them
 				for (int i = 0; i < degree; i++) {
 					final int toNotifyId = entry.getId(i);
-					final int toNotifyDegree = entry.getDegree(i);
 					
 					// rule out which ones not to notify
-					if (toNotifyDegree < degree || (toNotifyDegree == degree && toNotifyId < key))
+					if (toNotifyId < key)
 						continue;
 					
 					// notify that one of all our neighbors with a smaller id than that one
-					final SerialTriangleEntry toNotify = map.get(Integer.valueOf(toNotifyId));
-					int numTriangles = toNotify.countTriangles(entry.getAllIds(), entry.getAllTriangleCounts(), i, key, degree);
+					final SerialTriangleEntryNoDegrees toNotify = map.get(Integer.valueOf(toNotifyId));
+					int numTriangles = toNotify.countTriangles(entry.getAllIds(), entry.getAllTriangleCounts(), i, key);
 					entry.setNumTrianglesForEdge(i, numTriangles);
 					
 					totalTriangles += numTriangles;

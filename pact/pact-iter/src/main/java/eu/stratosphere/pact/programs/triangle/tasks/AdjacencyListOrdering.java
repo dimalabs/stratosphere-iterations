@@ -4,9 +4,9 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import eu.stratosphere.pact.iterative.ParallelTriangleEntry;
 import eu.stratosphere.pact.iterative.nephele.cache.CacheStore;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
+import eu.stratosphere.pact.standalone.ParallelTriangleEntry;
 
 public class AdjacencyListOrdering extends AbstractMinimalTask {
 

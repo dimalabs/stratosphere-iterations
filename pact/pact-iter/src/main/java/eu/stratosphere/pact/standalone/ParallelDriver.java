@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative;
+package eu.stratosphere.pact.standalone;
 
 import java.io.BufferedOutputStream;
 import java.io.FileNotFoundException;
@@ -10,6 +10,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Iterator;
 import java.util.Map;
+
+import eu.stratosphere.pact.iterative.AccessibleConcurrentHashMap;
 
 
 public class ParallelDriver

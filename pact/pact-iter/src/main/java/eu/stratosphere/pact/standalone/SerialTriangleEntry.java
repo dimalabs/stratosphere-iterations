@@ -1,16 +1,17 @@
-package eu.stratosphere.pact.iterative;
+package eu.stratosphere.pact.standalone;
 
 import java.util.Arrays;
 
-public class SerialTriangleEntryNoDegrees
+public class SerialTriangleEntry
 {
 	private int[] ids;
+	private int[] degrees;
 	private int[] numTrianglesForEdge;
 	private int len;
 	
 	private int numTriangles;
 	
-	public SerialTriangleEntryNoDegrees()
+	public SerialTriangleEntry()
 	{
 		this.ids = new int[10];
 		this.len = 0;
@@ -36,6 +37,23 @@ public class SerialTriangleEntryNoDegrees
 	public int[] getAllTriangleCounts()
 	{
 		return this.numTrianglesForEdge;
+	}
+	
+	public int getDegree(int pos)
+	{
+		rangeCheck(pos);
+		return this.degrees[pos];
+	}
+	
+	public void setDegree(int id, int degree)
+	{
+		int pos = Arrays.binarySearch(this.ids, 0, this.len, id);
+		if (pos >= 0) {
+			this.degrees[pos] = degree;
+		}
+		else {
+			throw new IllegalStateException("ID not found!");
+		}
 	}
 	
 	public void setNumTrianglesForEdge(int pos, int numTriangles)
@@ -76,12 +94,21 @@ public class SerialTriangleEntryNoDegrees
 		}
 		
 		this.len = k;
+		this.degrees = new int[k];
 		this.numTrianglesForEdge = new int[k];
 	}
 	
-	public int countTriangles(final int[] otherIds, final int[] otherTriangleCounts, final int num, final int souceId)
+	public void addTriangleCandidate(int id)
+	{
+		if (Arrays.binarySearch(this.ids, 0, this.len, id) >= 0) {
+			this.numTriangles++;
+		}
+	}
+	
+	public int countTriangles(final int[] otherIds, final int[] otherTriangleCounts, final int num, final int souceId, final int sourceDegree)
 	{
 		final int[] ids = this.ids;
+		final int[] degrees = this.degrees;
 		final int[] triangleCounts = this.numTrianglesForEdge;
 		final int len = this.len;
 		
@@ -103,7 +130,8 @@ public class SerialTriangleEntryNoDegrees
 			}
 			
 			if (thisId == otherId) {
-				if (otherId > souceId) {
+				final int candDegree = degrees[thisIndex]; 
+				if (candDegree > sourceDegree || (candDegree == sourceDegree && otherId > souceId)) {
 					triangles++;
 					triangleCounts[thisIndex]++;
 					otherTriangleCounts[otherIndex]++;

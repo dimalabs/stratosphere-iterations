@@ -1,17 +1,21 @@
-package eu.stratosphere.pact.iterative;
+package eu.stratosphere.pact.standalone;
 
+import java.io.PrintWriter;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-public class SerialTriangleEntry
+public class ParallelTriangleEntry
 {
-	private int[] ids;
-	private int[] degrees;
-	private int[] numTrianglesForEdge;
-	private int len;
+	private final AtomicBoolean spinLock = new AtomicBoolean();
 	
-	private int numTriangles;
+	private volatile int[] ids;
+	private volatile int[] degrees;
+	private volatile int[] numTrianglesForEdge;
+	private volatile int len;
 	
-	public SerialTriangleEntry()
+	private volatile int numTriangles;
+	
+	public ParallelTriangleEntry()
 	{
 		this.ids = new int[10];
 		this.len = 0;
@@ -19,8 +23,13 @@ public class SerialTriangleEntry
 	
 	public void add(int id)
 	{
-		ensureIdArraySize(this.len + 1);
-		this.ids[len++] = id;
+		lock();
+		try {
+			ensureIdArraySize(this.len + 1);
+			this.ids[len++] = id;
+		} finally {
+			unlock();
+		}
 	}
 	
 	public int getId(int pos)
@@ -52,6 +61,10 @@ public class SerialTriangleEntry
 			this.degrees[pos] = degree;
 		}
 		else {
+			System.out.println(id);
+			System.out.println("Array star");
+			Arrays.toString(this.ids);
+			System.out.println("arrad end");
 			throw new IllegalStateException("ID not found!");
 		}
 	}
@@ -94,25 +107,24 @@ public class SerialTriangleEntry
 		}
 		
 		this.len = k;
-		this.degrees = new int[k];
-		this.numTrianglesForEdge = new int[k];
+		this.degrees = new int[this.len + 10];
 	}
 	
 	public void addTriangleCandidate(int id)
 	{
 		if (Arrays.binarySearch(this.ids, 0, this.len, id) >= 0) {
+			lock();
 			this.numTriangles++;
+			unlock();
 		}
 	}
 	
-	public int countTriangles(final int[] otherIds, final int[] otherTriangleCounts, final int num, final int souceId, final int sourceDegree)
+	public void addTriangles(final int[] otherIds, final int num, final int firstId, final int secondId, final PrintWriter out)
 	{
 		final int[] ids = this.ids;
-		final int[] degrees = this.degrees;
-		final int[] triangleCounts = this.numTrianglesForEdge;
 		final int len = this.len;
 		
-		int triangles = 0;
+		lock();
 		
 		// go through our neighbors and see which of those neighbors we have
 		int thisIndex = 0, otherIndex = 0;
@@ -130,18 +142,59 @@ public class SerialTriangleEntry
 			}
 			
 			if (thisId == otherId) {
-				final int candDegree = degrees[thisIndex]; 
-				if (candDegree > sourceDegree || (candDegree == sourceDegree && otherId > souceId)) {
-					triangles++;
-					triangleCounts[thisIndex]++;
-					otherTriangleCounts[otherIndex]++;
-				}
+				this.numTriangles++;
+//				out.print(firstId);
+//				out.print(',');
+//				out.print(secondId);
+//				out.print(',');
+//				out.print(thisId);
+//				out.print('\n');
+				otherIndex++;
+			}
+			thisIndex++;
+		}
+		
+		unlock();
+	}
+	
+	public int countTriangles(final int[] otherIds, final int[] otherTriangleCounts, final int num)
+	{
+		final int[] ids = this.ids;
+		final int[] triangleCounts = this.numTrianglesForEdge;
+		final int len = this.len;
+		
+		int triangles = 0;
+		
+		lock();
+		
+		// go through our neighbors and see which of those neighbors we have
+		int thisIndex = 0, otherIndex = 0;
+		while (thisIndex < len && otherIndex < num)
+		{
+			int thisId = ids[thisIndex];
+			int otherId = otherIds[otherIndex];
+			
+			while (thisId < otherId && thisIndex < len-1) {
+				thisId = ids[++thisIndex];
+			}
+			
+			while (thisId > otherId && otherIndex < num - 1) {
+				otherId = otherIds[++otherIndex];
+			}
+			
+			if (thisId == otherId) {
+				triangles++;
+				triangleCounts[thisIndex]++;
+				otherTriangleCounts[otherIndex]++;
 				otherIndex++;
 			}
 			thisIndex++;
 		}
 		
 		this.numTriangles += triangles;
+		
+		unlock();
+		
 		return triangles;
 	}
 	
@@ -163,5 +216,13 @@ public class SerialTriangleEntry
 	private final void rangeCheck(int pos) {
 		if (pos < 0 || pos >= this.len)
 			throw new IndexOutOfBoundsException();
+	}
+	
+	public final void lock() {
+		for (; !this.spinLock.compareAndSet(false, true); );
+	}
+	
+	public final void unlock() {
+		this.spinLock.set(false);
 	}
 }

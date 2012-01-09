@@ -7,11 +7,11 @@ import java.util.concurrent.ConcurrentMap;
 
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactInteger;
-import eu.stratosphere.pact.iterative.ParallelTriangleEntry;
 import eu.stratosphere.pact.iterative.nephele.cache.CacheStore;
 import eu.stratosphere.pact.iterative.nephele.io.IntegerHashPartitioner;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter;
+import eu.stratosphere.pact.standalone.ParallelTriangleEntry;
 
 public class SendDegreesHashPartitioned extends AbstractMinimalTask {
 
