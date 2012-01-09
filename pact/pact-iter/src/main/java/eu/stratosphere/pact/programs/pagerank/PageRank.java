@@ -1,7 +1,7 @@
 package eu.stratosphere.pact.programs.pagerank;
 
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectIterationLoop;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectJobVertices;
-import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createDummyOutput;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createInput;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createOutput;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createTask;
@@ -19,7 +19,6 @@ import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.common.type.base.PactString;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
-import eu.stratosphere.pact.iterative.nephele.tasks.IterationStateSynchronizer;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
 import eu.stratosphere.pact.programs.pagerank.tasks.DBPediaPageLinkInput;
 import eu.stratosphere.pact.programs.pagerank.tasks.GroupTask;
@@ -86,21 +85,7 @@ public class PageRank {
 				new int[] {0}, new Class[] {PactString.class});
 		connectJobVertices(ShipStrategy.FORWARD, iterationStart, sinkVertex, null, null);
 		
-		//Iteration specific (make sure that iterationStart and iterationEnd share the same 
-		//instance and subtask id structure. The synchronizer is required, so that a new
-		//iteration does not start before all other subtasks are finished.
-		JobOutputVertex dummySinkA = createDummyOutput(graph, dop, spi);
-		dummySinkA.setVertexToShareInstancesWith(sourceVertex);
-		connectJobVertices(ShipStrategy.FORWARD, iterationEnd, dummySinkA, null, null);
-		JobTaskVertex iterationStateSynchronizer = createTask(IterationStateSynchronizer.class, graph, dop, spi);
-		iterationStateSynchronizer.setVertexToShareInstancesWith(sourceVertex);
-		iterationStateSynchronizer.setNumberOfSubtasks(1);
-		connectJobVertices(ShipStrategy.FORWARD, iterationStart, iterationEnd, null, null);
-		connectJobVertices(ShipStrategy.BROADCAST, iterationEnd, iterationStateSynchronizer, null, null);
-		connectJobVertices(ShipStrategy.BROADCAST, iterationStart, iterationStateSynchronizer, null, null);
-		JobOutputVertex dummySinkB = createDummyOutput(graph, dop, spi);
-		dummySinkB.setVertexToShareInstancesWith(sourceVertex);
-		connectJobVertices(ShipStrategy.FORWARD, iterationStateSynchronizer, dummySinkB, null, null);
+		connectIterationLoop(iterationStart, iterationEnd, graph);
 		
 		//Submit job
 		submit(graph, getConfiguration());

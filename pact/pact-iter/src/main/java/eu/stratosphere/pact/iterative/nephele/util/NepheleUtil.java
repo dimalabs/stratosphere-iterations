@@ -25,10 +25,11 @@ import eu.stratosphere.pact.common.io.OutputFormat;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
+import eu.stratosphere.pact.iterative.nephele.tasks.IterationStateSynchronizer;
 import eu.stratosphere.pact.runtime.task.DataSinkTask;
 import eu.stratosphere.pact.runtime.task.DataSourceTask;
-import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 import eu.stratosphere.pact.runtime.task.util.NepheleReaderIterator;
+import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 import eu.stratosphere.pact.runtime.task.util.TaskConfig;
 import eu.stratosphere.pact.runtime.task.util.TaskConfig.LocalStrategy;
 
@@ -149,6 +150,35 @@ public class NepheleUtil {
 			outputConfig.addOutputShipStrategy(shipStrategy, keyPos, keyTypes);
 		}
 		inputConfig.addInputShipStrategy(shipStrategy);
+	}
+	
+	/*
+	 * Iteration specific (make sure that iterationStart and iterationEnd share the same 
+	 * instance and subtask id structure. The synchronizer is required, so that a new
+	 * iteration does not start before all other subtasks are finished.
+	 */
+	public static void connectIterationLoop(JobTaskVertex iterationHead, JobTaskVertex iterationTail,
+			JobGraph graph) throws JobGraphDefinitionException {
+		int dop = iterationHead.getNumberOfSubtasks();
+		
+//		JobOutputVertex dummySinkA = createDummyOutput(graph, dop);
+//		dummySinkA.setVertexToShareInstancesWith(iterationTail);
+//		connectJobVertices(ShipStrategy.FORWARD, iterationTail, dummySinkA, null, null);
+		
+		//Create direct connection between head and tail
+		connectJobVertices(ShipStrategy.FORWARD, iterationHead, iterationTail, null, null);
+		
+		//Create synchronization point
+		JobTaskVertex iterationStateSynchronizer = createTask(IterationStateSynchronizer.class, graph, dop);
+		iterationStateSynchronizer.setVertexToShareInstancesWith(iterationTail);
+		iterationStateSynchronizer.setNumberOfSubtasks(1);
+		connectJobVertices(ShipStrategy.BROADCAST, iterationTail, iterationStateSynchronizer, null, null);
+		connectJobVertices(ShipStrategy.BROADCAST, iterationHead, iterationStateSynchronizer, null, null);
+		
+		//Create dummy sink for synchronization point so that nephele does not complain
+		JobOutputVertex dummySinkB = createDummyOutput(graph, dop);
+		dummySinkB.setVertexToShareInstancesWith(iterationTail);
+		connectJobVertices(ShipStrategy.FORWARD, iterationStateSynchronizer, dummySinkB, null, null);
 	}
 	
 

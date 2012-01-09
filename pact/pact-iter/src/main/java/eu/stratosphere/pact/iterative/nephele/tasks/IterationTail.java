@@ -45,7 +45,7 @@ public class IterationTail extends AbstractIterativeTask {
 								queue);
 						queue = null;
 						//Signal synchronization task that we are finished 
-						publishState(ChannelState.CLOSED, getEnvironment().getOutputGate(1));
+						publishState(ChannelState.CLOSED, getEnvironment().getOutputGate(0));
 					}
 					
 					if(stateListeners[0].getState() == ChannelState.OPEN && queue == null) {
