@@ -63,7 +63,7 @@ public class SortingPageRankIteration extends IterationHead {
 			for (String neighbour : outgoing) {
 				rec.setField(0, new PactString(neighbour));
 				rec.setField(1, prank);
-				output.getWriters().get(0).emit(rec);
+				iterOutputWriter.emit(rec);
 			}
 			i++;
 		}		
@@ -130,7 +130,7 @@ public class SortingPageRankIteration extends IterationHead {
 			for (String neighbour : outgoing) {
 				rec.setField(0, new PactString(neighbour));
 				rec.setField(1, prank);
-				output.getWriters().get(0).emit(rec);
+				iterOutputWriter.emit(rec);
 			}
 		}
 	}
@@ -145,7 +145,7 @@ public class SortingPageRankIteration extends IterationHead {
 			
 			rec.setField(0, new PactString(page));
 			rec.setField(1, new PactDouble(rank));
-			output.getWriters().get(1).emit(rec);
+			taskOutputWriter.emit(rec);
 		}
 	}
 
