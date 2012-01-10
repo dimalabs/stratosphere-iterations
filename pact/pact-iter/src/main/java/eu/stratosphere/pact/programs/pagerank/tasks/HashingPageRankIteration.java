@@ -52,7 +52,11 @@ public class HashingPageRankIteration extends IterationHead {
 				rec.setField(1, prank);
 				iterOutputWriter.emit(rec);
 			}
-		}		
+		}
+		
+		PactRecord errRecord = new PactRecord();
+		errRecord.setField(0, new PactDouble(initialRank));
+		terminationOutputWriter.emit(errRecord);
 	}
 
 	@Override
@@ -72,8 +76,18 @@ public class HashingPageRankIteration extends IterationHead {
 			}
 		}
 		
+		double maxDiff = Double.NEGATIVE_INFINITY;
+		
 		for (String page : sumMap.keySet()) {
 			double normalizedRank = 0.15 / NUM_VERTICES + 0.85 * sumMap.get(page);
+			Double oldRank = ranks.get(page);
+			if(oldRank != null) {
+				double diff = Math.abs(normalizedRank - oldRank);
+				if(diff > maxDiff) {
+					maxDiff = diff;
+				}
+			}
+			
 			ranks.put(page, normalizedRank);
 		}
 		sumMap = null; //Help garbage collection
@@ -89,6 +103,10 @@ public class HashingPageRankIteration extends IterationHead {
 				iterOutputWriter.emit(rec);
 			}
 		}
+		
+		PactRecord errRecord = new PactRecord();
+		errRecord.setField(0, new PactDouble(maxDiff));
+		terminationOutputWriter.emit(errRecord);
 	}
 
 	@Override

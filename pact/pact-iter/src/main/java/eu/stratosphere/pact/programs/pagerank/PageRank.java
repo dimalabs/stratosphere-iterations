@@ -85,7 +85,7 @@ public class PageRank {
 				new int[] {0}, new Class[] {PactString.class});
 		connectJobVertices(ShipStrategy.FORWARD, iterationStart, sinkVertex, null, null);
 		
-		connectIterationLoop(iterationStart, iterationEnd, graph);
+		connectIterationLoop(iterationStart, iterationEnd, PageRankTerminator.class, graph);
 		
 		//Submit job
 		submit(graph, getConfiguration());

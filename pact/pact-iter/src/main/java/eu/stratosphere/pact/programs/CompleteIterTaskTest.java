@@ -25,6 +25,7 @@ import eu.stratosphere.pact.iterative.nephele.tasks.AbstractIterativeTask;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
 import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
+import eu.stratosphere.pact.iterative.nephele.util.TenRoundTermination;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
 public class CompleteIterTaskTest {
@@ -60,7 +61,7 @@ public class CompleteIterTaskTest {
 				new int[] {0}, new Class[] {PactInteger.class});
 		connectJobVertices(ShipStrategy.FORWARD, iterationStart, sinkVertex, null, null);
 		
-		connectIterationLoop(iterationStart, iterationEnd, graph);
+		connectIterationLoop(iterationStart, iterationEnd, TenRoundTermination.class, graph);
 		
 		//Submit job
 		submit(graph, getConfiguration());

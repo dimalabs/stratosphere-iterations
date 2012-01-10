@@ -23,6 +23,7 @@ import eu.stratosphere.pact.iterative.nephele.io.EdgeInput;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeOutput;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
+import eu.stratosphere.pact.iterative.nephele.util.TenRoundTermination;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
 public class SimpleIterTaskTest {
@@ -59,7 +60,7 @@ public class SimpleIterTaskTest {
 				new int[] {0}, new Class[] {PactInteger.class});
 		connectJobVertices(ShipStrategy.FORWARD, iterationStart, sinkVertex, null, null);
 		
-		connectIterationLoop(iterationStart, iterationEnd, graph);
+		connectIterationLoop(iterationStart, iterationEnd, TenRoundTermination.class, graph);
 		
 		//Submit job
 		submit(graph, getConfiguration());

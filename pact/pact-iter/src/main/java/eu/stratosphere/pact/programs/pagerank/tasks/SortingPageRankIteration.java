@@ -66,7 +66,11 @@ public class SortingPageRankIteration extends IterationHead {
 				iterOutputWriter.emit(rec);
 			}
 			i++;
-		}		
+		}
+		
+		PactRecord errRecord = new PactRecord();
+		errRecord.setField(0, new PactDouble(initialRank));
+		terminationOutputWriter.emit(errRecord);
 	}
 
 	@Override
@@ -89,6 +93,8 @@ public class SortingPageRankIteration extends IterationHead {
 		TreeMap<String, Double> sortedUpdates = new TreeMap<String, Double>(sumMap);
 		sumMap = null; //Help garbage collection
 		
+		double maxDiff = Double.NEGATIVE_INFINITY;
+		
 		Iterator<Entry<String, Double>> sortedUpdatesIter = sortedUpdates.entrySet().iterator();
 		if(sortedUpdatesIter.hasNext()) {
 			Entry<String, Double> currentUpdate = sortedUpdatesIter.next();
@@ -108,6 +114,10 @@ public class SortingPageRankIteration extends IterationHead {
 				
 				if(comp == 0) {
 					double normalizedRank = 0.15 / NUM_VERTICES + 0.85 * currentUpdate.getValue();
+					double diff = Math.abs(normalizedRank - ranks[i]);
+					if(diff > maxDiff) {
+						maxDiff = diff;
+					}
 					ranks[i] = normalizedRank;
 					
 					if(sortedUpdatesIter.hasNext()) {
@@ -133,6 +143,10 @@ public class SortingPageRankIteration extends IterationHead {
 				iterOutputWriter.emit(rec);
 			}
 		}
+		
+		PactRecord errRecord = new PactRecord();
+		errRecord.setField(0, new PactDouble(maxDiff));
+		terminationOutputWriter.emit(errRecord);
 	}
 
 	@Override

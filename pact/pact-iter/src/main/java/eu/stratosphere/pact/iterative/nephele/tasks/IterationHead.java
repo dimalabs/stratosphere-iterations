@@ -27,19 +27,24 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	public static String MEMORY_SIZE = "page.rank.memory.size";
 	
 	ClosedListener channelStateListener;
+	ClosedListener terminationStateListener;
 	long memorySize;
 	
 	volatile boolean finished = false;
 	
 	protected OutputGate<? extends Record> iterOutputGate;
+	protected OutputGate<? extends Record> terminationOutputGate;
 	protected RecordWriter<PactRecord> iterOutputWriter;
+	protected RecordWriter<PactRecord> terminationOutputWriter;
 	protected RecordWriter<PactRecord> taskOutputWriter;
 	
 	@Override
 	protected void initTask() {
 		channelStateListener = new ClosedListener();
+		terminationStateListener = new ClosedListener();
 		
 		getEnvironment().getOutputGate(3).subscribeToEvent(channelStateListener, ChannelStateEvent.class);
+		getEnvironment().getOutputGate(4).subscribeToEvent(terminationStateListener, ChannelStateEvent.class);
 		memorySize = getRuntimeConfiguration().getLong(MEMORY_SIZE, -1) * 1024 * 1024;
 	}
 
@@ -61,7 +66,9 @@ public abstract class IterationHead extends AbstractMinimalTask {
 				this,
 				UpdateQueueStrategy.IN_MEMORY_SERIALIZED);
 		iterOutputGate = getEnvironment().getOutputGate(0);
+		terminationOutputGate = getEnvironment().getOutputGate(4);
 		iterOutputWriter = output.getWriters().get(0);
+		terminationOutputWriter = output.getWriters().get(4);
 		taskOutputWriter = output.getWriters().get(1);
 		
 		//Start with a first iteration run using the input data
@@ -73,6 +80,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		
 		//Send iterative close event to indicate that this round is finished
 		AbstractIterativeTask.publishState(ChannelState.CLOSED, iterOutputGate);
+		AbstractIterativeTask.publishState(ChannelState.CLOSED, terminationOutputGate);
 		
 		//Loop until iteration terminates
 		int iterationCounter = 0;
@@ -90,13 +98,14 @@ public abstract class IterationHead extends AbstractMinimalTask {
 			
 			//Wait until all other parallel subtasks have terminated
 			try {
-				channelStateListener.waitForClose();
+				channelStateListener.waitForUpdate();
+				terminationStateListener.waitForUpdate();
 			} catch (InterruptedException ex) {
 				throw new RuntimeException("Internal Error");
 			}
 			
 			
-			if(channelStateListener.isUpdated()) {
+			if(channelStateListener.isUpdated() && terminationStateListener.isUpdated()) {
 				BackTrafficQueueStore.getInstance().publishUpdateQueue(
 						getEnvironment().getJobID(), 
 						getEnvironment().getIndexInSubtaskGroup(),
@@ -104,7 +113,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 						this);
 				
 				//Check termination criterion
-				if(iterationCounter == 10) {
+				if(terminationStateListener.getState() == ChannelState.TERMINATED) {
 					updateQueue = null;
 					break;
 				} else {
@@ -118,6 +127,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 					processUpdates(new QueueIterator(updateQueue));
 					
 					AbstractIterativeTask.publishState(ChannelState.CLOSED, iterOutputGate);
+					AbstractIterativeTask.publishState(ChannelState.CLOSED, terminationOutputGate);
 					
 					updateQueue = null;
 					iterationCounter++;
@@ -190,7 +200,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 				synchronized(object) {
 					updated = true;
 					state = ((ChannelStateEvent) event).getState();
-					if(state != ChannelState.CLOSED) {
+					if(state != ChannelState.CLOSED  && state != ChannelState.TERMINATED) {
 						throw new RuntimeException("Impossible");
 					}
 					object.notifyAll();
@@ -198,7 +208,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 			}
 		}
 		
-		public void waitForClose() throws InterruptedException {
+		public void waitForUpdate() throws InterruptedException {
 			synchronized (object) {
 				while(!updated) {
 					object.wait();
@@ -213,6 +223,10 @@ public abstract class IterationHead extends AbstractMinimalTask {
 			}
 			
 			return false;
+		}
+		
+		public ChannelState getState() {
+			return state;
 		}
 	}
 }
