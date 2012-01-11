@@ -7,6 +7,15 @@ import eu.stratosphere.nephele.event.task.AbstractTaskEvent;
 import eu.stratosphere.nephele.event.task.EventListener;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 
+/**
+ * This class tracks the channel state concerning the internal iteration state.
+ * It makes sure that only valid state transitions are made and if there are
+ * multiple preceding tasks it only changes the final state when all preceding
+ * subtasks send the same state.
+ * 
+ * @author mkaufmann
+ *
+ */
 public class ChannelStateTracker implements EventListener {
 	private volatile ChannelState state = ChannelState.STARTED;
 	private volatile ChannelState nextState = null;
@@ -41,8 +50,6 @@ public class ChannelStateTracker implements EventListener {
 			if(nextState == ChannelState.OPEN && evtState == ChannelState.CLOSED) {
 				waitingStates.add(evtState);
 			} else {
-				//If one channel is switching to a different state then another
-				//bad behavior it is.
 				throw new RuntimeException("Expected next state is " + nextState + " but channel changed to " + state);
 			}
 		}

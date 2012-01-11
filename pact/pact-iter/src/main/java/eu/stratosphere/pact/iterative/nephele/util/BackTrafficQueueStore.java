@@ -33,9 +33,6 @@ public class BackTrafficQueueStore {
 	
 	private static final BackTrafficQueueStore store = new BackTrafficQueueStore();
 	
-	//private static BackTrafficQueueStore store = new ObjectQueueStore();
-	//private static BackTrafficQueueStore store = new SerializingQueueStore();
-	
 	public static BackTrafficQueueStore getInstance() {
 		return store;
 	}
@@ -56,12 +53,12 @@ public class BackTrafficQueueStore {
 				iterEndMap.put(getIdentifier(jobID, subTaskId), endQueue);
 				
 				synchronized(memoryManagerMap) {
-					memoryManagerMap.put(getIdentifier(jobID, ALL_SUBTASK_ID), new DefaultMemoryManager(memorySize));
 					if(memoryManagerMapCounter.containsKey(getIdentifier(jobID, ALL_SUBTASK_ID))) {
-						memoryManagerMapCounter.put(getIdentifier(jobID, ALL_SUBTASK_ID), 
-								memoryManagerMapCounter.get(getIdentifier(jobID, ALL_SUBTASK_ID)) + 1);
+						int newCount = memoryManagerMapCounter.get(getIdentifier(jobID, ALL_SUBTASK_ID)) + 1;
+						memoryManagerMapCounter.put(getIdentifier(jobID, ALL_SUBTASK_ID), newCount);
 					} else {
 						memoryManagerMapCounter.put(getIdentifier(jobID, ALL_SUBTASK_ID), 1);
+						memoryManagerMap.put(getIdentifier(jobID, ALL_SUBTASK_ID), new DefaultMemoryManager(memorySize));
 					}
 				}
 			}
@@ -82,7 +79,7 @@ public class BackTrafficQueueStore {
 					int newCount = memoryManagerMapCounter.get(getIdentifier(jobID, ALL_SUBTASK_ID)) - 1;
 					
 					if(newCount == 0) {
-						memoryManagerMap.remove(getIdentifier(jobID, ALL_SUBTASK_ID));
+						memoryManagerMap.remove(getIdentifier(jobID, ALL_SUBTASK_ID)).shutdown();
 						memoryManagerMapCounter.remove(getIdentifier(jobID, ALL_SUBTASK_ID));
 					} else {
 						memoryManagerMapCounter.put(getIdentifier(jobID, ALL_SUBTASK_ID), newCount);
@@ -317,6 +314,12 @@ public class BackTrafficQueueStore {
 					return count;
 				}
 				
+				@Override
+				public void clear() {
+					getMemoryManager(jobID).release(segments);					
+					segments.clear();
+					count = 0;
+				}
 			};
 		}
 		

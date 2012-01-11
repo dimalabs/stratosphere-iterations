@@ -35,8 +35,8 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	protected OutputGate<? extends Record> iterOutputGate;
 	protected OutputGate<? extends Record> terminationOutputGate;
 	protected RecordWriter<PactRecord> iterOutputWriter;
-	protected RecordWriter<PactRecord> terminationOutputWriter;
 	protected RecordWriter<PactRecord> taskOutputWriter;
+	protected RecordWriter<PactRecord> terminationOutputWriter;
 	
 	@Override
 	protected void initTask() {
@@ -55,6 +55,15 @@ public abstract class IterationHead extends AbstractMinimalTask {
 
 	@Override
 	public void invoke() throws Exception {
+		//Setup variables for easiser access to the correct output gates / writers
+		iterOutputGate = getEnvironment().getOutputGate(0);
+		terminationOutputGate = getEnvironment().getOutputGate(4);
+		iterOutputWriter = output.getWriters().get(0);
+		taskOutputWriter = output.getWriters().get(1);
+		terminationOutputWriter = output.getWriters().get(4);
+		
+		//Create and initialize internal structures for the transport of the iteration
+		//updates from the tail to the head (this class)
 		BackTrafficQueueStore.getInstance().addStructures(
 				getEnvironment().getJobID(), 
 				getEnvironment().getIndexInSubtaskGroup(),
@@ -65,11 +74,6 @@ public abstract class IterationHead extends AbstractMinimalTask {
 				INITIAL_QUEUE_SIZE,
 				this,
 				UpdateQueueStrategy.IN_MEMORY_SERIALIZED);
-		iterOutputGate = getEnvironment().getOutputGate(0);
-		terminationOutputGate = getEnvironment().getOutputGate(4);
-		iterOutputWriter = output.getWriters().get(0);
-		terminationOutputWriter = output.getWriters().get(4);
-		taskOutputWriter = output.getWriters().get(1);
 		
 		//Start with a first iteration run using the input data
 		AbstractIterativeTask.publishState(ChannelState.OPEN, iterOutputGate);
@@ -84,8 +88,8 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		
 		//Loop until iteration terminates
 		int iterationCounter = 0;
+		Queue<PactRecord> updateQueue = null;
 		while(true) {
-			Queue<PactRecord> updateQueue = null;
 			//Wait until previous iteration run is finished for this subtask
 			//and retrieve buffered updates
 			try {
@@ -96,7 +100,8 @@ public abstract class IterationHead extends AbstractMinimalTask {
 				throw new RuntimeException("Internal Error");
 			}
 			
-			//Wait until all other parallel subtasks have terminated
+			//Wait until also other parallel subtasks have terminated and
+			//a termination decision has been made
 			try {
 				channelStateListener.waitForUpdate();
 				terminationStateListener.waitForUpdate();
@@ -105,20 +110,19 @@ public abstract class IterationHead extends AbstractMinimalTask {
 			}
 			
 			
-			if(channelStateListener.isUpdated() && terminationStateListener.isUpdated()) {
-				BackTrafficQueueStore.getInstance().publishUpdateQueue(
-						getEnvironment().getJobID(), 
-						getEnvironment().getIndexInSubtaskGroup(),
-						updateQueue.size()>0?updateQueue.size():INITIAL_QUEUE_SIZE,
-						this);
-				
+			if(channelStateListener.isUpdated() && terminationStateListener.isUpdated()) {				
 				//Check termination criterion
 				if(terminationStateListener.getState() == ChannelState.TERMINATED) {
-					updateQueue = null;
 					break;
 				} else {
 					if (LOG.isInfoEnabled())
 						LOG.info(constructLogString("Starting Iteration: " + iterationCounter, getEnvironment().getTaskName(), this));
+					
+					BackTrafficQueueStore.getInstance().publishUpdateQueue(
+							getEnvironment().getJobID(), 
+							getEnvironment().getIndexInSubtaskGroup(),
+							updateQueue.size()>0?updateQueue.size():INITIAL_QUEUE_SIZE,
+							this);
 					
 					//Start new iteration run
 					AbstractIterativeTask.publishState(ChannelState.OPEN, iterOutputGate);
@@ -141,6 +145,9 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		finish(); 
 		
 		//Release the structures for this iteration
+		if(updateQueue != null) {
+			updateQueue.clear();
+		}
 		BackTrafficQueueStore.getInstance().releaseStructures(
 				getEnvironment().getJobID(), 
 				getEnvironment().getIndexInSubtaskGroup());
