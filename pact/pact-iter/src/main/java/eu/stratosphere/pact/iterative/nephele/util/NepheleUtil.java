@@ -150,7 +150,7 @@ public class NepheleUtil {
 		} else {
 			outputConfig.addOutputShipStrategy(shipStrategy, keyPos, keyTypes);
 		}
-		inputConfig.addInputShipStrategy(shipStrategy);
+		inputConfig.addInputShipStrategy(shipStrategy, 0);
 	}
 	
 	/*
