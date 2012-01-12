@@ -45,7 +45,6 @@ public class SimpleIterTaskTest {
 		
 		JobTaskVertex iterationStart = createTask(DummyIterationHead.class, graph, dop);
 		iterationStart.setVertexToShareInstancesWith(sourceVertex);
-		iterationStart.getConfiguration().setLong(IterationHead.MEMORY_SIZE, 32);
 		
 		JobTaskVertex iterationEnd = createTask(IterationTail.class, graph, dop);
 		iterationEnd.setVertexToShareInstancesWith(sourceVertex);

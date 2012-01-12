@@ -14,7 +14,6 @@ import java.util.concurrent.BlockingQueue;
 import eu.stratosphere.nephele.jobgraph.JobID;
 import eu.stratosphere.nephele.services.memorymanager.MemoryManager;
 import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
-import eu.stratosphere.nephele.services.memorymanager.spi.DefaultMemoryManager;
 import eu.stratosphere.nephele.template.AbstractTask;
 import eu.stratosphere.pact.common.type.PactRecord;
 
@@ -23,13 +22,6 @@ public class BackTrafficQueueStore {
 			new HashMap<String, BlockingQueue<Queue<PactRecord>>>();
 	private volatile HashMap<String, BlockingQueue<Queue<PactRecord>>> iterEndMap =
 			new HashMap<String, BlockingQueue<Queue<PactRecord>>>();
-	
-	private volatile HashMap<String, MemoryManager> memoryManagerMap =
-			new HashMap<String, MemoryManager>();
-	private volatile HashMap<String, Integer> memoryManagerMapCounter =
-			new HashMap<String, Integer>();
-	
-	private static final int ALL_SUBTASK_ID = -1;
 	
 	private static final BackTrafficQueueStore store = new BackTrafficQueueStore();
 	
@@ -51,16 +43,6 @@ public class BackTrafficQueueStore {
 				
 				iterOpenMap.put(getIdentifier(jobID, subTaskId), openQueue);
 				iterEndMap.put(getIdentifier(jobID, subTaskId), endQueue);
-				
-				synchronized(memoryManagerMap) {
-					if(memoryManagerMapCounter.containsKey(getIdentifier(jobID, ALL_SUBTASK_ID))) {
-						int newCount = memoryManagerMapCounter.get(getIdentifier(jobID, ALL_SUBTASK_ID)) + 1;
-						memoryManagerMapCounter.put(getIdentifier(jobID, ALL_SUBTASK_ID), newCount);
-					} else {
-						memoryManagerMapCounter.put(getIdentifier(jobID, ALL_SUBTASK_ID), 1);
-						memoryManagerMap.put(getIdentifier(jobID, ALL_SUBTASK_ID), new DefaultMemoryManager(memorySize));
-					}
-				}
 			}
 		}
 	}
@@ -74,17 +56,6 @@ public class BackTrafficQueueStore {
 				
 				iterOpenMap.remove(getIdentifier(jobID, subTaskId));
 				iterEndMap.remove(getIdentifier(jobID, subTaskId));
-				
-				synchronized(memoryManagerMap) {
-					int newCount = memoryManagerMapCounter.get(getIdentifier(jobID, ALL_SUBTASK_ID)) - 1;
-					
-					if(newCount == 0) {
-						memoryManagerMap.remove(getIdentifier(jobID, ALL_SUBTASK_ID)).shutdown();
-						memoryManagerMapCounter.remove(getIdentifier(jobID, ALL_SUBTASK_ID));
-					} else {
-						memoryManagerMapCounter.put(getIdentifier(jobID, ALL_SUBTASK_ID), newCount);
-					}
-				}
 			}
 		}
 	}
@@ -132,16 +103,6 @@ public class BackTrafficQueueStore {
 		}
 		
 		return queue.take();
-	}
-	
-	public DefaultMemoryManager getMemoryManager(JobID jobID) {
-		MemoryManager manager =
-				safeRetrieval(memoryManagerMap, getIdentifier(jobID, ALL_SUBTASK_ID));
-		if(manager == null) {
-			throw new RuntimeException("Internal Error");
-		}
-		
-		return (DefaultMemoryManager) manager;
 	}
 	
 	
@@ -207,6 +168,7 @@ public class BackTrafficQueueStore {
 				MemorySegment currentWriteSegment;
 				MemorySegment currentReadSegment;
 				Iterator<MemorySegment> allocatingIterator;
+				MemoryManager memoryManager = task.getEnvironment().getMemoryManager();
 				final int CURRENT_READ_SEGMENT_INDEX = 0;
 				
 				{
@@ -219,7 +181,7 @@ public class BackTrafficQueueStore {
 						@Override
 						public MemorySegment next() {
 							try {
-								return getMemoryManager(jobID).allocate(task, DEFAULT_MEMORY_SEGMENT_SIZE);
+								return memoryManager.allocateStrict(task, 1, DEFAULT_MEMORY_SEGMENT_SIZE).get(0);
 							} catch (Exception ex) {
 								throw new RuntimeException("Bad error during serialization", ex);
 							}
@@ -274,7 +236,7 @@ public class BackTrafficQueueStore {
 								
 								//Remove old read segment from list & release in memory manager
 								MemorySegment unused = segments.remove(CURRENT_READ_SEGMENT_INDEX);
-								getMemoryManager(jobID).release(unused);
+								memoryManager.release(unused);
 								
 								//Update reference to new read segment
 								currentReadSegment = segments.get(CURRENT_READ_SEGMENT_INDEX);
@@ -306,7 +268,7 @@ public class BackTrafficQueueStore {
 						//A memory segment can be left if it was not completely full
 						if(segments.size() == 1) {
 							currentWriteSegment = null;
-							getMemoryManager(jobID).release(segments);
+							memoryManager.release(segments);
 						} else if(segments.size() > 1) {
 							throw new RuntimeException("Too many memory segments left");
 						}
@@ -316,7 +278,7 @@ public class BackTrafficQueueStore {
 				
 				@Override
 				public void clear() {
-					getMemoryManager(jobID).release(segments);					
+					memoryManager.release(segments);					
 					segments.clear();
 					count = 0;
 				}

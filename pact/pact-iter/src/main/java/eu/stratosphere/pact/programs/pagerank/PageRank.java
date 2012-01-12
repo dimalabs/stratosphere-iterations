@@ -18,7 +18,6 @@ import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.common.type.base.PactString;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
-import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
 import eu.stratosphere.pact.programs.pagerank.tasks.DBPediaPageLinkInput;
 import eu.stratosphere.pact.programs.pagerank.tasks.GroupTask;
@@ -57,7 +56,6 @@ public class PageRank {
 		final Class<? extends AbstractMinimalTask> pageRankClass = 
 				PageRankVariants.valueOf(args[3]).getPageRankClass(); 
 		final int spi = Integer.valueOf(args[4]);
-		final long memorySize = Integer.valueOf(args[5]);
 		
 		JobGraph graph = new JobGraph("PageRank Test");
 		
@@ -69,7 +67,6 @@ public class PageRank {
 		
 		JobTaskVertex iterationStart = createTask(pageRankClass, graph, dop, spi);
 		iterationStart.setVertexToShareInstancesWith(sourceVertex);
-		iterationStart.getConfiguration().setLong(IterationHead.MEMORY_SIZE, memorySize);
 		
 		JobTaskVertex iterationEnd = createTask(IterationTail.class, graph, dop, spi);
 		iterationEnd.setVertexToShareInstancesWith(sourceVertex);

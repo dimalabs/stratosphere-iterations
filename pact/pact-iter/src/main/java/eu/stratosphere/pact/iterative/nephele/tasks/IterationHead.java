@@ -24,8 +24,6 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	protected static final Log LOG = LogFactory.getLog(IterationHead.class);
 	protected static final int INITIAL_QUEUE_SIZE = 100;
 	
-	public static String MEMORY_SIZE = "page.rank.memory.size";
-	
 	ClosedListener channelStateListener;
 	ClosedListener terminationStateListener;
 	long memorySize;
@@ -45,7 +43,6 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		
 		getEnvironment().getOutputGate(3).subscribeToEvent(channelStateListener, ChannelStateEvent.class);
 		getEnvironment().getOutputGate(4).subscribeToEvent(terminationStateListener, ChannelStateEvent.class);
-		memorySize = getRuntimeConfiguration().getLong(MEMORY_SIZE, -1) * 1024 * 1024;
 	}
 
 	@Override
@@ -55,7 +52,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 
 	@Override
 	public void invoke() throws Exception {
-		//Setup variables for easiser access to the correct output gates / writers
+		//Setup variables for easier access to the correct output gates / writers
 		iterOutputGate = getEnvironment().getOutputGate(0);
 		terminationOutputGate = getEnvironment().getOutputGate(4);
 		iterOutputWriter = output.getWriters().get(0);
