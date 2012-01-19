@@ -2,12 +2,15 @@ package eu.stratosphere.pact.iterative.nephele.tasks;
 
 import java.io.IOException;
 
+import eu.stratosphere.nephele.execution.librarycache.LibraryCacheManager;
 import eu.stratosphere.nephele.io.BipartiteDistributionPattern;
 import eu.stratosphere.nephele.io.DistributionPattern;
 import eu.stratosphere.nephele.io.MutableRecordReader;
 import eu.stratosphere.nephele.io.PointwiseDistributionPattern;
 import eu.stratosphere.nephele.template.AbstractTask;
+import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.util.InstantiationUtil;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.runtime.task.AbstractPactTask;
 import eu.stratosphere.pact.runtime.task.util.NepheleReaderIterator;
@@ -20,10 +23,16 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 	protected MutableObjectIterator<PactRecord>[] inputs;
 	protected TaskConfig config;
 	protected OutputCollector output;
+	protected ClassLoader classLoader;
 	
 	@Override
 	public final void registerInputOutput() {
 		this.config = new TaskConfig(getRuntimeConfiguration());
+		try {
+			this.classLoader = LibraryCacheManager.getClassLoader(getEnvironment().getJobID());
+		} catch (IOException ioe) {
+			throw new RuntimeException("The ClassLoader for the user code could not be instantiated from the library cache.", ioe);
+		}
 		
 		initInputs();
 		initOutputs();
@@ -89,6 +98,29 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 		PactRecord tmp = new PactRecord();
 		while(input.next(tmp)) {
 			
+		}
+	}
+	
+	protected Class<? extends Key>[] loadKeyClasses() {
+		try {
+			return config.getLocalStrategyKeyClasses(classLoader);
+		} catch (Exception ex) {
+			throw new RuntimeException("Error loading key classes", ex);
+		}
+	}
+	
+	protected <T> T initStub(Class<T> stubSuperClass) {
+		try {
+			@SuppressWarnings("unchecked")
+			Class<T> stubClass = (Class<T>) this.config.getStubClass(stubSuperClass, classLoader);
+			
+			return InstantiationUtil.instantiate(stubClass, stubSuperClass);
+		}
+		catch (ClassNotFoundException cnfe) {
+			throw new RuntimeException("The stub implementation class was not found.", cnfe);
+		}
+		catch (ClassCastException ccex) {
+			throw new RuntimeException("The stub class is not a proper subclass of " + stubSuperClass.getName(), ccex); 
 		}
 	}
 	

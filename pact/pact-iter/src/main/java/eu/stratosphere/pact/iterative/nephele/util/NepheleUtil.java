@@ -22,10 +22,14 @@ import eu.stratosphere.pact.common.io.FileInputFormat;
 import eu.stratosphere.pact.common.io.FileOutputFormat;
 import eu.stratosphere.pact.common.io.InputFormat;
 import eu.stratosphere.pact.common.io.OutputFormat;
+import eu.stratosphere.pact.common.stubs.MatchStub;
+import eu.stratosphere.pact.common.stubs.ReduceStub;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.iterative.nephele.bulk.BulkIterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationStateSynchronizer;
+import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationTerminationChecker;
 import eu.stratosphere.pact.runtime.task.DataSinkTask;
 import eu.stratosphere.pact.runtime.task.DataSourceTask;
@@ -38,6 +42,9 @@ public class NepheleUtil {
 	// config dir parameters
 	private static final String DEFAULT_CONFIG_DIRECTORY = "/home/mkaufmann/stratosphere-0.2/conf";
 	private static final String ENV_CONFIG_DIRECTORY = "NEPHELE_CONF_DIR";
+	public static final int DEFAULT_MATCH_MEMORY = 8*1024*1024;
+	public static final String TASK_MEMORY = "iter.task.memory";
+	public static final int HASH_JOIN_PAGE_SIZE = 0x1 << 15;
 	
 	public static void setProperty(JobTaskVertex buildCache,
 			String key, String value) {
@@ -185,6 +192,76 @@ public class NepheleUtil {
 		connectJobVertices(ShipStrategy.FORWARD, terminationDeciderTask, dummySinkB, null, null);
 	}
 	
+	/*
+	 * Iteration specific (make sure that iterationStart and iterationEnd share the same 
+	 * instance and subtask id structure. The synchronizer is required, so that a new
+	 * iteration does not start before all other subtasks are finished.
+	 */
+	public static void connectBulkIterationLoop(AbstractJobVertex iterationInput, AbstractJobVertex iterationOutput,
+			JobTaskVertex[] innerLoopStarts, JobTaskVertex innerLoopEnd, JobTaskVertex terminationDataVertex,
+			ShipStrategy iterationInputShipStrategy,
+			Class<? extends TerminationDecider> decider, JobGraph graph) throws JobGraphDefinitionException {
+		int dop = iterationInput.getNumberOfSubtasks();
+		int spi = iterationInput.getNumberOfSubtasksPerInstance();
+		
+		//Create iteration head
+		JobTaskVertex iterationHead = createTask(BulkIterationHead.class, graph, dop, spi);
+		iterationHead.setVertexToShareInstancesWith(iterationInput);
+		
+		//Create iteration tail
+		JobTaskVertex iterationTail = createTask(IterationTail.class, graph, dop, spi);
+		iterationTail.setVertexToShareInstancesWith(iterationInput);
+		
+		//Create synchronization task
+		JobTaskVertex iterationStateSynchronizer = createTask(IterationStateSynchronizer.class, graph, 1);
+		iterationStateSynchronizer.setVertexToShareInstancesWith(iterationInput);
+		
+		//Create termination decider
+		JobTaskVertex terminationDeciderTask = createTask(IterationTerminationChecker.class, graph, 1);
+		terminationDeciderTask.setVertexToShareInstancesWith(iterationInput);
+		terminationDeciderTask.getConfiguration().setClass(IterationTerminationChecker.TERMINATION_DECIDER, 
+						decider);
+		
+		//Create dummy sink for synchronization point so that nephele does not complain
+		JobOutputVertex dummySinkA = createDummyOutput(graph, 1);
+		dummySinkA.setVertexToShareInstancesWith(iterationInput);
+		
+		//Create dummy sink for termination decider so that nephele does not complain
+		JobOutputVertex dummySinkB = createDummyOutput(graph, 1);
+		dummySinkB.setVertexToShareInstancesWith(iterationInput);
+		
+
+		//Create a connection between iteration input and iteration head
+		connectJobVertices(iterationInputShipStrategy, iterationInput, iterationHead, null, null);
+
+		//Create a connection between iteration head and inner loop starts
+		for (JobTaskVertex innerLoopStart : innerLoopStarts) {
+			connectJobVertices(ShipStrategy.FORWARD, iterationHead, innerLoopStart, null, null);
+		}
+		
+		//Create a connection between iteration head and iteration output
+		connectJobVertices(ShipStrategy.FORWARD, iterationHead, iterationOutput, null, null);
+		
+		//Create a connection between inner loop end and iteration tail
+		connectJobVertices(iterationInputShipStrategy, innerLoopEnd, iterationTail, null, null);
+		
+		//Create a connection between termination output and termination decider
+		connectJobVertices(ShipStrategy.BROADCAST, terminationDataVertex, terminationDeciderTask, null, null);
+		
+		//Create direct connection between head and tail for nephele placement
+		connectJobVertices(ShipStrategy.FORWARD, iterationHead, iterationTail, null, null);
+		//Connect synchronization task with head and tail
+		connectJobVertices(ShipStrategy.BROADCAST, iterationTail, iterationStateSynchronizer, null, null);
+		connectJobVertices(ShipStrategy.BROADCAST, iterationHead, iterationStateSynchronizer, null, null);
+		//Connect termination decider to iteration head
+		connectJobVertices(ShipStrategy.BROADCAST, iterationHead, terminationDeciderTask, null, null);	
+		
+		//Connect synchronization task with dummy output
+		connectJobVertices(ShipStrategy.FORWARD, iterationStateSynchronizer, dummySinkA, null, null);
+		//Connect termination decider with dummy output
+		connectJobVertices(ShipStrategy.FORWARD, terminationDeciderTask, dummySinkB, null, null);
+	}
+	
 
 	public static Configuration getConfiguration() {
 		String location = null;
@@ -204,6 +281,29 @@ public class NepheleUtil {
 	public static void submit(JobGraph graph, Configuration nepheleConfig) throws IOException, JobExecutionException {
 		JobClient client = new JobClient(graph, nepheleConfig);
 		client.submitJobAndWait();
+	}
+	
+	public static void setMatchInformation(JobTaskVertex match, Class<? extends MatchStub> stubClass,
+			int[] keyPosA, int[] keyPosB, Class<? extends Key>[] keyClasses) {
+		TaskConfig config = new TaskConfig(match.getConfiguration());
+		config.setStubClass(stubClass);
+		config.setLocalStrategyKeyTypes(0, keyPosA);
+		config.setLocalStrategyKeyTypes(1, keyPosB);
+		config.setLocalStrategyKeyTypes(keyClasses);
+	}
+	
+	public static void setReduceInformation(JobTaskVertex reduce, Class<? extends ReduceStub> stubClass,
+			int[] keyPos, Class<? extends Key>[] keyClasses) {
+		TaskConfig config = new TaskConfig(reduce.getConfiguration());
+		config.setStubClass(stubClass);
+		config.setLocalStrategyKeyTypes(0, keyPos);
+		config.setLocalStrategyKeyTypes(keyClasses);
+	}
+	
+	public static void setMemorSize(JobTaskVertex task, int mem) {
+		task.getConfiguration().setInteger(NepheleUtil.TASK_MEMORY, mem);
+		TaskConfig config = new TaskConfig(task.getConfiguration());
+		config.setMemorySize(mem*1024*1024);
 	}
 	
 	public static class DummyNullOutput extends AbstractOutputTask {

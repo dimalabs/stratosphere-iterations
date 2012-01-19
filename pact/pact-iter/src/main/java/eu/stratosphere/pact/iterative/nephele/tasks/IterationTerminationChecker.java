@@ -51,9 +51,9 @@ public class IterationTerminationChecker extends AbstractIterativeTask {
 					values.clear();
 					
 					if(terminate) {
-						getEnvironment().getInputGate(0).publishEvent(new ChannelStateEvent(ChannelState.TERMINATED));
+						getEnvironment().getInputGate(1).publishEvent(new ChannelStateEvent(ChannelState.TERMINATED));
 					} else {
-						getEnvironment().getInputGate(0).publishEvent(new ChannelStateEvent(ChannelState.CLOSED));
+						getEnvironment().getInputGate(1).publishEvent(new ChannelStateEvent(ChannelState.CLOSED));
 					}
 				} 
 			}
@@ -70,7 +70,7 @@ public class IterationTerminationChecker extends AbstractIterativeTask {
 
 	@Override
 	public int getNumberOfInputs() {
-		return 1;
+		return 2;
 	}
 
 }

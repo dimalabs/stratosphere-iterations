@@ -8,25 +8,18 @@ import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelStat
 
 public class IterationIterator implements MutableObjectIterator<PactRecord> {
 	private MutableObjectIterator<PactRecord> iter;
-	private PactRecord firstRecord;
 	private ChannelStateTracker listener;
-	private boolean closed;
+	private PactRecord dummyRecord;
+	private boolean closed = true;
 	
-	public IterationIterator(PactRecord rec,
-			MutableObjectIterator<PactRecord> input, ChannelStateTracker listener) {
+	public IterationIterator(MutableObjectIterator<PactRecord> input, ChannelStateTracker listener) {
 		this.iter = input;
-		this.firstRecord = rec;
 		this.listener = listener;
+		this.dummyRecord = new PactRecord();
 	}
 
 	@Override
-	public boolean next(PactRecord target) throws IOException {
-		if(firstRecord != null) {
-			firstRecord.copyTo(target);
-			firstRecord = null;
-			return true;
-		}
-		
+	public boolean next(PactRecord target) throws IOException {		
 		if(closed) {
 			return false;
 		}
@@ -43,7 +36,9 @@ public class IterationIterator implements MutableObjectIterator<PactRecord> {
 				}
 				return success;
 			} catch (StateChangeException ex) {
-				//Only valid state changed is from open to closed
+				//When this function is called the current state always has to be ChannelState.OPENED
+				//this is assured by first calling checkTermination(). So the only valid state change
+				//is from open to closed.
 				if(listener.isChanged()) {
 					ChannelState state = listener.getState();
 					if(state == ChannelState.CLOSED) {
@@ -51,6 +46,37 @@ public class IterationIterator implements MutableObjectIterator<PactRecord> {
 						return false;
 					} else {
 						throw new RuntimeException("Should never happen");
+					}
+				}
+			}
+		}
+	}
+	
+	/**
+	 * Checks whether the input is terminate. If false the state is open
+	 * @return
+	 * @throws IOException
+	 */
+	public boolean checkTermination() throws IOException {
+		while(true) {
+			try {
+				boolean success = iter.next(dummyRecord);	
+				if(success) {
+					//When calling this function the ChannelState should be closed and the next epected
+					//thing is a event and not a record
+					throw new RuntimeException("Record received but only events were expected");
+				} else {
+					//If it returned without access the channel was closed => terminated
+					return true;
+				}
+			} catch (StateChangeException ex) {
+				if(listener.isChanged()) {
+					if(listener.getState() == ChannelState.OPEN) {
+						//Channel is opened so it can't be terminated
+						closed = false;
+						return false;
+					} else {
+						throw new RuntimeException("Only expected state change is to open" + listener.getState());
 					}
 				}
 			}

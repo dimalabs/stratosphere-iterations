@@ -41,8 +41,8 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		channelStateListener = new ClosedListener();
 		terminationStateListener = new ClosedListener();
 		
-		getEnvironment().getOutputGate(3).subscribeToEvent(channelStateListener, ChannelStateEvent.class);
-		getEnvironment().getOutputGate(4).subscribeToEvent(terminationStateListener, ChannelStateEvent.class);
+		getEnvironment().getOutputGate(4).subscribeToEvent(channelStateListener, ChannelStateEvent.class);
+		getEnvironment().getOutputGate(5).subscribeToEvent(terminationStateListener, ChannelStateEvent.class);
 	}
 
 	@Override
@@ -54,10 +54,10 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	public void invoke() throws Exception {
 		//Setup variables for easier access to the correct output gates / writers
 		iterOutputGate = getEnvironment().getOutputGate(0);
-		terminationOutputGate = getEnvironment().getOutputGate(4);
+		terminationOutputGate = getEnvironment().getOutputGate(5);
 		iterOutputWriter = output.getWriters().get(0);
-		taskOutputWriter = output.getWriters().get(1);
-		terminationOutputWriter = output.getWriters().get(4);
+		taskOutputWriter = output.getWriters().get(2);
+		terminationOutputWriter = output.getWriters().get(5);
 		
 		//Create and initialize internal structures for the transport of the iteration
 		//updates from the tail to the head (this class)
@@ -81,7 +81,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		
 		//Send iterative close event to indicate that this round is finished
 		AbstractIterativeTask.publishState(ChannelState.CLOSED, iterOutputGate);
-		AbstractIterativeTask.publishState(ChannelState.CLOSED, terminationOutputGate);
+		//AbstractIterativeTask.publishState(ChannelState.CLOSED, terminationOutputGate);
 		
 		//Loop until iteration terminates
 		int iterationCounter = 0;
@@ -128,7 +128,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 					processUpdates(new QueueIterator(updateQueue));
 					
 					AbstractIterativeTask.publishState(ChannelState.CLOSED, iterOutputGate);
-					AbstractIterativeTask.publishState(ChannelState.CLOSED, terminationOutputGate);
+					//AbstractIterativeTask.publishState(ChannelState.CLOSED, terminationOutputGate);
 					
 					updateQueue = null;
 					iterationCounter++;
@@ -139,7 +139,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		}
 		
 		//Call stub so that it can finish its code
-		finish(); 
+		finish(new QueueIterator(updateQueue)); 
 		
 		//Release the structures for this iteration
 		if(updateQueue != null) {
@@ -154,10 +154,15 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		output.close();
 	}
 	
+	//TODO: Make abstract and delete old finish
+	public void finish(MutableObjectIterator<PactRecord> iter) throws Exception {
+	}
+
 	public abstract void processInput(MutableObjectIterator<PactRecord> iter) throws Exception;
 	
 	public abstract void processUpdates(MutableObjectIterator<PactRecord> iter) throws Exception;
 	
+	@Deprecated
 	public abstract void finish() throws Exception;
 	
 	public static String constructLogString(String message, String taskName, AbstractInvokable parent)

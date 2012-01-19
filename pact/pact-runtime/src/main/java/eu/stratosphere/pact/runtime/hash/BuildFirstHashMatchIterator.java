@@ -42,7 +42,7 @@ public final class BuildFirstHashMatchIterator implements MatchTaskIterator
 	/**
 	 * Constant describing the size of the pages, used by the internal hash join, in bytes.
 	 */
-	public static final int HASH_JOIN_PAGE_SIZE = 0x1 << 15;
+	public static final int HASH_JOIN_PAGE_SIZE = 0x1 << 18;
 	
 	// --------------------------------------------------------------------------------------------
 	
