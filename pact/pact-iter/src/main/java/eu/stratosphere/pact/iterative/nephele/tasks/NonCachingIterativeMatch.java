@@ -2,17 +2,11 @@ package eu.stratosphere.pact.iterative.nephele.tasks;
 
 import eu.stratosphere.pact.common.stubs.MatchStub;
 import eu.stratosphere.pact.common.type.Key;
-import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
-import eu.stratosphere.pact.iterative.nephele.util.NepheleUtil;
 import eu.stratosphere.pact.runtime.hash.BuildFirstHashMatchIterator;
-import eu.stratosphere.pact.runtime.resettable.SpillingResettableIterator;
-import eu.stratosphere.pact.runtime.resettable.SpillingResettableMutableObjectIterator;
 import eu.stratosphere.pact.runtime.task.util.MatchTaskIterator;
 
 public class NonCachingIterativeMatch extends AbstractDualIterativeTask {
-	private static final int PROBE_INPUT = 1;
-	
 	private int[] buildKeyPos;
 	private int[] probeKeyPos;
 	private Class<? extends Key>[] keyClasses;
@@ -22,7 +16,7 @@ public class NonCachingIterativeMatch extends AbstractDualIterativeTask {
 	@Override
 	protected void initTask() {
 		buildKeyPos = config.getLocalStrategyKeyPositions(0);
-		probeKeyPos = config.getLocalStrategyKeyPositions(PROBE_INPUT);
+		probeKeyPos = config.getLocalStrategyKeyPositions(1);
 		keyClasses =  loadKeyClasses();
 		
 		stub = initStub(MatchStub.class);

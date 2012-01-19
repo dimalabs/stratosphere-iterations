@@ -76,10 +76,17 @@ public class BackTrafficQueueStore {
 	}
 	
 	public synchronized Queue<PactRecord> receiveUpdateQueue(JobID jobID, int subTaskId) throws InterruptedException {
-		BlockingQueue<Queue<PactRecord>> queue = 
-				 safeRetrieval(iterOpenMap, getIdentifier(jobID, subTaskId));
-		if(queue == null) {
-			throw new RuntimeException("Internal Error");
+		BlockingQueue<Queue<PactRecord>> queue = null;
+		int count = 0;
+		while(queue == null) {
+			queue = safeRetrieval(iterOpenMap, getIdentifier(jobID, subTaskId));
+			if(queue == null) {
+				Thread.sleep(1000);
+				count++;
+				if(count == 10) {
+					throw new RuntimeException("Internal Error");
+				}
+			}
 		}
 		
 		return queue.take();
@@ -97,7 +104,7 @@ public class BackTrafficQueueStore {
 	
 	public Queue<PactRecord> receiveIterationEnd(JobID jobID, int subTaskId) throws InterruptedException {
 		BlockingQueue<Queue<PactRecord>> queue = 
-				 safeRetrieval(iterEndMap, getIdentifier(jobID, subTaskId));
+				safeRetrieval(iterEndMap, getIdentifier(jobID, subTaskId));
 		if(queue == null) {
 			throw new RuntimeException("Internal Error");
 		}

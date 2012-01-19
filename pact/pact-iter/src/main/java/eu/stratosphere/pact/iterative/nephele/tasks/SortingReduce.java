@@ -6,7 +6,6 @@ import eu.stratosphere.pact.common.stubs.ReduceStub;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
-import eu.stratosphere.pact.programs.bulkpagerank2.tasks.RankReduce;
 import eu.stratosphere.pact.runtime.sort.UnilateralSortMerger;
 import eu.stratosphere.pact.runtime.util.KeyComparator;
 import eu.stratosphere.pact.runtime.util.KeyGroupedIterator;
@@ -20,6 +19,7 @@ public class SortingReduce extends AbstractIterativeTask {
 	private ReduceStub stub;
 	private UnilateralSortMerger sorter;
 	
+	@SuppressWarnings("unchecked")
 	@Override
 	protected void initTask() {
 		keyPos = config.getLocalStrategyKeyPositions(0);
@@ -56,7 +56,6 @@ public class SortingReduce extends AbstractIterativeTask {
 		// run stub implementation
 		while (iter.nextKey())
 		{
-			//output.getWriters().get(1).emit(new PactRecord(new PactDouble(2)));
 			stub.reduce(iter.getValues(), output);
 		}
 		

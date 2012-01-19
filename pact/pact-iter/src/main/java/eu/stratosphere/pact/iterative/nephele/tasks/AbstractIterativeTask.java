@@ -77,6 +77,7 @@ public abstract class AbstractIterativeTask extends AbstractMinimalTask {
 	/**
 	 * Allows to run code that should only be run once in the beginning
 	 * @throws Exception
+	 * TODO: Make abstract
 	 */
 	public void invokeStart() throws Exception {
 		
