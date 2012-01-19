@@ -24,6 +24,7 @@ import eu.stratosphere.pact.iterative.nephele.tasks.NonCachingIterativeMatch;
 import eu.stratosphere.pact.iterative.nephele.tasks.ProbeCachingMatch;
 import eu.stratosphere.pact.iterative.nephele.tasks.SortingReduce;
 import eu.stratosphere.pact.programs.bulkpagerank2.tasks.BulkGroupTask;
+import eu.stratosphere.pact.programs.bulkpagerank.BulkPageRankTerminator;
 import eu.stratosphere.pact.programs.bulkpagerank.tasks.ContributionMatch;
 import eu.stratosphere.pact.programs.bulkpagerank.tasks.DiffMatch;
 import eu.stratosphere.pact.programs.bulkpagerank.tasks.InitialRankAssigner;
@@ -97,13 +98,7 @@ public class BulkPageRank {
 		
 		connectJobVertices(ShipStrategy.FORWARD, adjList, initialRankAssigner, null, null);
 		connectJobVertices(ShipStrategy.FORWARD, initialRankAssigner, tmpTask, null, null);
-		//connectJobVertices(ShipStrategy.FORWARD, adjList, iterationStart, null, null);
-		
-		//connectJobVertices(ShipStrategy.FORWARD, iterationStart, contributionMatch, null, null);
 		connectJobVertices(ShipStrategy.FORWARD, contributionMatch, rankReduce, null, null);
-		//connectJobVertices(ShipStrategy.BROADCAST, rankReduce, iterationEnd, null, null);
-		
-		//connectJobVertices(ShipStrategy.FORWARD, iterationStart, sinkVertex, null, null);
 		
 		connectBulkIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {contributionMatch, diffMatch}, 
 				rankReduce,	diffMatch, ShipStrategy.BROADCAST, BulkPageRankTerminator.class, graph);
@@ -111,7 +106,6 @@ public class BulkPageRank {
 		connectJobVertices(ShipStrategy.PARTITION_HASH, adjList, contributionMatch, 
 				new int[] {1}, new Class[] {PactString.class});
 		connectJobVertices(ShipStrategy.FORWARD, rankReduce, diffMatch, null, null);
-		//connectIterationLoop(iterationStart, iterationEnd, PageRankTerminator.class, graph);
 		
 		//Submit job
 		submit(graph, getConfiguration());

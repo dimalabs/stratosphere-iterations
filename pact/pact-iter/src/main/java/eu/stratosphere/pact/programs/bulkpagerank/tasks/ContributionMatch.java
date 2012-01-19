@@ -7,11 +7,9 @@ import eu.stratosphere.pact.common.type.base.PactDouble;
 import eu.stratosphere.pact.common.type.base.PactString;
 
 public class ContributionMatch extends MatchStub {
-	PactDouble number = new PactDouble();
-	PactString tid = new PactString();
-	PactString pid = new PactString();
-	PactDouble p = new PactDouble();
-	PactDouble contrib = new PactDouble();
+	private PactDouble number = new PactDouble();
+	private PactString tid = new PactString();
+	private PactDouble contrib = new PactDouble();
 	
 	@Override
 	public void match(PactRecord rankState, PactRecord neighbourProb, Collector out)

@@ -97,21 +97,13 @@ public class BulkPageRank {
 		
 		connectJobVertices(ShipStrategy.FORWARD, adjList, initialRankAssigner, null, null);
 		connectJobVertices(ShipStrategy.FORWARD, initialRankAssigner, tmpTask, null, null);
-		//connectJobVertices(ShipStrategy.FORWARD, adjList, iterationStart, null, null);
-		
-		//connectJobVertices(ShipStrategy.FORWARD, iterationStart, contributionMatch, null, null);
 		connectJobVertices(ShipStrategy.FORWARD, contributionMatch, rankReduce, null, null);
-		//connectJobVertices(ShipStrategy.BROADCAST, rankReduce, iterationEnd, null, null);
-		
-		//connectJobVertices(ShipStrategy.FORWARD, iterationStart, sinkVertex, null, null);
-		
 		connectBulkIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {contributionMatch, diffMatch}, 
 				rankReduce,	diffMatch, ShipStrategy.BROADCAST, BulkPageRankTerminator.class, graph);
 		
 		connectJobVertices(ShipStrategy.PARTITION_HASH, adjList, contributionMatch, 
 				new int[] {1}, new Class[] {PactString.class});
 		connectJobVertices(ShipStrategy.FORWARD, rankReduce, diffMatch, null, null);
-		//connectIterationLoop(iterationStart, iterationEnd, PageRankTerminator.class, graph);
 		
 		//Submit job
 		submit(graph, getConfiguration());
