@@ -5,6 +5,7 @@ import eu.stratosphere.nephele.io.InputGate;
 import eu.stratosphere.nephele.io.OutputGate;
 import eu.stratosphere.nephele.services.iomanager.IOManager;
 import eu.stratosphere.nephele.services.memorymanager.MemoryManager;
+import eu.stratosphere.nephele.types.Record;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent;
@@ -99,5 +100,12 @@ public abstract class AbstractIterativeTask extends AbstractMinimalTask {
 		//Now when the event arrives, all records will be processed before the state change.
 		gate.publishEvent(new ChannelStateEvent(state));
 		gate.flush();
+	}
+
+	public static void publishState(ChannelState state,
+			OutputGate<? extends Record>[] iterStateGates) throws Exception {
+		for (OutputGate<? extends Record> gate : iterStateGates) {
+			publishState(state, gate);
+		}
 	}	
 }

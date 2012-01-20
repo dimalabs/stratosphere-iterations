@@ -42,9 +42,7 @@ public class NepheleUtil {
 	// config dir parameters
 	private static final String DEFAULT_CONFIG_DIRECTORY = "/home/mkaufmann/stratosphere-0.2/conf";
 	private static final String ENV_CONFIG_DIRECTORY = "NEPHELE_CONF_DIR";
-	public static final int DEFAULT_MATCH_MEMORY = 8*1024*1024;
 	public static final String TASK_MEMORY = "iter.task.memory";
-	public static final int HASH_JOIN_PAGE_SIZE = 0x1 << 15;
 	
 	public static void setProperty(JobTaskVertex buildCache,
 			String key, String value) {
@@ -233,11 +231,6 @@ public class NepheleUtil {
 
 		//Create a connection between iteration input and iteration head
 		connectJobVertices(iterationInputShipStrategy, iterationInput, iterationHead, null, null);
-
-		//Create a connection between iteration head and inner loop starts
-		for (JobTaskVertex innerLoopStart : innerLoopStarts) {
-			connectJobVertices(ShipStrategy.FORWARD, iterationHead, innerLoopStart, null, null);
-		}
 		
 		//Create a connection between iteration head and iteration output
 		connectJobVertices(ShipStrategy.FORWARD, iterationHead, iterationOutput, null, null);
@@ -255,6 +248,11 @@ public class NepheleUtil {
 		connectJobVertices(ShipStrategy.BROADCAST, iterationHead, iterationStateSynchronizer, null, null);
 		//Connect termination decider to iteration head
 		connectJobVertices(ShipStrategy.BROADCAST, iterationHead, terminationDeciderTask, null, null);	
+		
+		//Create a connection between iteration head and inner loop starts
+		for (JobTaskVertex innerLoopStart : innerLoopStarts) {
+			connectJobVertices(ShipStrategy.FORWARD, iterationHead, innerLoopStart, null, null);
+		}
 		
 		//Connect synchronization task with dummy output
 		connectJobVertices(ShipStrategy.FORWARD, iterationStateSynchronizer, dummySinkA, null, null);

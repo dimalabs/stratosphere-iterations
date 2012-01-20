@@ -69,10 +69,4 @@ public class SortingReduce extends AbstractIterativeTask {
 		return 1;
 	}
 	
-	@Override
-	protected void initOutputs() {
-		// TODO Auto-generated method stub
-		super.initOutputs();
-	}
-
 }

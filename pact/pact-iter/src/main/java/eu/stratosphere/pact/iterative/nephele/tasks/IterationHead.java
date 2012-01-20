@@ -18,31 +18,26 @@ import eu.stratosphere.pact.iterative.nephele.util.BackTrafficQueueStore;
 import eu.stratosphere.pact.iterative.nephele.util.BackTrafficQueueStore.UpdateQueueStrategy;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
+import eu.stratosphere.pact.runtime.task.util.OutputCollector;
 
 public abstract class IterationHead extends AbstractMinimalTask {
 	
 	protected static final Log LOG = LogFactory.getLog(IterationHead.class);
 	protected static final int INITIAL_QUEUE_SIZE = 100;
 	
-	ClosedListener channelStateListener;
-	ClosedListener terminationStateListener;
-	long memorySize;
+	private ClosedListener channelStateListener;
+	private ClosedListener terminationStateListener;
+	private long memorySize;
 	
-	volatile boolean finished = false;
-	
-	protected OutputGate<? extends Record> iterOutputGate;
-	protected OutputGate<? extends Record> terminationOutputGate;
-	protected RecordWriter<PactRecord> iterOutputWriter;
-	protected RecordWriter<PactRecord> taskOutputWriter;
-	protected RecordWriter<PactRecord> terminationOutputWriter;
+	private volatile boolean finished = false;
 	
 	@Override
 	protected void initTask() {
 		channelStateListener = new ClosedListener();
 		terminationStateListener = new ClosedListener();
 		
-		getEnvironment().getOutputGate(4).subscribeToEvent(channelStateListener, ChannelStateEvent.class);
-		getEnvironment().getOutputGate(5).subscribeToEvent(terminationStateListener, ChannelStateEvent.class);
+		getEnvironment().getOutputGate(2).subscribeToEvent(channelStateListener, ChannelStateEvent.class);
+		getEnvironment().getOutputGate(3).subscribeToEvent(terminationStateListener, ChannelStateEvent.class);
 	}
 
 	@Override
@@ -53,11 +48,19 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	@Override
 	public void invoke() throws Exception {
 		//Setup variables for easier access to the correct output gates / writers
-		iterOutputGate = getEnvironment().getOutputGate(0);
-		terminationOutputGate = getEnvironment().getOutputGate(5);
-		iterOutputWriter = output.getWriters().get(0);
-		taskOutputWriter = output.getWriters().get(2);
-		terminationOutputWriter = output.getWriters().get(5);
+		//Create output collector for intermediate results
+		OutputCollector innerOutput = new OutputCollector();
+		RecordWriter<PactRecord>[] innerWriters = getIterationRecordWriters();
+		for (RecordWriter<PactRecord> writer : innerWriters) {
+			innerOutput.addWriter(writer);
+		}
+		
+		//Create output collector for final iteration output
+		OutputCollector taskOutput = new OutputCollector();
+		taskOutput.addWriter(output.getWriters().get(0));
+		
+		//Gates where the iterative channel state is send to
+		OutputGate<? extends Record>[] iterStateGates = getIterationOutputGates();
 		
 		//Create and initialize internal structures for the transport of the iteration
 		//updates from the tail to the head (this class)
@@ -73,14 +76,14 @@ public abstract class IterationHead extends AbstractMinimalTask {
 				UpdateQueueStrategy.IN_MEMORY_SERIALIZED);
 		
 		//Start with a first iteration run using the input data
-		AbstractIterativeTask.publishState(ChannelState.OPEN, iterOutputGate);
+		AbstractIterativeTask.publishState(ChannelState.OPEN, iterStateGates);
 
 		//Process all input records by passing them to the processInput method (supplied by the user)
 		MutableObjectIterator<PactRecord> input = inputs[0];
-		processInput(input);
+		processInput(input, innerOutput);
 		
 		//Send iterative close event to indicate that this round is finished
-		AbstractIterativeTask.publishState(ChannelState.CLOSED, iterOutputGate);
+		AbstractIterativeTask.publishState(ChannelState.CLOSED, iterStateGates);
 		//AbstractIterativeTask.publishState(ChannelState.CLOSED, terminationOutputGate);
 		
 		//Loop until iteration terminates
@@ -122,13 +125,12 @@ public abstract class IterationHead extends AbstractMinimalTask {
 							this);
 					
 					//Start new iteration run
-					AbstractIterativeTask.publishState(ChannelState.OPEN, iterOutputGate);
+					AbstractIterativeTask.publishState(ChannelState.OPEN, iterStateGates);
 					
 					//Call stub function to process updates
-					processUpdates(new QueueIterator(updateQueue));
+					processUpdates(new QueueIterator(updateQueue), innerOutput);
 					
-					AbstractIterativeTask.publishState(ChannelState.CLOSED, iterOutputGate);
-					//AbstractIterativeTask.publishState(ChannelState.CLOSED, terminationOutputGate);
+					AbstractIterativeTask.publishState(ChannelState.CLOSED, iterStateGates);
 					
 					updateQueue = null;
 					iterationCounter++;
@@ -139,7 +141,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		}
 		
 		//Call stub so that it can finish its code
-		finish(new QueueIterator(updateQueue)); 
+		finish(new QueueIterator(updateQueue), taskOutput); 
 		
 		//Release the structures for this iteration
 		if(updateQueue != null) {
@@ -154,16 +156,11 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		output.close();
 	}
 	
-	//TODO: Make abstract and delete old finish
-	public void finish(MutableObjectIterator<PactRecord> iter) throws Exception {
-	}
+	public abstract void finish(MutableObjectIterator<PactRecord> iter, OutputCollector iterationOutput) throws Exception;
 
-	public abstract void processInput(MutableObjectIterator<PactRecord> iter) throws Exception;
+	public abstract void processInput(MutableObjectIterator<PactRecord> iter, OutputCollector innerOutput) throws Exception;
 	
-	public abstract void processUpdates(MutableObjectIterator<PactRecord> iter) throws Exception;
-	
-	@Deprecated
-	public abstract void finish() throws Exception;
+	public abstract void processUpdates(MutableObjectIterator<PactRecord> iter, OutputCollector innerOutput) throws Exception;
 	
 	public static String constructLogString(String message, String taskName, AbstractInvokable parent)
 	{
@@ -177,6 +174,30 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		bld.append(parent.getEnvironment().getCurrentNumberOfSubtasks());
 		bld.append(')');
 		return bld.toString();
+	}
+	
+	private RecordWriter<PactRecord>[] getIterationRecordWriters() {
+		int numIterOutputs = this.config.getNumOutputs() - 4;
+		
+		@SuppressWarnings("unchecked")
+		RecordWriter<PactRecord>[] writers = new RecordWriter[numIterOutputs];
+		for (int i = 0; i < numIterOutputs; i++) {
+			writers[i]  = output.getWriters().get(4 + i);
+		}
+		
+		return writers;
+	}
+	
+	private OutputGate<? extends Record>[] getIterationOutputGates() {
+		int numIterOutputs = this.config.getNumOutputs() - 4;
+		
+		@SuppressWarnings("unchecked")
+		OutputGate<? extends Record>[] gates = new OutputGate[numIterOutputs];
+		for (int i = 0; i < numIterOutputs; i++) {
+			gates[i]  = getEnvironment().getOutputGate(4 + i);
+		}
+		
+		return gates;
 	}
 	
 	private static class QueueIterator implements MutableObjectIterator<PactRecord> {

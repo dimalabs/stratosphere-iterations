@@ -3,7 +3,6 @@ package eu.stratosphere.pact.iterative.nephele.tasks;
 import eu.stratosphere.pact.common.stubs.MatchStub;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
-import eu.stratosphere.pact.iterative.nephele.util.NepheleUtil;
 import eu.stratosphere.pact.runtime.hash.BuildFirstHashMatchIterator;
 import eu.stratosphere.pact.runtime.resettable.SpillingResettableMutableObjectIterator;
 
@@ -30,7 +29,7 @@ public class ProbeCachingMatch extends AbstractIterativeTask {
 		initEnvManagers();
 		probeIter = new SpillingResettableMutableObjectIterator(
 				memoryManager, ioManager, inputs[1],
-				NepheleUtil.DEFAULT_MATCH_MEMORY, this);
+				memorySize, this);
 		probeIter.open();
 	}
 	

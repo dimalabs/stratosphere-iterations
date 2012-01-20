@@ -50,7 +50,7 @@ public class HashingPageRankIteration extends IterationHead {
 			for (String neighbour : outgoing) {
 				rec.setField(0, new PactString(neighbour));
 				rec.setField(1, prank);
-				iterOutputWriter.emit(rec);
+				innerOutputWriter.emit(rec);
 			}
 		}
 		
@@ -100,7 +100,7 @@ public class HashingPageRankIteration extends IterationHead {
 			for (String neighbour : outgoing) {
 				rec.setField(0, new PactString(neighbour));
 				rec.setField(1, prank);
-				iterOutputWriter.emit(rec);
+				innerOutputWriter.emit(rec);
 			}
 		}
 		
