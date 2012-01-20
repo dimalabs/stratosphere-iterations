@@ -1,17 +1,29 @@
 package eu.stratosphere.pact.iterative.nephele.tasks;
 
+import static eu.stratosphere.pact.iterative.nephele.tasks.AbstractIterativeTask.initStateTracking;
+import eu.stratosphere.nephele.io.InputGate;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent;
-import eu.stratosphere.pact.iterative.nephele.util.ChannelStateTracker;
-import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
-import eu.stratosphere.pact.iterative.nephele.util.StateChangeException;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
+import eu.stratosphere.pact.iterative.nephele.util.ChannelStateTracker;
+import eu.stratosphere.pact.iterative.nephele.util.StateChangeException;
 
-public class IterationStateSynchronizer extends AbstractIterativeTask {
+public class IterationStateSynchronizer extends AbstractMinimalTask {
 	
+	private ChannelStateTracker[] stateListeners;
+	
+	@SuppressWarnings("unchecked")
 	@Override
 	protected void initTask() {
+		int numInputs = getNumberOfInputs();
+		stateListeners = new ChannelStateTracker[numInputs];
+		
+		for (int i = 0; i < numInputs; i++)
+		{
+			stateListeners[i] = 
+					initStateTracking((InputGate<PactRecord>) getEnvironment().getInputGate(i));
+		}
 	}
 
 	@Override
@@ -42,13 +54,7 @@ public class IterationStateSynchronizer extends AbstractIterativeTask {
 		inputs[1].next(rec);
 		
 		output.close();
-	}
-
-	@Override
-	public void invokeIter(IterationIterator iterationIter) throws Exception {
-	}
-
-	
+	}	
 
 	@Override
 	public int getNumberOfInputs() {

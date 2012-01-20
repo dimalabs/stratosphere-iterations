@@ -43,7 +43,7 @@ public abstract class AbstractDualIterativeTask extends AbstractIterativeTask {
 			}
 		}
 		
-		invokeEnd();
+		cleanup();
 		
 		output.close();
 	}

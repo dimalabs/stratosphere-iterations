@@ -49,7 +49,7 @@ public class ProbeCachingMatch extends AbstractIterativeTask {
 	}
 	
 	@Override
-	public void invokeEnd() throws Exception {
+	public void cleanup() throws Exception {
 		probeIter.close();
 	}
 

@@ -1,17 +1,36 @@
 package eu.stratosphere.pact.iterative.nephele.tasks;
 
+import static eu.stratosphere.pact.iterative.nephele.tasks.AbstractIterativeTask.initStateTracking;
+import static eu.stratosphere.pact.iterative.nephele.tasks.AbstractIterativeTask.publishState;
+
 import java.util.Queue;
 
+import eu.stratosphere.nephele.io.InputGate;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.util.BackTrafficQueueStore;
-import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
-import eu.stratosphere.pact.iterative.nephele.util.StateChangeException;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
+import eu.stratosphere.pact.iterative.nephele.util.ChannelStateTracker;
+import eu.stratosphere.pact.iterative.nephele.util.StateChangeException;
 
 
-public class IterationTail extends AbstractIterativeTask {
+public class IterationTail extends AbstractMinimalTask {
+	
+	private ChannelStateTracker[] stateListeners;
 
+	@SuppressWarnings("unchecked")
+	@Override
+	protected void initTask() {
+		int numInputs = getNumberOfInputs();
+		stateListeners = new ChannelStateTracker[numInputs];
+		
+		for (int i = 0; i < numInputs; i++)
+		{
+			stateListeners[i] = 
+					initStateTracking((InputGate<PactRecord>) getEnvironment().getInputGate(i));
+		}
+	}
+	
 	@Override
 	public void invoke() throws Exception {
 		//For the iteration internal state tracking, events like iteration close are forwarded using
@@ -66,15 +85,7 @@ public class IterationTail extends AbstractIterativeTask {
 	}
 
 	@Override
-	protected void initTask() {
-	}
-
-	@Override
 	public int getNumberOfInputs() {
 		return 2;
-	}
-
-	@Override
-	public void invokeIter(IterationIterator iterationIter) throws Exception {
 	}
 }

@@ -7,7 +7,7 @@ import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createOutp
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createTask;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.getConfiguration;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.setMatchInformation;
-import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.setMemorSize;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.setMemorySize;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.setReduceInformation;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.submit;
 
@@ -67,26 +67,26 @@ public class BulkPageRank {
 		tmpTask.setVertexToShareInstancesWith(sourceVertex);
 		TaskConfig tempConfig = new TaskConfig(tmpTask.getConfiguration());
 		tempConfig.setStubClass(RankReduce.class);
-		setMemorSize(tmpTask, baseMemory / 8);
+		setMemorySize(tmpTask, baseMemory / 8);
 		
 		//Inner iteration loop tasks -- START
 		JobTaskVertex contributionMatch = createTask(ProbeCachingMatch.class, graph, dop, spi);
 		contributionMatch.setVertexToShareInstancesWith(sourceVertex);
 		setMatchInformation(contributionMatch, ContributionMatch.class, 
 				new int[] {0}, new int[] {0}, new Class[] {PactString.class});
-		setMemorSize(contributionMatch, baseMemory);
+		setMemorySize(contributionMatch, baseMemory);
 		
 		JobTaskVertex rankReduce = createTask(SortingReduce.class, graph, dop, spi);
 		rankReduce.setVertexToShareInstancesWith(sourceVertex);
 		setReduceInformation(rankReduce, RankReduce.class, 
 				new int[] {0}, new Class[] {PactString.class});
-		setMemorSize(rankReduce, baseMemory/3);
+		setMemorySize(rankReduce, baseMemory/3);
 		
 		JobTaskVertex diffMatch = createTask(NonCachingIterativeMatch.class, graph, dop, spi);
 		diffMatch.setVertexToShareInstancesWith(sourceVertex);
 		setMatchInformation(diffMatch, DiffMatch.class, 
 				new int[] {0}, new int[] {0}, new Class[] {PactString.class});
-		setMemorSize(diffMatch, baseMemory);
+		setMemorySize(diffMatch, baseMemory);
 		//Inner iteration loop tasks -- END
 		
 		JobOutputVertex sinkVertex = createOutput(RankOutput.class, output, graph, dop, spi);

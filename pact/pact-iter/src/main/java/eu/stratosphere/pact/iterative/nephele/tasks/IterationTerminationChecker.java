@@ -1,22 +1,27 @@
 package eu.stratosphere.pact.iterative.nephele.tasks;
 
+import static eu.stratosphere.pact.iterative.nephele.tasks.AbstractIterativeTask.initStateTracking;
+
 import java.util.ArrayList;
 import java.util.List;
 
+import eu.stratosphere.nephele.io.InputGate;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent;
+import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateTracker;
-import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
 import eu.stratosphere.pact.iterative.nephele.util.StateChangeException;
 import eu.stratosphere.pact.iterative.nephele.util.TerminationDecider;
-import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 
-public class IterationTerminationChecker extends AbstractIterativeTask {
-	TerminationDecider decider = null;
+public class IterationTerminationChecker extends AbstractMinimalTask {
 	
 	public static final String TERMINATION_DECIDER = "iter.termination.decider";
 	
+	private TerminationDecider decider = null;
+	private ChannelStateTracker[] stateListeners;
+	
+	@SuppressWarnings("unchecked")
 	@Override
 	protected void initTask() {
 		Class<?> cls = getRuntimeConfiguration().getClass(TERMINATION_DECIDER, null);
@@ -24,6 +29,15 @@ public class IterationTerminationChecker extends AbstractIterativeTask {
 			decider = (TerminationDecider) cls.newInstance();
 		} catch (Exception ex) {
 			throw new RuntimeException("Could not instantiate termination decider", ex);
+		}
+		
+		int numInputs = getNumberOfInputs();
+		stateListeners = new ChannelStateTracker[numInputs];
+		
+		for (int i = 0; i < numInputs; i++)
+		{
+			stateListeners[i] = 
+					initStateTracking((InputGate<PactRecord>) getEnvironment().getInputGate(i));
 		}
 	}
 
@@ -60,13 +74,7 @@ public class IterationTerminationChecker extends AbstractIterativeTask {
 		}
 		
 		output.close();
-	}
-
-	@Override
-	public void invokeIter(IterationIterator iterationIter) throws Exception {
-	}
-
-	
+	}	
 
 	@Override
 	public int getNumberOfInputs() {

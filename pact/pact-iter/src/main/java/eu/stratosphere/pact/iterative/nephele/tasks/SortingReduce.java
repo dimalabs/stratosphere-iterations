@@ -4,7 +4,6 @@ import java.util.Comparator;
 
 import eu.stratosphere.pact.common.stubs.ReduceStub;
 import eu.stratosphere.pact.common.type.Key;
-import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
 import eu.stratosphere.pact.runtime.sort.UnilateralSortMerger;
 import eu.stratosphere.pact.runtime.util.KeyComparator;
@@ -42,8 +41,6 @@ public class SortingReduce extends AbstractIterativeTask {
 	
 	@Override
 	public void invokeIter(IterationIterator iterationIter) throws Exception {
-		publishState(ChannelState.OPEN, getEnvironment().getOutputGate(1));
-		
 		try {
 			sorter = new UnilateralSortMerger(memoryManager, ioManager, memorySize, 64, comparators, 
 					keyPos, keyClasses, iterationIter, this, 0.8f);
@@ -60,13 +57,15 @@ public class SortingReduce extends AbstractIterativeTask {
 		}
 		
 		sorter.close();
-		
-		publishState(ChannelState.CLOSED, getEnvironment().getOutputGate(1));
 	}
 
 	@Override
 	public int getNumberOfInputs() {
 		return 1;
+	}
+
+	@Override
+	public void cleanup() throws Exception {
 	}
 	
 }

@@ -2,11 +2,14 @@ package eu.stratosphere.pact.iterative.nephele.tasks;
 
 import java.io.IOException;
 
+import eu.stratosphere.nephele.execution.Environment;
 import eu.stratosphere.nephele.execution.librarycache.LibraryCacheManager;
 import eu.stratosphere.nephele.io.BipartiteDistributionPattern;
 import eu.stratosphere.nephele.io.DistributionPattern;
 import eu.stratosphere.nephele.io.MutableRecordReader;
 import eu.stratosphere.nephele.io.PointwiseDistributionPattern;
+import eu.stratosphere.nephele.services.iomanager.IOManager;
+import eu.stratosphere.nephele.services.memorymanager.MemoryManager;
 import eu.stratosphere.nephele.template.AbstractTask;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.PactRecord;
@@ -15,8 +18,8 @@ import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.runtime.task.AbstractPactTask;
 import eu.stratosphere.pact.runtime.task.util.NepheleReaderIterator;
 import eu.stratosphere.pact.runtime.task.util.OutputCollector;
-import eu.stratosphere.pact.runtime.task.util.TaskConfig;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
+import eu.stratosphere.pact.runtime.task.util.TaskConfig;
 
 public abstract class AbstractMinimalTask extends AbstractTask {
 
@@ -24,6 +27,11 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 	protected TaskConfig config;
 	protected OutputCollector output;
 	protected ClassLoader classLoader;
+	protected MemoryManager memoryManager;
+	protected IOManager ioManager;
+	
+	protected long memorySize;
+	
 	
 	@Override
 	public final void registerInputOutput() {
@@ -34,6 +42,11 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 			throw new RuntimeException("The ClassLoader for the user code could not be instantiated from the library cache.", ioe);
 		}
 		
+		Environment env = getEnvironment();
+		memoryManager = env.getMemoryManager();
+		ioManager = env.getIOManager();
+		memorySize = config.getMemorySize();
+		
 		initInputs();
 		initOutputs();
 		initInternal();
@@ -41,7 +54,7 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 	}
 	
 	protected void initInternal() {
-		//Default implementation does nothing
+		//Can be used by subclasses
 	}
 	
 	protected abstract void initTask();
@@ -122,6 +135,12 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 		catch (ClassCastException ccex) {
 			throw new RuntimeException("The stub class is not a proper subclass of " + stubSuperClass.getName(), ccex); 
 		}
+	}
+	
+	protected void initEnvManagers() {
+		Environment env = getEnvironment();
+		memoryManager = env.getMemoryManager();
+		ioManager = env.getIOManager();
 	}
 	
 	/**

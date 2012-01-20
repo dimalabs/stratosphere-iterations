@@ -298,8 +298,7 @@ public class NepheleUtil {
 		config.setLocalStrategyKeyTypes(keyClasses);
 	}
 	
-	public static void setMemorSize(JobTaskVertex task, int mem) {
-		task.getConfiguration().setInteger(NepheleUtil.TASK_MEMORY, mem);
+	public static void setMemorySize(JobTaskVertex task, int mem) {
 		TaskConfig config = new TaskConfig(task.getConfiguration());
 		config.setMemorySize(mem*1024*1024);
 	}

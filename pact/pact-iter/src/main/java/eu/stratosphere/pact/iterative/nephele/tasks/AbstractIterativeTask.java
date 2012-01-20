@@ -1,10 +1,7 @@
 package eu.stratosphere.pact.iterative.nephele.tasks;
 
-import eu.stratosphere.nephele.execution.Environment;
 import eu.stratosphere.nephele.io.InputGate;
 import eu.stratosphere.nephele.io.OutputGate;
-import eu.stratosphere.nephele.services.iomanager.IOManager;
-import eu.stratosphere.nephele.services.memorymanager.MemoryManager;
 import eu.stratosphere.nephele.types.Record;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
@@ -12,35 +9,25 @@ import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateTracker;
 import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
-import eu.stratosphere.pact.iterative.nephele.util.NepheleUtil;
-import eu.stratosphere.pact.runtime.task.util.TaskConfig;
 
 public abstract class AbstractIterativeTask extends AbstractMinimalTask {
 	
 	protected ChannelStateTracker[] stateListeners;
-	protected MemoryManager memoryManager;
-	protected IOManager ioManager;
-	protected TaskConfig config;
-	
-	protected int memorySize;
+	protected OutputGate<? extends Record>[] iterStateGates;
 	
 	@SuppressWarnings("unchecked")
 	@Override
-	protected void initInternal() {
-		Environment env = getEnvironment();
-		memoryManager = env.getMemoryManager();
-		ioManager = env.getIOManager();
+	protected void initInternal() {		
 		int numInputs = getNumberOfInputs();
-		memorySize = getRuntimeConfiguration().getInteger(NepheleUtil.TASK_MEMORY, 0) * 1024 * 1024;
-		config = new TaskConfig(getRuntimeConfiguration());
-		
 		stateListeners = new ChannelStateTracker[numInputs];
+		
 		for (int i = 0; i < numInputs; i++)
 		{
-			InputGate<PactRecord> inputGate = (InputGate<PactRecord>) env.getInputGate(i);
-			stateListeners[i] = new ChannelStateTracker(inputGate.getNumberOfInputChannels());
-			inputGate.subscribeToEvent(stateListeners[i], ChannelStateEvent.class);
+			stateListeners[i] = 
+					initStateTracking((InputGate<PactRecord>) getEnvironment().getInputGate(i));
 		}
+		
+		iterStateGates = getIterationOutputGates();
 	}
 
 	@Override
@@ -53,7 +40,7 @@ public abstract class AbstractIterativeTask extends AbstractMinimalTask {
 		IterationIterator iterationIter = new IterationIterator(input, stateListener);
 		while(!iterationIter.checkTermination()) {
 			//Send iterative open state to output gates
-			publishState(ChannelState.OPEN, getEnvironment().getOutputGate(0));
+			publishState(ChannelState.OPEN, iterStateGates);
 			
 			if(firstRound) {
 				invokeStart();
@@ -64,35 +51,43 @@ public abstract class AbstractIterativeTask extends AbstractMinimalTask {
 			invokeIter(iterationIter);
 			
 			if(stateListener.getState() == ChannelState.CLOSED) {
-				publishState(ChannelState.CLOSED, getEnvironment().getOutputGate(0));
+				publishState(ChannelState.CLOSED, iterStateGates);
 			} else {
 				throw new RuntimeException("Illegal state after iteration call");
 			}
 		}
 		
-		invokeEnd();
+		cleanup();
 		
 		output.close();
+	}
+	
+	private OutputGate<? extends Record>[] getIterationOutputGates() {
+		int numIterOutputs = this.config.getNumOutputs();
+		
+		@SuppressWarnings("unchecked")
+		OutputGate<? extends Record>[] gates = new OutputGate[numIterOutputs];
+		for (int i = 0; i < numIterOutputs; i++) {
+			gates[i]  = getEnvironment().getOutputGate(i);
+		}
+		
+		return gates;
 	}
 	
 	/**
 	 * Allows to run code that should only be run once in the beginning
 	 * @throws Exception
-	 * TODO: Make abstract
 	 */
-	public void invokeStart() throws Exception {
-		
-	}
-	public void invokeEnd() throws Exception {
-		
-	}
+	public abstract void invokeStart() throws Exception;
+	
+	public abstract void cleanup() throws Exception;
 
 	public abstract void invokeIter(IterationIterator iterationIter) throws Exception;
 	
-	protected void initEnvManagers() {
-		Environment env = getEnvironment();
-		memoryManager = env.getMemoryManager();
-		ioManager = env.getIOManager();
+	public static ChannelStateTracker initStateTracking(InputGate<PactRecord> gate) {
+		ChannelStateTracker tracker = new ChannelStateTracker(gate.getNumberOfInputChannels());
+		gate.subscribeToEvent(tracker, ChannelStateEvent.class);
+		return tracker;
 	}
 	
 	public static void publishState(ChannelState state, OutputGate<?> gate) throws Exception {

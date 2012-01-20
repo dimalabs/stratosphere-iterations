@@ -41,7 +41,7 @@ public class NonCachingIterativeMatch extends AbstractDualIterativeTask {
 	}
 	
 	@Override
-	public void invokeEnd() throws Exception {
+	public void cleanup() throws Exception {
 	}
 
 	@Override
