@@ -46,10 +46,17 @@ public class BulkGroupTask extends AbstractMinimalTask {
 		PactString page = new PactString();
 		PactString tid = new PactString();
 		PactDouble contribution = new PactDouble();
+		PactDouble damp = new PactDouble();
+		damp.setValue(0);
 		for (Entry<String, Set<String>> pageGroup : grouped.entrySet()) {
 			page.setValue(pageGroup.getKey());
 			Set<String> neighbours = pageGroup.getValue();
 			contribution.setValue(1d / neighbours.size());
+			
+			rec.setField(0, page);
+			rec.setField(1, page);
+			rec.setField(2, damp); 
+			output.collect(rec);
 			
 			for (String neighbour : neighbours) {
 				tid.setValue(neighbour);

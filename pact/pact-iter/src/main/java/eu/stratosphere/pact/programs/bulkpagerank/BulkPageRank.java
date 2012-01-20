@@ -38,7 +38,7 @@ public class BulkPageRank {
 	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
-		if(args.length != 4) {
+		if(args.length != 5) {
 			System.out.println("Not correct parameters");
 			System.exit(-1);
 		}
@@ -47,6 +47,7 @@ public class BulkPageRank {
 		final String input = args[1];
 		final String output = args[2];
 		final int spi = Integer.valueOf(args[3]);
+		final int baseMemory = Integer.valueOf(args[4]);
 		
 		JobGraph graph = new JobGraph("Bulk PageRank Broadcast");
 		
@@ -66,26 +67,26 @@ public class BulkPageRank {
 		tmpTask.setVertexToShareInstancesWith(sourceVertex);
 		TaskConfig tempConfig = new TaskConfig(tmpTask.getConfiguration());
 		tempConfig.setStubClass(RankReduce.class);
-		setMemorSize(tmpTask, 2);
+		setMemorSize(tmpTask, baseMemory / 8);
 		
 		//Inner iteration loop tasks -- START
 		JobTaskVertex contributionMatch = createTask(ProbeCachingMatch.class, graph, dop, spi);
 		contributionMatch.setVertexToShareInstancesWith(sourceVertex);
 		setMatchInformation(contributionMatch, ContributionMatch.class, 
 				new int[] {0}, new int[] {0}, new Class[] {PactString.class});
-		setMemorSize(contributionMatch, 12);
+		setMemorSize(contributionMatch, baseMemory);
 		
 		JobTaskVertex rankReduce = createTask(SortingReduce.class, graph, dop, spi);
 		rankReduce.setVertexToShareInstancesWith(sourceVertex);
 		setReduceInformation(rankReduce, RankReduce.class, 
 				new int[] {0}, new Class[] {PactString.class});
-		setMemorSize(rankReduce, 4);
+		setMemorSize(rankReduce, baseMemory/3);
 		
 		JobTaskVertex diffMatch = createTask(NonCachingIterativeMatch.class, graph, dop, spi);
 		diffMatch.setVertexToShareInstancesWith(sourceVertex);
 		setMatchInformation(diffMatch, DiffMatch.class, 
 				new int[] {0}, new int[] {0}, new Class[] {PactString.class});
-		setMemorSize(diffMatch, 12);
+		setMemorSize(diffMatch, baseMemory);
 		//Inner iteration loop tasks -- END
 		
 		JobOutputVertex sinkVertex = createOutput(RankOutput.class, output, graph, dop, spi);
@@ -98,6 +99,7 @@ public class BulkPageRank {
 		connectJobVertices(ShipStrategy.FORWARD, adjList, initialRankAssigner, null, null);
 		connectJobVertices(ShipStrategy.FORWARD, initialRankAssigner, tmpTask, null, null);
 		connectJobVertices(ShipStrategy.FORWARD, contributionMatch, rankReduce, null, null);
+		
 		connectBulkIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {contributionMatch, diffMatch}, 
 				rankReduce,	diffMatch, ShipStrategy.BROADCAST, BulkPageRankTerminator.class, graph);
 		

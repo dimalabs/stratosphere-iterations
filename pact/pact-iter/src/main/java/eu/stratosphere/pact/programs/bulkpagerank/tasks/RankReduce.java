@@ -8,8 +8,8 @@ import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactDouble;
 
 public class RankReduce extends ReduceStub {
-	private PactDouble contrib = new PactDouble();
-	private PactDouble rank = new PactDouble();
+	PactDouble contrib = new PactDouble();
+	PactDouble rank = new PactDouble();
 	
 	@Override
 	public void reduce(Iterator<PactRecord> records, Collector out)
@@ -23,9 +23,6 @@ public class RankReduce extends ReduceStub {
 		}
 		
 		contribSum = 0.15 / 14052 + 0.85 * contribSum;
-//		if(rec.getField(0, pid).getValue().equals("Ελλάδα")) {
-//			System.out.println("Ελλάδα::"+contribSum);
-//		}
 		
 		rank.setValue(contribSum);
 		rec.setField(1, rank);
