@@ -25,19 +25,34 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	protected static final Log LOG = LogFactory.getLog(IterationHead.class);
 	protected static final int INITIAL_QUEUE_SIZE = 100;
 	
+	public static final String FIXED_POINT_TERMINATOR = "pact.iter.fixedpoint";
+	public static final String NUMBER_OF_ITERATIONS = "pact.iter.numiterations";
+	
 	private ClosedListener channelStateListener;
 	private ClosedListener terminationStateListener;
 	private long memorySize;
+	private int numInternalOutputs;
 	
 	private volatile boolean finished = false;
 	
 	@Override
 	protected void initTask() {
-		channelStateListener = new ClosedListener();
-		terminationStateListener = new ClosedListener();
+		boolean useFixedPointTerminator = 
+				getRuntimeConfiguration().getBoolean(FIXED_POINT_TERMINATOR, false);
 		
+		channelStateListener = new ClosedListener();
 		getEnvironment().getOutputGate(2).subscribeToEvent(channelStateListener, ChannelStateEvent.class);
-		getEnvironment().getOutputGate(3).subscribeToEvent(terminationStateListener, ChannelStateEvent.class);
+		
+		if(useFixedPointTerminator) {
+			terminationStateListener = new ClosedListener();
+			getEnvironment().getOutputGate(3).subscribeToEvent(terminationStateListener, ChannelStateEvent.class);
+			numInternalOutputs = 4;
+		} else {
+			int numIterations = 
+					getRuntimeConfiguration().getInteger(NUMBER_OF_ITERATIONS, -1);
+			terminationStateListener = new FixedRoundListener(numIterations);
+			numInternalOutputs = 3;
+		}
 	}
 
 	@Override
@@ -156,11 +171,11 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		output.close();
 	}
 	
-	public abstract void finish(MutableObjectIterator<PactRecord> iter, OutputCollector iterationOutput) throws Exception;
+	public abstract void finish(MutableObjectIterator<PactRecord> iter, OutputCollector output) throws Exception;
 
-	public abstract void processInput(MutableObjectIterator<PactRecord> iter, OutputCollector innerOutput) throws Exception;
+	public abstract void processInput(MutableObjectIterator<PactRecord> iter, OutputCollector output) throws Exception;
 	
-	public abstract void processUpdates(MutableObjectIterator<PactRecord> iter, OutputCollector innerOutput) throws Exception;
+	public abstract void processUpdates(MutableObjectIterator<PactRecord> iter, OutputCollector output) throws Exception;
 	
 	public static String constructLogString(String message, String taskName, AbstractInvokable parent)
 	{
@@ -177,24 +192,24 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	}
 	
 	private RecordWriter<PactRecord>[] getIterationRecordWriters() {
-		int numIterOutputs = this.config.getNumOutputs() - 4;
+		int numIterOutputs = this.config.getNumOutputs() - numInternalOutputs;
 		
 		@SuppressWarnings("unchecked")
 		RecordWriter<PactRecord>[] writers = new RecordWriter[numIterOutputs];
 		for (int i = 0; i < numIterOutputs; i++) {
-			writers[i]  = output.getWriters().get(4 + i);
+			writers[i]  = output.getWriters().get(numInternalOutputs + i);
 		}
 		
 		return writers;
 	}
 	
 	private OutputGate<? extends Record>[] getIterationOutputGates() {
-		int numIterOutputs = this.config.getNumOutputs() - 4;
+		int numIterOutputs = this.config.getNumOutputs() - numInternalOutputs;
 		
 		@SuppressWarnings("unchecked")
 		OutputGate<? extends Record>[] gates = new OutputGate[numIterOutputs];
 		for (int i = 0; i < numIterOutputs; i++) {
-			gates[i]  = getEnvironment().getOutputGate(4 + i);
+			gates[i]  = getEnvironment().getOutputGate(numInternalOutputs + i);
 		}
 		
 		return gates;
@@ -257,6 +272,36 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		
 		public ChannelState getState() {
 			return state;
+		}
+	}
+	
+	private class FixedRoundListener extends ClosedListener {
+		int numRounds;
+		int currentRound;
+		
+		public FixedRoundListener(int numIterations) {
+			this.numRounds = numIterations;
+			this.currentRound = 0;
+		}
+
+		@Override
+		public void waitForUpdate() throws InterruptedException {
+			return;
+		}
+		
+		@Override
+		public boolean isUpdated() {
+			return true;
+		}
+		
+		@Override
+		public ChannelState getState() {
+			currentRound++;
+			if(currentRound == numRounds) {
+				return ChannelState.TERMINATED;
+			} else {
+				return ChannelState.OPEN;
+			}
 		}
 	}
 }

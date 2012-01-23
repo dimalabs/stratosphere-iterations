@@ -28,6 +28,7 @@ import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.iterative.nephele.bulk.BulkIterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
+import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationStateSynchronizer;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationTerminationChecker;
@@ -158,36 +159,50 @@ public class NepheleUtil {
 		inputConfig.addInputShipStrategy(shipStrategy, 0);
 	}
 	
-	/*
-	 * Iteration specific (make sure that iterationStart and iterationEnd share the same 
-	 * instance and subtask id structure. The synchronizer is required, so that a new
-	 * iteration does not start before all other subtasks are finished.
-	 */
-	public static void connectIterationLoop(JobTaskVertex iterationHead, JobTaskVertex iterationTail,
-			Class<? extends TerminationDecider> decider, JobGraph graph) throws JobGraphDefinitionException {
-		//Create direct connection between head and tail for nephele placement
-		connectJobVertices(ShipStrategy.FORWARD, iterationHead, iterationTail, null, null);
+	public static void connectBoundedRoundsIterationLoop(AbstractJobVertex iterationInput, AbstractJobVertex iterationOutput,
+			JobTaskVertex[] innerLoopStarts, JobTaskVertex innerLoopEnd, JobTaskVertex iterationHead, 
+			ShipStrategy iterationInputShipStrategy, int numRounds, JobGraph graph) throws JobGraphDefinitionException {
+		int dop = iterationInput.getNumberOfSubtasks();
+		int spi = iterationInput.getNumberOfSubtasksPerInstance();
+		
+
+		iterationHead.getConfiguration().setBoolean(IterationHead.FIXED_POINT_TERMINATOR, false);
+		iterationHead.getConfiguration().setInteger(IterationHead.NUMBER_OF_ITERATIONS, numRounds);
+		
+		//Create iteration tail
+		JobTaskVertex iterationTail = createTask(IterationTail.class, graph, dop, spi);
+		iterationTail.setVertexToShareInstancesWith(iterationInput);
 		
 		//Create synchronization task
 		JobTaskVertex iterationStateSynchronizer = createTask(IterationStateSynchronizer.class, graph, 1);
-		iterationStateSynchronizer.setVertexToShareInstancesWith(iterationTail);
-		connectJobVertices(ShipStrategy.BROADCAST, iterationTail, iterationStateSynchronizer, null, null);
-		connectJobVertices(ShipStrategy.BROADCAST, iterationHead, iterationStateSynchronizer, null, null);		
+		iterationStateSynchronizer.setVertexToShareInstancesWith(iterationInput);
+		
 		//Create dummy sink for synchronization point so that nephele does not complain
 		JobOutputVertex dummySinkA = createDummyOutput(graph, 1);
-		dummySinkA.setVertexToShareInstancesWith(iterationTail);
-		connectJobVertices(ShipStrategy.FORWARD, iterationStateSynchronizer, dummySinkA, null, null);
+		dummySinkA.setVertexToShareInstancesWith(iterationInput);
+
+		//Create a connection between iteration input and iteration head
+		connectJobVertices(iterationInputShipStrategy, iterationInput, iterationHead, null, null);
 		
-		//Create termination decider
-		JobTaskVertex terminationDeciderTask = createTask(IterationTerminationChecker.class, graph, 1);
-		terminationDeciderTask.setVertexToShareInstancesWith(iterationTail);
-		terminationDeciderTask.getConfiguration().setClass(IterationTerminationChecker.TERMINATION_DECIDER, 
-				decider);
-		connectJobVertices(ShipStrategy.BROADCAST, iterationHead, terminationDeciderTask, null, null);		
-		//Create dummy sink for termination decider so that nephele does not complain
-		JobOutputVertex dummySinkB = createDummyOutput(graph, 1);
-		dummySinkB.setVertexToShareInstancesWith(iterationHead);
-		connectJobVertices(ShipStrategy.FORWARD, terminationDeciderTask, dummySinkB, null, null);
+		//Create a connection between iteration head and iteration output
+		connectJobVertices(ShipStrategy.FORWARD, iterationHead, iterationOutput, null, null);
+		
+		//Create a connection between inner loop end and iteration tail
+		connectJobVertices(iterationInputShipStrategy, innerLoopEnd, iterationTail, null, null);
+		
+		//Create direct connection between head and tail for nephele placement
+		connectJobVertices(ShipStrategy.FORWARD, iterationHead, iterationTail, null, null);
+		//Connect synchronization task with head and tail
+		connectJobVertices(ShipStrategy.BROADCAST, iterationTail, iterationStateSynchronizer, null, null);
+		connectJobVertices(ShipStrategy.BROADCAST, iterationHead, iterationStateSynchronizer, null, null);
+		
+		//Create a connection between iteration head and inner loop starts
+		for (JobTaskVertex innerLoopStart : innerLoopStarts) {
+			connectJobVertices(ShipStrategy.FORWARD, iterationHead, innerLoopStart, null, null);
+		}
+		
+		//Connect synchronization task with dummy output
+		connectJobVertices(ShipStrategy.FORWARD, iterationStateSynchronizer, dummySinkA, null, null);
 	}
 	
 	/*
@@ -195,16 +210,14 @@ public class NepheleUtil {
 	 * instance and subtask id structure. The synchronizer is required, so that a new
 	 * iteration does not start before all other subtasks are finished.
 	 */
-	public static void connectBulkIterationLoop(AbstractJobVertex iterationInput, AbstractJobVertex iterationOutput,
+	public static void connectFixedPointIterationLoop(AbstractJobVertex iterationInput, AbstractJobVertex iterationOutput,
 			JobTaskVertex[] innerLoopStarts, JobTaskVertex innerLoopEnd, JobTaskVertex terminationDataVertex,
-			ShipStrategy iterationInputShipStrategy,
+			JobTaskVertex iterationHead, ShipStrategy iterationInputShipStrategy,
 			Class<? extends TerminationDecider> decider, JobGraph graph) throws JobGraphDefinitionException {
 		int dop = iterationInput.getNumberOfSubtasks();
 		int spi = iterationInput.getNumberOfSubtasksPerInstance();
 		
-		//Create iteration head
-		JobTaskVertex iterationHead = createTask(BulkIterationHead.class, graph, dop, spi);
-		iterationHead.setVertexToShareInstancesWith(iterationInput);
+		iterationHead.getConfiguration().setBoolean(IterationHead.FIXED_POINT_TERMINATOR, true);
 		
 		//Create iteration tail
 		JobTaskVertex iterationTail = createTask(IterationTail.class, graph, dop, spi);
@@ -258,6 +271,26 @@ public class NepheleUtil {
 		connectJobVertices(ShipStrategy.FORWARD, iterationStateSynchronizer, dummySinkA, null, null);
 		//Connect termination decider with dummy output
 		connectJobVertices(ShipStrategy.FORWARD, terminationDeciderTask, dummySinkB, null, null);
+	}
+	
+	/*
+	 * Iteration specific (make sure that iterationStart and iterationEnd share the same 
+	 * instance and subtask id structure. The synchronizer is required, so that a new
+	 * iteration does not start before all other subtasks are finished.
+	 */
+	public static void connectBulkIterationLoop(AbstractJobVertex iterationInput, AbstractJobVertex iterationOutput,
+			JobTaskVertex[] innerLoopStarts, JobTaskVertex innerLoopEnd, JobTaskVertex terminationDataVertex,
+			ShipStrategy iterationInputShipStrategy,
+			Class<? extends TerminationDecider> decider, JobGraph graph) throws JobGraphDefinitionException {
+		int dop = iterationInput.getNumberOfSubtasks();
+		int spi = iterationInput.getNumberOfSubtasksPerInstance();
+		
+		//Create iteration head
+		JobTaskVertex iterationHead = createTask(BulkIterationHead.class, graph, dop, spi);
+		iterationHead.setVertexToShareInstancesWith(iterationInput);
+		
+		connectFixedPointIterationLoop(iterationInput, iterationOutput, innerLoopStarts, innerLoopEnd, 
+				terminationDataVertex, iterationHead, iterationInputShipStrategy, decider, graph);
 	}
 	
 

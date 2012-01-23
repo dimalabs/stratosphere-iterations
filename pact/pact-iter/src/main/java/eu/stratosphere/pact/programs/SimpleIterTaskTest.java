@@ -1,7 +1,6 @@
 package eu.stratosphere.pact.programs;
 
-import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectIterationLoop;
-import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectJobVertices;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectBoundedRoundsIterationLoop;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createInput;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createOutput;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createTask;
@@ -21,13 +20,13 @@ import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeInput;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeOutput;
+import eu.stratosphere.pact.iterative.nephele.tasks.AbstractIterativeTask;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
-import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
-import eu.stratosphere.pact.iterative.nephele.util.TenRoundTermination;
+import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
+import eu.stratosphere.pact.runtime.task.util.OutputCollector;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
 public class SimpleIterTaskTest {
-	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
 		if(args.length != 3) {
@@ -46,54 +45,83 @@ public class SimpleIterTaskTest {
 		JobTaskVertex iterationStart = createTask(DummyIterationHead.class, graph, dop);
 		iterationStart.setVertexToShareInstancesWith(sourceVertex);
 		
-		JobTaskVertex iterationEnd = createTask(IterationTail.class, graph, dop);
-		iterationEnd.setVertexToShareInstancesWith(sourceVertex);
+		JobTaskVertex forward = createTask(DummyIterativeForward.class, graph, dop);
+		forward.setVertexToShareInstancesWith(sourceVertex);
 		
 		JobOutputVertex sinkVertex = createOutput(EdgeOutput.class, output, graph, dop);
 		sinkVertex.setVertexToShareInstancesWith(sourceVertex);
 		
-		//Connect tasks
-		connectJobVertices(ShipStrategy.PARTITION_HASH, sourceVertex, iterationStart, 
-				new int[] {0}, new Class[] {PactInteger.class});
-		connectJobVertices(ShipStrategy.PARTITION_HASH, iterationStart, iterationEnd, 
-				new int[] {0}, new Class[] {PactInteger.class});
-		connectJobVertices(ShipStrategy.FORWARD, iterationStart, sinkVertex, null, null);
-		
-		connectIterationLoop(iterationStart, iterationEnd, TenRoundTermination.class, graph);
+		connectBoundedRoundsIterationLoop(sourceVertex, sinkVertex, new JobTaskVertex[] {forward}, forward,
+				iterationStart, ShipStrategy.FORWARD, 100, graph);
 		
 		//Submit job
 		submit(graph, getConfiguration());
 	}
 	
 	public static class DummyIterationHead extends IterationHead {
+		private PactRecord rec = new PactRecord();
 
 		@Override
-		public void processInput(MutableObjectIterator<PactRecord> iter) throws Exception {
-			PactRecord rec = new PactRecord();
+		public void finish(MutableObjectIterator<PactRecord> iter,
+				OutputCollector output) throws Exception {
+			while(iter.next(rec)) {
+				output.collect(rec);
+			}
+		}
+
+		@Override
+		public void processInput(MutableObjectIterator<PactRecord> iter,
+				OutputCollector output) throws Exception {
+			
 			while(iter.next(rec)) {
 			}
 			
 			//Inject two dummy records in the iteration process
-			for (int i = 0; i < 100000; i++) {
+			for (int i = 0; i < 100; i++) {
 				rec.setField(0, new PactInteger(i));
-				output.getWriters().get(0).emit(rec);
+				output.collect(rec);
 			}
 		}
 
 		@Override
-		public void processUpdates(MutableObjectIterator<PactRecord> iter) throws Exception {
+		public void processUpdates(MutableObjectIterator<PactRecord> iter,
+				OutputCollector output) throws Exception {
 			PactRecord rec = new PactRecord();
 			while(iter.next(rec)) {
-				output.getWriters().get(0).emit(rec);
+				output.collect(rec);
+			}
+		}
+		
+	}
+	
+	public static class DummyIterativeForward extends AbstractIterativeTask {
+		private PactRecord rec = new PactRecord();
+		
+		@Override
+		public void invokeStart() throws Exception {
+			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public void cleanup() throws Exception {
+		}
+
+		@Override
+		public void invokeIter(IterationIterator iterationIter)
+				throws Exception {
+			while(iterationIter.next(rec)) {
+				output.collect(rec);
 			}
 		}
 
 		@Override
-		public void finish() throws Exception {
-			PactRecord rec = new PactRecord();
-			rec.setField(0, new PactInteger(0));
-			rec.setField(1, new PactInteger(1));
-			output.getWriters().get(1).emit(rec);
+		protected void initTask() {
+		}
+
+		@Override
+		public int getNumberOfInputs() {
+			return 1;
 		}
 		
 	}

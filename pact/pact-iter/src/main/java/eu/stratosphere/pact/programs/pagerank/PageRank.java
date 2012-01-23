@@ -1,6 +1,6 @@
 package eu.stratosphere.pact.programs.pagerank;
 
-import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectIterationLoop;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectBoundedRoundsIterationLoop;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectJobVertices;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createInput;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createOutput;
@@ -18,6 +18,7 @@ import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.common.type.base.PactString;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
+import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
 import eu.stratosphere.pact.programs.pagerank.tasks.DBPediaPageLinkInput;
 import eu.stratosphere.pact.programs.pagerank.tasks.GroupTask;
@@ -82,7 +83,9 @@ public class PageRank {
 				new int[] {0}, new Class[] {PactString.class});
 		connectJobVertices(ShipStrategy.FORWARD, iterationStart, sinkVertex, null, null);
 		
-		connectIterationLoop(iterationStart, iterationEnd, PageRankTerminator.class, graph);
+		connectBoundedRoundsIterationLoop(adjList, sinkVertex, null, null, iterationStart, ShipStrategy.PARTITION_HASH, 
+				13, graph);
+		//connectIterationLoop(iterationStart, iterationEnd, PageRankTerminator.class, graph);
 		
 		//Submit job
 		submit(graph, getConfiguration());

@@ -10,23 +10,26 @@ public class BulkIterationHead extends IterationHead {
 	
 	@Override
 	public void processInput(MutableObjectIterator<PactRecord> iter,
-			OutputCollector innerOutput) throws Exception {
-		while(iter.next(rec)) {
-			innerOutput.collect(rec);
-		}
+			OutputCollector output) throws Exception {
+		forwardRecords(iter, output);
 	}
 
 	@Override
 	public void processUpdates(MutableObjectIterator<PactRecord> iter,
-			OutputCollector innerOutput) throws Exception {
-		processInput(iter, innerOutput);
+			OutputCollector output) throws Exception {
+		forwardRecords(iter, output);
 	}
 	
 	@Override
 	public void finish(MutableObjectIterator<PactRecord> iter,
-			OutputCollector iterationOutput) throws Exception {
+			OutputCollector output) throws Exception {
+		forwardRecords(iter, output);
+	}
+	
+	private final void forwardRecords(MutableObjectIterator<PactRecord> iter,
+			OutputCollector output) throws Exception {
 		while(iter.next(rec)) {
-			iterationOutput.collect(rec);
+			output.collect(rec);
 		}
 	}
 }
