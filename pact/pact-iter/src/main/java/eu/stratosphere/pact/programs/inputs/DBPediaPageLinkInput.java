@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.programs.pagerank.tasks;
+package eu.stratosphere.pact.programs.inputs;
 
 import eu.stratosphere.pact.common.io.DelimitedInputFormat;
 import eu.stratosphere.pact.common.type.PactRecord;

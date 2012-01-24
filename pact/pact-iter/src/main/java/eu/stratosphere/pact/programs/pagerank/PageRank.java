@@ -20,7 +20,7 @@ import eu.stratosphere.pact.common.type.base.PactString;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
-import eu.stratosphere.pact.programs.pagerank.tasks.DBPediaPageLinkInput;
+import eu.stratosphere.pact.programs.inputs.DBPediaPageLinkInput;
 import eu.stratosphere.pact.programs.pagerank.tasks.GroupTask;
 import eu.stratosphere.pact.programs.pagerank.tasks.HashingPageRankIteration;
 import eu.stratosphere.pact.programs.pagerank.tasks.RankOutput;

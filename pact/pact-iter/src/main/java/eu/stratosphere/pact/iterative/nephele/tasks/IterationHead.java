@@ -130,8 +130,9 @@ public abstract class IterationHead extends AbstractMinimalTask {
 				if(terminationStateListener.getState() == ChannelState.TERMINATED) {
 					break;
 				} else {
-					if (LOG.isInfoEnabled())
+					if (LOG.isInfoEnabled()) {
 						LOG.info(constructLogString("Starting Iteration: " + iterationCounter, getEnvironment().getTaskName(), this));
+					}
 					
 					BackTrafficQueueStore.getInstance().publishUpdateQueue(
 							getEnvironment().getJobID(), 
