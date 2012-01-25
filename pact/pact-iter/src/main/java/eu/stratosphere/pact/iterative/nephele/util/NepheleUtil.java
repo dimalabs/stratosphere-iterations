@@ -293,6 +293,20 @@ public class NepheleUtil {
 				terminationDataVertex, iterationHead, iterationInputShipStrategy, decider, graph);
 	}
 	
+	public static void connectBulkIterationLoop(AbstractJobVertex iterationInput, AbstractJobVertex iterationOutput,
+			JobTaskVertex[] innerLoopStarts, JobTaskVertex innerLoopEnd, int numIterations,
+			ShipStrategy iterationInputShipStrategy, JobGraph graph) throws JobGraphDefinitionException {
+		int dop = iterationInput.getNumberOfSubtasks();
+		int spi = iterationInput.getNumberOfSubtasksPerInstance();
+		
+		//Create iteration head
+		JobTaskVertex iterationHead = createTask(BulkIterationHead.class, graph, dop, spi);
+		iterationHead.setVertexToShareInstancesWith(iterationInput);
+		
+		connectBoundedRoundsIterationLoop(iterationInput, iterationOutput, innerLoopStarts, innerLoopEnd, 
+				iterationHead, iterationInputShipStrategy, numIterations, graph);
+	}
+	
 
 	public static Configuration getConfiguration() {
 		String location = null;

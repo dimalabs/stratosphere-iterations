@@ -5,8 +5,8 @@ import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactLong;
 
 public class CSVEdgeInput extends DelimitedInputFormat {
-	PactLong node;
-	PactLong neighbour;
+	PactLong node = new PactLong();
+	PactLong neighbour = new PactLong();
 	
 	@Override
 	public boolean readRecord(PactRecord target, byte[] bytes, int numBytes) {

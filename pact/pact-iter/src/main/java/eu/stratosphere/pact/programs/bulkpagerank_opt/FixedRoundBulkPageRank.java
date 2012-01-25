@@ -21,15 +21,13 @@ import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.base.PactLong;
-import eu.stratosphere.pact.iterative.nephele.tasks.NonCachingIterativeMatch;
 import eu.stratosphere.pact.iterative.nephele.tasks.PreSortedReduce;
 import eu.stratosphere.pact.iterative.nephele.tasks.ProbeCachingMatch;
 import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.ContributionMatch;
-import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.DiffMatch;
+import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.Forward;
 import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.GroupNeighbours;
 import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.InitialRankAssigner;
 import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.Longify;
-import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.Max;
 import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.RankOutput;
 import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.RankReduce;
 import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.SortByNeighbour;
@@ -38,7 +36,7 @@ import eu.stratosphere.pact.runtime.task.TempTask;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 import eu.stratosphere.pact.runtime.task.util.TaskConfig;
 
-public class BulkPageRank {	
+public class FixedRoundBulkPageRank {	
 	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
@@ -87,6 +85,9 @@ public class BulkPageRank {
 				new int[] {1}, new Class[] {keyType});
 		
 		//Inner iteration loop tasks -- START
+		JobTaskVertex forward = createTask(Forward.class, graph, dop, spi);
+		forward.setVertexToShareInstancesWith(sourceVertex);
+		
 		JobTaskVertex contributionMatch = createTask(ProbeCachingMatch.class, graph, dop, spi);
 		contributionMatch.setVertexToShareInstancesWith(sourceVertex);
 		setMatchInformation(contributionMatch, ContributionMatch.class, 
@@ -98,15 +99,6 @@ public class BulkPageRank {
 		setReduceInformation(rankReduce, RankReduce.class, 
 				new int[] {0}, new Class[] {keyType});
 		//setMemorySize(rankReduce, baseMemory/3);
-		
-		JobTaskVertex diffMatch = createTask(NonCachingIterativeMatch.class, graph, dop, spi);
-		diffMatch.setVertexToShareInstancesWith(sourceVertex);
-		setMatchInformation(diffMatch, DiffMatch.class, 
-				new int[] {0}, new int[] {0}, new Class[] {keyType});
-		setMemorySize(diffMatch, baseMemory);
-		
-		JobTaskVertex maxError = createTask(Max.class, graph, dop, spi);
-		maxError.setVertexToShareInstancesWith(sourceVertex);
 		//Inner iteration loop tasks -- END
 		
 		JobOutputVertex sinkVertex = createOutput(RankOutput.class, output, graph, dop, spi);
@@ -120,16 +112,16 @@ public class BulkPageRank {
 		
 		connectJobVertices(ShipStrategy.FORWARD, adjList, initialRankAssigner, null, null);
 		connectJobVertices(ShipStrategy.FORWARD, initialRankAssigner, tmpTask, null, null);
+		
+		connectJobVertices(ShipStrategy.BROADCAST, forward, contributionMatch, null, null);
 		connectJobVertices(ShipStrategy.FORWARD, contributionMatch, rankReduce, null, null);
 		
-		connectBulkIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {contributionMatch, diffMatch}, 
-				rankReduce,	maxError, ShipStrategy.BROADCAST, BulkPageRankTerminator.class, graph);
+		connectBulkIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {forward}, 
+				rankReduce, 13, ShipStrategy.FORWARD, graph);
 		
 		connectJobVertices(ShipStrategy.PARTITION_HASH, adjList, sortedNeighbours, 
 				new int[] {1}, new Class[] {keyType});
 		connectJobVertices(ShipStrategy.FORWARD, sortedNeighbours, contributionMatch, null, null);
-		connectJobVertices(ShipStrategy.FORWARD, rankReduce, diffMatch, null, null);
-		connectJobVertices(ShipStrategy.FORWARD, diffMatch, maxError, null, null);
 		
 		//Submit job
 		submit(graph, getConfiguration());
