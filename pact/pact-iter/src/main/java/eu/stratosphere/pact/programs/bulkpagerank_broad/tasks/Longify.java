@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.programs.bulkpagerank_opt.tasks;
+package eu.stratosphere.pact.programs.bulkpagerank_broad.tasks;
 
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactLong;

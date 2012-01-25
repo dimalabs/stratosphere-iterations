@@ -3,8 +3,9 @@ package eu.stratosphere.pact.iterative.nephele.tasks;
 import eu.stratosphere.pact.common.stubs.MatchStub;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
-import eu.stratosphere.pact.runtime.hash.BuildFirstHashMatchIterator;
+import eu.stratosphere.pact.runtime.hash.BuildSecondHashMatchIterator;
 import eu.stratosphere.pact.runtime.resettable.SpillingResettableMutableObjectIterator;
+import eu.stratosphere.pact.runtime.task.util.MatchTaskIterator;
 
 public class BuildCachingMatch extends AbstractIterativeTask {
 	
@@ -37,8 +38,8 @@ public class BuildCachingMatch extends AbstractIterativeTask {
 	public void invokeIter(IterationIterator probeIter) throws Exception {
 		buildIter.reset();
 		
-		BuildFirstHashMatchIterator joinIter = new BuildFirstHashMatchIterator(buildIter, 
-				probeIter, buildKeyPos, probeKeyPos, keyClasses, 
+		MatchTaskIterator joinIter = new BuildSecondHashMatchIterator(probeIter, 
+				buildIter, buildKeyPos, probeKeyPos, keyClasses, 
 				memoryManager, ioManager, this, memorySize);
 		
 		joinIter.open();

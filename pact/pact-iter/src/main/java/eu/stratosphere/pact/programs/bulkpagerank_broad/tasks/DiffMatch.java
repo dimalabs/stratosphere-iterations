@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.programs.bulkpagerank.tasks;
+package eu.stratosphere.pact.programs.bulkpagerank_broad.tasks;
 
 import eu.stratosphere.pact.common.stubs.Collector;
 import eu.stratosphere.pact.common.stubs.MatchStub;
@@ -21,6 +21,5 @@ public class DiffMatch extends MatchStub {
 		result.setField(0, number);
 		out.collect(result);
 	}
-
 	
 }

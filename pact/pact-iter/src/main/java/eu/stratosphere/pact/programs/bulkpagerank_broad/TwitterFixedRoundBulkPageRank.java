@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.programs.bulkpagerank_opt;
+package eu.stratosphere.pact.programs.bulkpagerank_broad;
 
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectBulkIterationLoop;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectJobVertices;
@@ -23,12 +23,12 @@ import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.base.PactLong;
 import eu.stratosphere.pact.iterative.nephele.tasks.PreSortedReduce;
 import eu.stratosphere.pact.iterative.nephele.tasks.ProbeCachingMatch;
-import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.ContributionMatch;
-import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.GroupNeighbours;
-import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.InitialRankAssigner;
-import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.RankOutput;
-import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.RankReduce;
-import eu.stratosphere.pact.programs.bulkpagerank_opt.tasks.SortByNeighbour;
+import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.ContributionMatch;
+import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.GroupNeighbours;
+import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.InitialRankAssigner;
+import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.RankOutput;
+import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.RankReduce;
+import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.SortByNeighbour;
 import eu.stratosphere.pact.programs.inputs.CSVEdgeInput;
 import eu.stratosphere.pact.runtime.task.TempTask;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;

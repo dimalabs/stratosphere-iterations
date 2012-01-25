@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.programs.bulkpagerank_opt.tasks;
+package eu.stratosphere.pact.programs.bulkpagerank_broad.tasks;
 
 import eu.stratosphere.pact.common.stubs.Collector;
 import eu.stratosphere.pact.common.stubs.MatchStub;

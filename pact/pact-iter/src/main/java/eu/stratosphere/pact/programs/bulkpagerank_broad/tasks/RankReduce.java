@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.programs.bulkpagerank.tasks;
+package eu.stratosphere.pact.programs.bulkpagerank_broad.tasks;
 
 import java.util.Iterator;
 
@@ -15,8 +15,8 @@ public class RankReduce extends ReduceStub {
 	public void reduce(Iterator<PactRecord> records, Collector out)
 			throws Exception {
 		PactRecord rec = null;
-		double contribSum = 0;
 		
+		double contribSum = 0;
 		while(records.hasNext()) {
 			rec = records.next();
 			contribSum += rec.getField(1, contrib).getValue();

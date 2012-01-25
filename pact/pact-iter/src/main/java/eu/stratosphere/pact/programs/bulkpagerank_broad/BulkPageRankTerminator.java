@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.programs.bulkpagerank;
+package eu.stratosphere.pact.programs.bulkpagerank_broad;
 
 import java.util.Iterator;
 
