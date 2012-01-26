@@ -15,7 +15,6 @@
 
 package eu.stratosphere.pact.runtime.io;
 
-import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,7 +32,7 @@ import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
  *
  * @author Stephan Ewen (stephan.ewen@tu-berlin.de)
  */
-public final class ChannelWriterOutputView extends AbstractPagedOutputView
+public final class ChannelWriterOutputViewV2 extends AbstractPagedOutputViewV2
 {
 	/**
 	 * The magic number that identifies blocks as blocks from a ChannelWriterOutputView.
@@ -73,34 +72,37 @@ public final class ChannelWriterOutputView extends AbstractPagedOutputView
 	// --------------------------------------------------------------------------------------------
 	
 	/**
-	 * Creates an new <code>ChannelWriterOutputView</code> that writes to the given channels and buffers data
-	 * in the given memory segments.
+	 * Creates an new <code>ChannelWriterOutputView</code> that writes to the given channel and buffers data
+	 * in the given memory segments. If the given memory segments are null, the writer takes its buffers
+	 * directly from the return queue of the writer. Note that this variant locks if no buffers are contained
+	 * in the return queue.
 	 * 
 	 * @param writer The writer to write to.
-	 * @param memory The memory used to buffer data.
+	 * @param memory The memory used to buffer data, or null, to utilize solely the return queue.
 	 * @param segmentSize The size of the memory segments.
 	 */
-	public ChannelWriterOutputView(BlockChannelWriter writer, List<MemorySegment> memory, int segmentSize)
+	public ChannelWriterOutputViewV2(BlockChannelWriter writer, List<MemorySegment> memory, int segmentSize)
 	{
-		
 		super(segmentSize, HEADER_LENGTH);
 		
-		if (writer == null || memory == null)
+		if (writer == null)
 			throw new NullPointerException();
-		if (memory.isEmpty())
-			throw new IllegalArgumentException("Empty memory segment collection given.");
 		
 		this.writer = writer;
-		this.numSegments = memory.size();
 		
-		// load the segments into the queue
-		final LinkedBlockingQueue<MemorySegment> queue = writer.getReturnQueue();
-		for (int i = memory.size() - 1; i >= 0; --i) {
-			final MemorySegment seg = memory.get(i);
-			if (seg.size() != segmentSize) {
-				throw new IllegalArgumentException("The supplied memory segments are not of the specified size.");
+		if (memory == null) {
+			this.numSegments = 0;
+		} else {
+			this.numSegments = memory.size();
+			// load the segments into the queue
+			final LinkedBlockingQueue<MemorySegment> queue = writer.getReturnQueue();
+			for (int i = memory.size() - 1; i >= 0; --i) {
+				final MemorySegment seg = memory.get(i);
+				if (seg.size() != segmentSize) {
+					throw new IllegalArgumentException("The supplied memory segments are not of the specified size.");
+				}
+				queue.add(seg);
 			}
-			queue.add(seg);
 		}
 		
 		// get the first segment
@@ -110,6 +112,18 @@ public final class ChannelWriterOutputView extends AbstractPagedOutputView
 		catch (IOException ioex) {
 			throw new RuntimeException("BUG: IOException occurred while getting first block for ChannelWriterOutputView.", ioex);
 		}
+	}
+	
+	/**
+	 * Creates an new <code>ChannelWriterOutputView</code> that writes to the given channel. It uses only a single
+	 * memory segment for the buffering, which it takes from the writers return queue.
+	 * 
+	 * @param writer The writer to write to.
+	 * @param segmentSize The size of the memory segments.
+	 */
+	public ChannelWriterOutputViewV2(BlockChannelWriter writer, int segmentSize)
+	{
+		this(writer, null, segmentSize);
 	}
 	
 	// --------------------------------------------------------------------------------------------
@@ -155,48 +169,26 @@ public final class ChannelWriterOutputView extends AbstractPagedOutputView
 	{
 		return this.blockCount;
 	}
-
-	/* (non-Javadoc)
-	 * @see eu.stratosphere.nephele.services.memorymanager.DataOutputView#getPosition()
-	 */
-	@Override
-	public int getPosition() {
-		throw new UnsupportedOperationException();
-//		if (this.positionBeforeSegment + this.positionInSegment <= Integer.MAX_VALUE) {
-//			return (int) (this.positionBeforeSegment + this.positionInSegment);
-//		}
-//		else {
-//			throw new RuntimeException("ChannelWriterOutput View exceeded int addressable size - Still incompatible with current memory layout.");
-//		}
-	}
 	
-	public long getBytesWritten() {
+	/**
+	 * Gets the number of payload bytes already written. This excludes the number of bytes spent on headers
+	 * in the segments.
+	 * 
+	 * @return The number of bytes that have been written to this output view.
+	 */
+	public long getBytesWritten()
+	{
 		return this.bytesBeforeSegment + getCurrentPositionInSegment() - HEADER_LENGTH;
 	}
 
-	/* (non-Javadoc)
-	 * @see eu.stratosphere.nephele.services.memorymanager.DataOutputView#setPosition(int)
+	/**
+	 * Gets the number of bytes used by this output view, including written bytes and header bytes.
+	 * 
+	 * @return The number of bytes that have been written to this output view.
 	 */
-	@Override
-	public DataOutput setPosition(int position) {
-		throw new UnsupportedOperationException();
-	}
-
-	/* (non-Javadoc)
-	 * @see eu.stratosphere.nephele.services.memorymanager.DataOutputView#reset()
-	 */
-	@Override
-	public DataOutputView reset() {
-		throw new UnsupportedOperationException();
-	}
-
-	/* (non-Javadoc)
-	 * @see eu.stratosphere.nephele.services.memorymanager.DataOutputView#getRemainingBytes()
-	 */
-	@Override
-	public int getRemainingBytes() {
-		// the number of remaining bytes is infinite
-		return -1;
+	public long getBytesMemoryUsed()
+	{
+		return (this.blockCount - 1) * getSegmentSize() + getCurrentPositionInSegment();
 	}
 
 	// --------------------------------------------------------------------------------------------

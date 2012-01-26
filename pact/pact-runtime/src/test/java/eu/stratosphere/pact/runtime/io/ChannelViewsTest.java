@@ -104,7 +104,7 @@ public class ChannelViewsTest
 		// create the writer output view
 		List<MemorySegment> memory = this.memoryManager.allocateStrict(this.parentTask, NUM_MEMORY_SEGMENTS, MEMORY_SEGMENT_SIZE);
 		final BlockChannelWriter writer = this.ioManager.createBlockChannelWriter(channel);
-		final ChannelWriterOutputView outView = new ChannelWriterOutputView(writer, memory, MEMORY_SEGMENT_SIZE);
+		final ChannelWriterOutputViewV2 outView = new ChannelWriterOutputViewV2(writer, memory, MEMORY_SEGMENT_SIZE);
 		
 		// write a number of pairs
 		final PactRecord rec = new PactRecord();
@@ -117,7 +117,7 @@ public class ChannelViewsTest
 		// create the reader input view
 		memory = this.memoryManager.allocateStrict(this.parentTask, NUM_MEMORY_SEGMENTS, MEMORY_SEGMENT_SIZE);
 		final BlockChannelReader reader = this.ioManager.createBlockChannelReader(channel);
-		final ChannelReaderInputView inView = new ChannelReaderInputView(reader, memory, outView.getBlockCount(), true);
+		final ChannelReaderInputViewV2 inView = new ChannelReaderInputViewV2(reader, memory, outView.getBlockCount(), true);
 		generator.reset();
 		
 		// read and re-generate all records and compare them
@@ -148,7 +148,7 @@ public class ChannelViewsTest
 		// create the writer output view
 		List<MemorySegment> memory = this.memoryManager.allocateStrict(this.parentTask, NUM_MEMORY_SEGMENTS, MEMORY_SEGMENT_SIZE);
 		final BlockChannelWriter writer = this.ioManager.createBlockChannelWriter(channel);
-		final ChannelWriterOutputView outView = new ChannelWriterOutputView(writer, memory, MEMORY_SEGMENT_SIZE);
+		final ChannelWriterOutputViewV2 outView = new ChannelWriterOutputViewV2(writer, memory, MEMORY_SEGMENT_SIZE);
 		
 		// write a number of pairs
 		final PactRecord rec = new PactRecord();
@@ -161,7 +161,7 @@ public class ChannelViewsTest
 		// create the reader input view
 		memory = this.memoryManager.allocateStrict(this.parentTask, NUM_MEMORY_SEGMENTS, MEMORY_SEGMENT_SIZE);
 		final BlockChannelReader reader = this.ioManager.createBlockChannelReader(channel);
-		final ChannelReaderInputView inView = new ChannelReaderInputView(reader, memory, outView.getBlockCount(), true);
+		final ChannelReaderInputViewV2 inView = new ChannelReaderInputViewV2(reader, memory, outView.getBlockCount(), true);
 		generator.reset();
 		
 		// read and re-generate all records and compare them
@@ -189,7 +189,7 @@ public class ChannelViewsTest
 		// create the writer output view
 		List<MemorySegment> memory = this.memoryManager.allocateStrict(this.parentTask, NUM_MEMORY_SEGMENTS, MEMORY_SEGMENT_SIZE);
 		final BlockChannelWriter writer = this.ioManager.createBlockChannelWriter(channel);
-		final ChannelWriterOutputView outView = new ChannelWriterOutputView(writer, memory, MEMORY_SEGMENT_SIZE);
+		final ChannelWriterOutputViewV2 outView = new ChannelWriterOutputViewV2(writer, memory, MEMORY_SEGMENT_SIZE);
 		
 		// write a number of pairs
 		final PactRecord rec = new PactRecord();
@@ -202,7 +202,7 @@ public class ChannelViewsTest
 		// create the reader input view
 		memory = this.memoryManager.allocateStrict(this.parentTask, NUM_MEMORY_SEGMENTS, MEMORY_SEGMENT_SIZE);
 		final BlockChannelReader reader = this.ioManager.createBlockChannelReader(channel);
-		final ChannelReaderInputView inView = new ChannelReaderInputView(reader, memory, outView.getBlockCount(), true);
+		final ChannelReaderInputViewV2 inView = new ChannelReaderInputViewV2(reader, memory, outView.getBlockCount(), true);
 		generator.reset();
 		
 		// read and re-generate all records and compare them
@@ -240,7 +240,7 @@ public class ChannelViewsTest
 		// create the writer output view
 		List<MemorySegment> memory = this.memoryManager.allocateStrict(this.parentTask, NUM_MEMORY_SEGMENTS, MEMORY_SEGMENT_SIZE);
 		final BlockChannelWriter writer = this.ioManager.createBlockChannelWriter(channel);
-		final ChannelWriterOutputView outView = new ChannelWriterOutputView(writer, memory, MEMORY_SEGMENT_SIZE);
+		final ChannelWriterOutputViewV2 outView = new ChannelWriterOutputViewV2(writer, memory, MEMORY_SEGMENT_SIZE);
 		
 		// write a number of pairs
 		final PactRecord rec = new PactRecord();
@@ -253,7 +253,7 @@ public class ChannelViewsTest
 		// create the reader input view
 		memory = this.memoryManager.allocateStrict(this.parentTask, NUM_MEMORY_SEGMENTS, MEMORY_SEGMENT_SIZE);
 		final BlockChannelReader reader = this.ioManager.createBlockChannelReader(channel);
-		final ChannelReaderInputView inView = new ChannelReaderInputView(reader, memory, true);
+		final ChannelReaderInputViewV2 inView = new ChannelReaderInputViewV2(reader, memory, true);
 		generator.reset();
 		
 		// read and re-generate all records and cmpare them
@@ -284,7 +284,7 @@ public class ChannelViewsTest
 		// create the writer output view
 		List<MemorySegment> memory = this.memoryManager.allocateStrict(this.parentTask, 1, MEMORY_SEGMENT_SIZE);
 		final BlockChannelWriter writer = this.ioManager.createBlockChannelWriter(channel);
-		final ChannelWriterOutputView outView = new ChannelWriterOutputView(writer, memory, MEMORY_SEGMENT_SIZE);
+		final ChannelWriterOutputViewV2 outView = new ChannelWriterOutputViewV2(writer, memory, MEMORY_SEGMENT_SIZE);
 		
 		// write a number of pairs
 		final PactRecord rec = new PactRecord();
@@ -297,7 +297,7 @@ public class ChannelViewsTest
 		// create the reader input view
 		memory = this.memoryManager.allocateStrict(this.parentTask, 1, MEMORY_SEGMENT_SIZE);
 		final BlockChannelReader reader = this.ioManager.createBlockChannelReader(channel);
-		final ChannelReaderInputView inView = new ChannelReaderInputView(reader, memory, outView.getBlockCount(), true);
+		final ChannelReaderInputViewV2 inView = new ChannelReaderInputViewV2(reader, memory, outView.getBlockCount(), true);
 		generator.reset();
 		
 		// read and re-generate all records and compare them

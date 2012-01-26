@@ -20,11 +20,58 @@ import eu.stratosphere.nephele.services.ServiceException;
 
 
 /**
- * An exception to be thrown when a memory backed object identifies that the
- * backing memory segment is full.
+ * An exception to be thrown when a request to allocate memory cannot be served due to a lack of available memory.
  * 
  * @author Alexander Alexandrov
+ * @author Stephan Ewen
  */
-public class OutOfMemoryException extends ServiceException {
-	private static final long serialVersionUID = -1101411002986277519L;
+public class OutOfMemoryException extends ServiceException
+{
+	private static final long serialVersionUID = 7948265635897479726L;
+	
+	private final int segmentsRequested;
+	private final int segmentsAvailable;
+	
+	/**
+	 * Creates an exception without error message. The requested number of segments and the number of available
+	 * segments is unknown (set to <code>-1</code>).
+	 */
+	public OutOfMemoryException() {
+		super();
+		
+		this.segmentsRequested = -1;
+		this.segmentsAvailable = -1;
+	}
+	
+	/**
+	 * Creates an exception describing the given requested number of segments and the number of
+	 * available segments.
+	 * 
+	 * @param segmentsRequested The requested number of segments.
+	 * @param segmentsAvailable The available number of segments.
+	 */
+	public OutOfMemoryException(int segmentsRequested, int segmentsAvailable) {
+		super("Could not provide the requested " + segmentsRequested + " segments of memory. Only " + 
+			segmentsAvailable + " segments available.");
+		this.segmentsRequested = segmentsRequested;
+		this.segmentsAvailable = segmentsAvailable;
+	}
+
+	/**
+	 * Gets the number of requested segments.
+	 * 
+	 * @return The number of requested segments.
+	 */
+	public int getSegmentsRequested() {
+		return segmentsRequested;
+	}
+
+	/**
+	 * Gets the number of available segments.
+	 * 
+	 * @return The number of available segments.
+	 */
+	public int getSegmentsAvailable() {
+		return segmentsAvailable;
+	}
 }

@@ -33,7 +33,6 @@ import eu.stratosphere.pact.runtime.util.MemorySegmentListIterator;
  */
 public final class NormalizedKeySorter<T> implements IndexedSortable
 {
-	
 	private static final int OFFSET_LEN = 8;
 	
 	private static final int DEFAULT_MAX_NORMALIZED_KEY_LEN = 8;
