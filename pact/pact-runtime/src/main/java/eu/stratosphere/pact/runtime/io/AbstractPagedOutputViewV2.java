@@ -15,9 +15,11 @@
 
 package eu.stratosphere.pact.runtime.io;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.UTFDataFormatException;
 
+import eu.stratosphere.nephele.services.memorymanager.DataInputViewV2;
 import eu.stratosphere.nephele.services.memorymanager.DataOutputViewV2;
 import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
 
@@ -73,7 +75,18 @@ public abstract class AbstractPagedOutputViewV2 implements DataOutputViewV2
 	//                                  Page Management
 	// --------------------------------------------------------------------------------------------
 	
-	protected abstract MemorySegment nextSegment(MemorySegment current) throws IOException;
+	/**
+	 * 
+	 * This method must return a segment. If no more segments are available, it must throw an
+	 * {@link EOFException}.
+	 * 
+	 * @param current The current memory segment
+	 * @param positionInCurrent The position in the segment, one after the last valid byte.
+	 * @return The next memory segment. 
+	 * 
+	 * @throws IOException
+	 */
+	protected abstract MemorySegment nextSegment(MemorySegment current, int positionInCurrent) throws IOException;
 	
 	
 	public MemorySegment getCurrentSegment() {
@@ -89,13 +102,14 @@ public abstract class AbstractPagedOutputViewV2 implements DataOutputViewV2
 	}
 	
 	
-	protected void advance() throws IOException
+	void advance() throws IOException
 	{
-		this.currentSegment = nextSegment(this.currentSegment);
+		this.currentSegment = nextSegment(this.currentSegment, this.positionInSegment);
 		this.positionInSegment = this.headerLength;
 	}
 	
-	protected void clear() {
+	protected void clear()
+	{
 		this.currentSegment = null;
 		this.positionInSegment = this.headerLength;
 	}
@@ -383,9 +397,34 @@ public abstract class AbstractPagedOutputViewV2 implements DataOutputViewV2
 				this.positionInSegment += numBytes;
 				return;
 			}
-			
+			this.positionInSegment = this.segmentSize;
 			advance();
 			numBytes -= remaining;
+		}
+		return;
+	}
+
+	/* (non-Javadoc)
+	 * @see eu.stratosphere.nephele.services.memorymanager.DataOutputViewV2#write(eu.stratosphere.nephele.services.memorymanager.DataInputViewV2, int)
+	 */
+	@Override
+	public void write(DataInputViewV2 source, int numBytes) throws IOException
+	{
+		while (numBytes > 0) {
+			final int remaining = this.segmentSize - this.positionInSegment;
+			if (numBytes <= remaining) {
+				this.currentSegment.put(source, this.positionInSegment, numBytes);
+				this.positionInSegment += numBytes;
+				return;
+			}
+			
+			if (remaining > 0) {
+				this.currentSegment.put(source, this.positionInSegment, remaining);
+				this.positionInSegment = this.segmentSize;
+				numBytes -= remaining;
+			}
+			
+			advance();
 		}
 		return;
 	}

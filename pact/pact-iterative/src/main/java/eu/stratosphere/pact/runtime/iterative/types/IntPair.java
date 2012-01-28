@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.runtime.iterative;
+package eu.stratosphere.pact.runtime.iterative.types;
 
 
 /**

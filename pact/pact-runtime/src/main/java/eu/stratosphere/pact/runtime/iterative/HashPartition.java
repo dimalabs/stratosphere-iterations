@@ -30,12 +30,12 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2
 	/**
 	 * The length of the header in the partition buffer blocks.
 	 */
-	private static final int PARTITION_BLOCK_HEADER_LEN = 8;
+	protected static final int PARTITION_BLOCK_HEADER_LEN = 8;
 	
 	/**
 	 * The offset of the field where the length (size) of the partition block is stored in its header.
 	 */
-	private static final int PARTITION_BLOCK_SIZE_OFFSET = 4;
+	protected static final int PARTITION_BLOCK_SIZE_OFFSET = 4;
 	
 	// --------------------------------- Table Structure Auxiliaries ------------------------------------
 	
@@ -187,6 +187,14 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2
 	
 	public long getProbeSideRecordCount() {
 		return this.probeSideRecordCounter;
+	}
+
+	public BlockChannelWriter getBuildSideChannel() {
+		return this.buildSideChannel;
+	}
+	
+	public BlockChannelWriter getProbeSideChannel() {
+		return this.probeSideChannel;
 	}
 	
 	// --------------------------------------------------------------------------------------------------
@@ -392,6 +400,11 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2
 		}
 	}
 	
+	final PartitionIterator getPartitionIterator() throws IOException
+	{
+		return new PartitionIterator();
+	}
+	
 	// --------------------------------------------------------------------------------------------------
 	//                   Methods to provide input view abstraction for reading probe records
 	// --------------------------------------------------------------------------------------------------
@@ -401,7 +414,7 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2
 		final int offset = (int) pointer;
 		final MemorySegment seg = this.partitionBuffers[bufferNum];
 		
-		seekInput(seg, offset, getLimitForSegment(seg));
+		seekInput(seg, offset, this.memorySegmentSize);
 		this.currentBufferNum = bufferNum;
 	}
 	
@@ -451,9 +464,9 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2
 		 * @see eu.stratosphere.pact.runtime.io.AbstractPagedOutputViewV2#nextSegment(eu.stratosphere.nephele.services.memorymanager.MemorySegment)
 		 */
 		@Override
-		protected MemorySegment nextSegment(MemorySegment current) throws IOException
+		protected MemorySegment nextSegment(MemorySegment current, int bytesUsed) throws IOException
 		{
-			finalizeSegment(current);
+			finalizeSegment(current, bytesUsed);
 			
 			final MemorySegment next;
 			if (this.writer == null) {
@@ -495,7 +508,7 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2
 		{
 			final MemorySegment current = getCurrentSegment();
 			if (current != null) {
-				finalizeSegment(current);
+				finalizeSegment(current, getCurrentPositionInSegment());
 				clear();
 			}
 			if (this.writer == null) {
@@ -509,9 +522,53 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2
 			}
 		}
 		
-		private final void finalizeSegment(MemorySegment seg) {
+		private final void finalizeSegment(MemorySegment seg, int bytesUsed) {
 			seg.putInt(0, this.currentBlockNumber);
-			seg.putInt(PARTITION_BLOCK_SIZE_OFFSET, getCurrentPositionInSegment());
+			seg.putInt(PARTITION_BLOCK_SIZE_OFFSET, bytesUsed);
+		}
+	}
+	
+	// ============================================================================================
+	
+	final class PartitionIterator
+	{
+		private final BT record;
+		
+		private long currentPointer;
+		
+		private int currentHashCode;
+		
+		
+		private PartitionIterator() throws IOException
+		{
+			this.record = HashPartition.this.buildSideAccessors.createInstance();
+			positionToPointer(PARTITION_BLOCK_HEADER_LEN);
+		}
+		
+		
+		protected final boolean next() throws IOException
+		{
+			final int pos = getCurrentPositionInSegment();
+			final int buffer = HashPartition.this.currentBufferNum;
+			
+			try {
+				HashPartition.this.buildSideAccessors.deserialize(this.record, HashPartition.this);
+				this.currentPointer = (((long) buffer) << 32) | pos;
+				this.currentHashCode = HashPartition.this.buildSideAccessors.hash(this.record);
+				return true;
+			} catch (EOFException eofex) {
+				return false;
+			}
+		}
+		
+		protected final long getPointer()
+		{
+			return this.currentPointer;
+		}
+		
+		protected final int getCurrentHashCode()
+		{
+			return this.currentHashCode;
 		}
 	}
 }

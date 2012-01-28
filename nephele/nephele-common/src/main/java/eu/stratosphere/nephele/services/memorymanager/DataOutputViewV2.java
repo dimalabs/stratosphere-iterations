@@ -35,4 +35,12 @@ public interface DataOutputViewV2 extends DataOutput
 	 * @param size The number of bytes to skip.
 	 */
 	public void skipBytesToWrite(int size) throws IOException;
+	
+	/**
+	 * Copies <code>numBytes</code> bytes from the source to this view.
+	 * 
+	 * @param source The source to copy the bytes from.
+	 * @param numBytes The number of bytes to copy.
+	 */
+	public void write(DataInputViewV2 source, int numBytes) throws IOException;
 }

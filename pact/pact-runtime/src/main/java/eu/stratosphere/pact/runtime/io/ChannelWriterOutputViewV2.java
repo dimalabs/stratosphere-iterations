@@ -195,10 +195,10 @@ public final class ChannelWriterOutputViewV2 extends AbstractPagedOutputViewV2
 	//                                      Page Management
 	// --------------------------------------------------------------------------------------------
 	
-	protected final MemorySegment nextSegment(MemorySegment current) throws IOException
+	protected final MemorySegment nextSegment(MemorySegment current, int posInSegment) throws IOException
 	{
 		if (current != null) {
-			writeSegment(current, current.size(), false);
+			writeSegment(current, posInSegment, false);
 		}
 		
 		try {

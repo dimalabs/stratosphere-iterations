@@ -24,23 +24,17 @@ import java.util.concurrent.LinkedBlockingQueue;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import eu.stratosphere.nephele.io.IOReadableWritable;
 import eu.stratosphere.nephele.services.iomanager.BlockChannelReader;
-import eu.stratosphere.nephele.services.iomanager.BlockChannelWriter;
 import eu.stratosphere.nephele.services.iomanager.BulkBlockChannelReader;
 import eu.stratosphere.nephele.services.iomanager.Channel;
 import eu.stratosphere.nephele.services.iomanager.IOManager;
-import eu.stratosphere.nephele.services.memorymanager.DataInputView;
-import eu.stratosphere.nephele.services.memorymanager.DataOutputView;
 import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
-import eu.stratosphere.pact.common.type.Key;
-import eu.stratosphere.pact.common.type.NullKeyFieldException;
-import eu.stratosphere.pact.common.type.PactRecord;
-import eu.stratosphere.pact.common.util.InstantiationUtil;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.runtime.hash.HashJoin;
+import eu.stratosphere.pact.runtime.io.ChannelReaderInputViewIterator;
 import eu.stratosphere.pact.runtime.io.MemorySegmentSource;
 import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
+import eu.stratosphere.pact.runtime.plugable.TypeComparator;
 import eu.stratosphere.pact.runtime.util.MathUtils;
 
 
@@ -210,6 +204,11 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	private final TypeAccessorsV2<PT> probeSideAccessors;
 	
 	/**
+	 * The comparator used to determine (in)equality between probe side and build side records.
+	 */
+	private final TypeComparator<PT, BT> recordComparator;
+	
+	/**
 	 * The free memory segments currently available to the hash join.
 	 */
 	private final List<MemorySegment> availableMemory;
@@ -278,7 +277,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	/**
 	 * Iterator over the elements in the hash table.
 	 */
-	private HashBucketIterator<BT> bucketIterator;
+	private HashBucketIterator<BT, PT> bucketIterator;
 	
 	/**
 	 * Iterator over the elements from the probe side.
@@ -333,15 +332,16 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	// ------------------------------------------------------------------------
 	
 	public MutableHashTable(TypeAccessorsV2<BT> buildSideAccessors, TypeAccessorsV2<PT> probeSideAccessors,
-			List<MemorySegment> memorySegments, IOManager ioManager)
+			TypeComparator<PT, BT> comparator, List<MemorySegment> memorySegments, IOManager ioManager)
 	{
-		this(buildSideAccessors, probeSideAccessors,
+		this(buildSideAccessors, probeSideAccessors, comparator,
 			memorySegments, ioManager, DEFAULT_RECORD_LEN);
 	}
 	
 	
 	public MutableHashTable(TypeAccessorsV2<BT> buildSideAccessors, TypeAccessorsV2<PT> probeSideAccessors,
-			List<MemorySegment> memorySegments,	IOManager ioManager, int avgRecordLen)
+			TypeComparator<PT, BT> comparator, List<MemorySegment> memorySegments,
+			IOManager ioManager, int avgRecordLen)
 	{
 		// some sanity checks first
 		if (memorySegments == null) {
@@ -355,6 +355,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		// assign the members
 		this.buildSideAccessors = buildSideAccessors;
 		this.probeSideAccessors = probeSideAccessors;
+		this.recordComparator = comparator;
 		this.availableMemory = memorySegments;
 		this.ioManager = ioManager;
 		
@@ -420,12 +421,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		this.probeIterator = new ProbeIterator<PT>(probeSide, this.probeSideAccessors.createInstance());
 		
 		// the bucket iterator can remain constant over the time
-		// it needs extra fields to deserialize the keys into
-		Key[] keyHolders = new Key[this.keyClasses.length];
-		for (int i = 0; i < keyHolders.length; i++) {
-			keyHolders[i] = InstantiationUtil.instantiate(this.keyClasses[i], Key.class);
-		}
-		this.bucketIterator = new HashBucketIterator(this.buildSideKeyFields, keyHolders);
+		this.bucketIterator = new HashBucketIterator<BT, PT>(this.buildSideAccessors.duplicate(), this.recordComparator);
 	}
 	
 	/**
@@ -434,14 +430,13 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	 */
 	public boolean nextRecord() throws IOException
 	{
-		final ProbeIterator probeIter = this.probeIterator;
-		final Key[] keyHolders = this.keyHolders;
+		final ProbeIterator<PT> probeIter = this.probeIterator;
+		final TypeAccessorsV2<PT> probeAccessors = this.probeSideAccessors;
 		
-		PactRecord next;
+		PT next;
 		while ((next = probeIter.next()) != null)
 		{
-			next.getFieldsIntoCheckingNull(this.probeSideKeyFields, keyHolders);
-			final int hash = hash(keyHolders, this.currentRecursionDepth);
+			final int hash = hash(probeAccessors.hash(next), this.currentRecursionDepth);
 			final int posHashCode = hash % this.numBuckets;
 			
 			// get the bucket for the given hash code
@@ -451,11 +446,12 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 			
 			// get the basic characteristics of the bucket
 			final int partitionNumber = bucket.get(bucketInSegmentOffset + HEADER_PARTITION_OFFSET);
-			final Partition p = this.partitionsBeingBuilt.get(partitionNumber);
+			final HashPartition<BT, PT> p = this.partitionsBeingBuilt.get(partitionNumber);
 			
 			// for an in-memory partition, process set the return iterators, else spill the probe records
 			if (p.isInMemory()) {
-				this.bucketIterator.set(bucket, p.overflowSegments, p.inMemoryBuffers, keyHolders, hash, bucketInSegmentOffset);
+				this.recordComparator.setReference(next, this.probeSideAccessors);
+				this.bucketIterator.set(bucket, p.overflowSegments, p, hash, bucketInSegmentOffset);
 				return true;
 			}
 			else {
@@ -468,7 +464,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		// finalize and cleanup the partitions of the current table
 		int buffersAvailable = 0;
 		for (int i = 0; i < this.partitionsBeingBuilt.size(); i++) {
-			Partition p = this.partitionsBeingBuilt.get(i);
+			HashPartition<BT, PT> p = this.partitionsBeingBuilt.get(i);
 			buffersAvailable += p.finalizeProbePhase(this.availableMemory, this.partitionsPending);
 		}
 		this.partitionsBeingBuilt.clear();
@@ -477,28 +473,34 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		// release the table memory
 		releaseTable();
 		
+		if (this.currentSpilledProbeSide != null) {
+			this.currentSpilledProbeSide.closeAndDelete();
+			this.currentSpilledProbeSide = null;
+		}
+		
 		// check if there are pending partitions
 		if (!this.partitionsPending.isEmpty())
 		{
-			final Partition p = this.partitionsPending.get(0);
+			final HashPartition<BT, PT> p = this.partitionsPending.get(0);
 			
 			// build the next table
 			buildTableFromSpilledPartition(p);
 			
 			// set the probe side - gather memory segments for reading
 			LinkedBlockingQueue<MemorySegment> returnQueue = new LinkedBlockingQueue<MemorySegment>();
-			this.currentSpilledProbeSide = this.ioManager.createBlockChannelReader(p.probeSideChannel.getChannelID(), returnQueue);
+			this.currentSpilledProbeSide = this.ioManager.createBlockChannelReader(p.getProbeSideChannel().getChannelID(), returnQueue);
 			
 			List<MemorySegment> memory = new ArrayList<MemorySegment>();
 			memory.add(getNextBuffer());
 			memory.add(getNextBuffer());
 			
-			BlockReaderIterator probeReader = new BlockReaderIterator(this.currentSpilledProbeSide, returnQueue, memory, this.availableMemory, p.probeBlockCounter);
+			ChannelReaderInputViewIterator<PT> probeReader = new ChannelReaderInputViewIterator<PT>(this.currentSpilledProbeSide, 
+				returnQueue, memory, this.availableMemory, this.probeSideAccessors, p.getProbeSideBlockCount());
 			this.probeIterator.set(probeReader);
 			
 			// unregister the pending partition
 			this.partitionsPending.remove(0);
-			this.currentRecursionDepth = p.recursionLevel + 1;
+			this.currentRecursionDepth = p.getRecursionLevel() + 1;
 			
 			// recursively get the next
 			return nextRecord();
@@ -520,7 +522,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	/**
 	 * @return
 	 */
-	public HashBucketIterator<BT> getBuildSideIterator()
+	public HashBucketIterator<BT, PT> getBuildSideIterator()
 	{
 		return this.bucketIterator;
 	}
@@ -563,9 +565,8 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		
 		// clear the partitions that are still to be done (that have files on disk)
 		for (int i = 0; i < this.partitionsPending.size(); i++) {
-			final Partition p = this.partitionsPending.get(i);
-			p.buildSideChannel.deleteChannel();
-			p.probeSideChannel.deleteChannel();
+			final HashPartition<BT, PT> p = this.partitionsPending.get(i);
+			p.clearAllMemory(this.availableMemory);
 		}
 		
 		// return the write-behind buffers
@@ -627,16 +628,14 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	 * @param p
 	 * @throws IOException
 	 */
-	protected void buildTableFromSpilledPartition(final Partition p)
+	protected void buildTableFromSpilledPartition(final HashPartition<BT, PT> p)
 	throws IOException
 	{
-		final int nextRecursionLevel = p.recursionLevel + 1;
+		final int nextRecursionLevel = p.getRecursionLevel() + 1;
 		if (nextRecursionLevel > MAX_RECURSION_DEPTH) {
 			throw new RuntimeException("Hash join exceeded maximum number of recursions, without reducing "
 				+ "partitions enough to be memory resident. Probably cause: Too many duplicate keys.");
 		}
-		
-		final Key[] keyHolders = this.keyHolders;
 		
 		// we distinguish two cases here:
 		// 1) The partition fits entirely into main memory. That is the case if we have enough buffers for
@@ -651,23 +650,24 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 			throw new RuntimeException("Hash Join bug in memory management: Memory buffers leaked.");
 		}
 		
-		long numBuckets = (p.buildSideRecordCounter * RECORD_TABLE_BYTES) / (HASH_BUCKET_SIZE - BUCKET_HEADER_LENGTH) + 1;
+		long numBuckets = (p.getBuildSideRecordCount() * RECORD_TABLE_BYTES) / (HASH_BUCKET_SIZE - BUCKET_HEADER_LENGTH) + 1;
 		
 		// we need to consider the worst case where everything hashes to one bucket which needs to overflow by the same
 		// number of total buckets again.
-		final long totalBuffersNeeded = (numBuckets * 2) / (this.bucketsPerSegmentMask + 1) + p.buildSideBlockCounter + 1;
+		final long totalBuffersNeeded = (numBuckets * 2) / (this.bucketsPerSegmentMask + 1) + p.getBuildSideBlockCount() + 1;
 		
 		if (totalBuffersNeeded < totalBuffersAvailable)
 		{
 			// we are guaranteed to stay in memory
-			ensureNumBuffersReturned(p.buildSideBlockCounter);
+			ensureNumBuffersReturned(p.getBuildSideBlockCount());
 			
 			// first read the partition in
-			final BulkBlockChannelReader reader = this.ioManager.createBulkBlockChannelReader(p.buildSideChannel.getChannelID(), 
-				this.availableMemory, p.buildSideBlockCounter);
+			final BulkBlockChannelReader reader = this.ioManager.createBulkBlockChannelReader(p.getBuildSideChannel().getChannelID(), 
+				this.availableMemory, p.getBuildSideBlockCount());
 			reader.closeAndDelete(); // call waits until all is read
 			final List<MemorySegment> partitionBuffers = reader.getFullSegments();
-			final Partition newPart = new Partition(0, nextRecursionLevel, partitionBuffers, p.buildSideRecordCounter);
+			final HashPartition<BT, PT> newPart = new HashPartition<BT, PT>(this.buildSideAccessors, this.probeSideAccessors,
+					0, nextRecursionLevel, partitionBuffers, p.getBuildSideRecordCount(), this.segmentSize);
 			
 			this.partitionsBeingBuilt.add(newPart);
 			
@@ -675,10 +675,10 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 			initTable((int) numBuckets, (byte) 1);
 			
 			// now, index the partition through a hash table
-			PartitionIterator pIter = newPart.getPartitionIterator(this.buildSideKeyFields, keyHolders);
+			HashPartition<BT, PT>.PartitionIterator pIter = newPart.getPartitionIterator();
 			
 			while (pIter.next()) {
-				final int hashCode = hash(keyHolders, nextRecursionLevel);
+				final int hashCode = hash(pIter.getCurrentHashCode(), nextRecursionLevel);
 				final int posHashCode = hashCode % this.numBuckets;
 				final long pointer = pIter.getPointer();
 				
@@ -692,8 +692,8 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		}
 		else {
 			// we need to partition and partially spill
-			final int avgRecordLenPartition = (int) (((long) p.buildSideBlockCounter) * 
-					(this.segmentSize - PARTITION_BLOCK_HEADER_LEN) / p.buildSideRecordCounter);
+			final int avgRecordLenPartition = (int) (((long) p.getBuildSideBlockCount()) * 
+					(this.segmentSize - HashPartition.PARTITION_BLOCK_HEADER_LEN) / p.getBuildSideRecordCount());
 			
 			final int bucketCount = (int) (((long) totalBuffersAvailable) * RECORD_TABLE_BYTES / 
 					(avgRecordLenPartition + RECORD_OVERHEAD_BYTES));
@@ -713,20 +713,22 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 			segments.add(getNextBuffer());
 			segments.add(getNextBuffer());
 			
-			final BlockReaderIterator reader = new BlockReaderIterator(this.ioManager,
-					p.buildSideChannel.getChannelID(), segments, this.availableMemory, p.buildSideBlockCounter);
+			final ChannelReaderInputViewIterator<BT> reader = new ChannelReaderInputViewIterator<BT>(
+					this.ioManager, p.getBuildSideChannel().getChannelID(), segments, this.availableMemory, 
+					this.buildSideAccessors, p.getBuildSideBlockCount());
 			
-			PactRecord rec = new PactRecord();
+			final TypeAccessorsV2<BT> btAccessor = this.buildSideAccessors;
+			BT rec = btAccessor.createInstance();
 			while (reader.next(rec))
 			{	
-				final int hashCode = hashBuildeSideRecord(rec, nextRecursionLevel);
+				final int hashCode = hash(btAccessor.hash(rec), nextRecursionLevel);
 				insertIntoTable(rec, hashCode);
 			}
 
 			// finalize the partitions
 			for (int i = 0; i < this.partitionsBeingBuilt.size(); i++) {
-				Partition part = this.partitionsBeingBuilt.get(i);
-				part.finalizeBuildPhase(this.ioManager, this.currentEnumerator);
+				HashPartition<BT, PT> part = this.partitionsBeingBuilt.get(i);
+				part.finalizeBuildPhase(this.ioManager, this.currentEnumerator, this.writeBehindBuffers);
 			}
 		}
 	}
@@ -989,21 +991,22 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	protected int spillPartition() throws IOException
 	{	
 		// find the largest partition
-		ArrayList<Partition> partitions = this.partitionsBeingBuilt;
+		ArrayList<HashPartition<BT, PT>> partitions = this.partitionsBeingBuilt;
 		int largestNumBlocks = 0;
 		int largestPartNum = -1;
 		
 		for (int i = 0; i < partitions.size(); i++) {
-			Partition p = partitions.get(i);
-			if (p.isInMemory() && p.buildSideBlockCounter > largestNumBlocks) {
-				largestNumBlocks = p.buildSideBlockCounter;
+			HashPartition<BT, PT> p = partitions.get(i);
+			if (p.isInMemory() && p.getBuildSideBlockCount() > largestNumBlocks) {
+				largestNumBlocks = p.getBuildSideBlockCount();
 				largestPartNum = i;
 			}
 		}
-		final Partition p = partitions.get(largestPartNum);
+		final HashPartition<BT, PT> p = partitions.get(largestPartNum);
 		
 		// spill the partition
-		int numBuffersFreed = p.spillPartition(this.availableMemory, this.ioManager, this.currentEnumerator.next());
+		int numBuffersFreed = p.spillPartition(this.availableMemory, this.ioManager, 
+										this.currentEnumerator.next(), this.writeBehindBuffers);
 		this.writeBehindBuffersAvailable += numBuffersFreed;
 		
 		// grab as many buffers as are available directly
@@ -1014,30 +1017,6 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		}
 		
 		return largestPartNum;
-	}
-	
-	private final int hashBuildeSideRecord(PactRecord record, int recursionLevel)
-	{
-		int hashCode = 0;
-		for (int i = 0; i < this.buildSideKeyFields.length; i++) {
-			Key k = record.getField(this.buildSideKeyFields[i], this.keyClasses[i]);
-			if (k != null) {
-				hashCode ^= hash(k.hashCode(), recursionLevel);
-			}
-			else {
-				throw new NullKeyFieldException(i);
-			}
-		}
-		return hashCode;
-	}
-	
-	private final int hash(Key[] fields, int recursionLevel)
-	{
-		int code = 0;
-		for (int i = 0; i < fields.length; i++) {
-			code ^= hash(fields[i].hashCode(), recursionLevel);
-		}
-		return code;
 	}
 	
 	/**
@@ -1111,6 +1090,32 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		}
 	}
 	
+	/* (non-Javadoc)
+	 * @see eu.stratosphere.pact.runtime.io.MemorySegmentSource#nextSegment()
+	 */
+	@Override
+	public MemorySegment nextSegment()
+	{
+		final MemorySegment seg = getNextBuffer();
+		if (seg == null) {
+			try {
+				spillPartition();
+			} catch (IOException ioex) {
+				throw new RuntimeException("Error spilling Hash Join Partition" + (ioex.getMessage() == null ?
+					"." : ": " + ioex.getMessage()), ioex);
+			}
+			
+			MemorySegment fromSpill = getNextBuffer();
+			if (fromSpill == null) {
+				throw new RuntimeException("BUG in Hybrid Hash Join: Spilling did not free a buffer.");
+			} else {
+				return fromSpill;
+			}
+		} else {
+			return seg;
+		}
+	}
+
 	// --------------------------------------------------------------------------------------------
 	//                             Utility Computational Functions
 	// --------------------------------------------------------------------------------------------
@@ -1205,542 +1210,23 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		code = (code ^ 0xb55a4f09) ^ (code >>> 16);
 		return code >= 0 ? code : -(code + 1);
 	}
-
-	
-	// ------------------------------------------------------------------------
-	//                      Hash Table Data Structures
-	// ------------------------------------------------------------------------
-	
-	/**
-	 * A partition in a hash table. The partition contains the actual records, which are referenced by pointers from
-	 * the hash buckets. The partition may be in-memory, in which case it has several partition
-	 * buffers that contain the records, or it may be spilled. In the latter case, it has only a single
-	 * partition buffer in which it collects records to be spilled once the block is full, and a channel writer to
-	 * spill the records.
-	 * <p>
-	 * The partition contains structures relevant to both the build-side and the probe-side. For spilled partitions,
-	 * it contains references to the temp files for both sides, as well as counters for the number of records and
-	 * the number of blocks.
-	 * <p>
-	 * In addition to the structures that contain the actual records, it anchors the lists of overflow buckets for
-	 * partition, because the overflow buckets are typically released together when a partition is spilled.  
-	 */
-//	protected static final class Partition<BT, PT>
-//	{
-//		// --------------------------------- Table Structure Auxiliaries ------------------------------------
-//		
-//		private MemorySegment[] overflowSegments;			// segments in which overflow buckets from the table structure are stored
-//		
-//		private int numOverflowSegments;					// the number of actual segments in the overflowSegments array
-//		
-//		private int nextOverflowBucket;						// the next free bucket in the current overflow segment
-//
-//		// -------------------------------------  Type Accessors --------------------------------------------
-//		
-//		private final TypeAccessorsV2<BT> buildSideAccessors;
-//		
-//		private final TypeAccessorsV2<PT> probeSideAccessors;
-//		
-//		// -------------------------------------- Record Buffers --------------------------------------------
-//		
-//		private MemorySegment currentPartitionBuffer;		// the partition buffer into which elements are put (build and probe side)
-//		
-//		private final List<MemorySegment> inMemoryBuffers;	// this partition's buffers
-//		
-//		// ------------------------------------------ Spilling ----------------------------------------------
-//		
-//		private BlockChannelWriter buildSideChannel;		// the channel writer for the build side, if partition is spilled
-//		
-//		private BlockChannelWriter probeSideChannel;		// the channel writer from the probe side, if partition is spilled
-//		
-//		private long buildSideRecordCounter;				// number of build-side records in this partition
-//		
-//		private long probeSideRecordCounter;				// number of probe-side records in this partition 
-//		
-//		private int buildSideBlockCounter;					// number of build-side blocks in this partition
-//		
-//		private int probeBlockCounter;						// number of probe-side blocks in this partition
-//		
-//		private final LinkedBlockingQueue<MemorySegment> bufferReturnQueue;	// queue to return write buffers
-//
-//		// ----------------------------------------- General ------------------------------------------------
-//		
-//		private final int partitionNumber;					// the number of the partition
-//		
-//		private final int recursionLevel;					// the recursion level on which this partition lives
-//		
-//		
-//		// --------------------------------------------------------------------------------------------------
-//		
-//		/**
-//		 * Creates a new partition, initially in memory, with one buffer for the build side. The partition is
-//		 * initialized to expect record insertions for the build side.
-//		 * 
-//		 * @param partitionNumber The number of the partition.
-//		 * @param recursionLevel The recursion level - zero for partitions from the initial build, <i>n + 1</i> for
-//		 *                       partitions that are created from spilled partition with recursion level <i>n</i>. 
-//		 * @param initialBuffer The initial buffer for this partition.
-//		 * @param writeBehindBuffers The queue from which to pop buffers for writing, once the partition is spilled.
-//		 */
-//		private Partition(int partitionNumber, int recursionLevel,
-//				MemorySegment initialBuffer, LinkedBlockingQueue<MemorySegment> bufferReturnQueue)
-//		{
-//			this.partitionNumber = partitionNumber;
-//			this.recursionLevel = recursionLevel;
-//			
-//			this.inMemoryBuffers = new ArrayList<MemorySegment>(4);
-//			this.bufferReturnQueue = bufferReturnQueue;
-//			this.buildSideRecordCounter = 0;
-//			this.buildSideBlockCounter = 1;
-//			
-//			this.overflowSegments = new MemorySegment[2];
-//			this.numOverflowSegments = 0;
-//			this.nextOverflowBucket = 0;
-//			
-//			initBuffer(initialBuffer, 0);
-//			this.currentPartitionBuffer = initialBuffer;
-//		}
-//		
-//		private Partition(int partitionNumber, int recursionLevel, List<MemorySegment> buffers,
-//				long buildSideRecordCounter)
-//		{
-//			this.partitionNumber = partitionNumber;
-//			this.recursionLevel = recursionLevel;
-//			
-//			this.inMemoryBuffers = buffers;
-//			this.bufferReturnQueue = null;
-//			this.buildSideBlockCounter = buffers.size();
-//			this.buildSideRecordCounter = buildSideRecordCounter;
-//			
-//			this.overflowSegments = new MemorySegment[2];
-//			this.numOverflowSegments = 0;
-//			this.nextOverflowBucket = 0;
-//		}
-//
-//		// --------------------------------------------------------------------------------------------------
-//		
-//		/**
-//		 * Gets the partition number of this partition.
-//		 * 
-//		 * @return This partition's number.
-//		 */
-//		public int getPartitionNumber()
-//		{
-//			return this.partitionNumber;
-//		}
-//		
-//		/**
-//		 * Gets this partition's recursion level.
-//		 * 
-//		 * @return The partition's recursion level.
-//		 */
-//		public int getRecursionLevel()
-//		{
-//			return this.recursionLevel;
-//		}
-//		
-//		/**
-//		 * Checks whether this partition is in memory or spilled.
-//		 * 
-//		 * @return True, if the partition is in memory, false if it is spilled.
-//		 */
-//		public final boolean isInMemory()
-//		{
-//			return this.buildSideChannel == null;
-//		}
-//		
-//		// --------------------------------------------------------------------------------------------------
-//		
-//		/**
-//		 * Inserts the given object into the current buffer. This method returns a pointer that
-//		 * can be used to address the written record in this partition, if it is in-memory. The returned
-//		 * pointers have no expressiveness in the case where the partition is spilled.
-//		 * <p>
-//		 * If the partition is in-memory and its buffers are full, then <code>-1</code> is returned.
-//		 * The partition then needs to be assigned another buffer, or it may be spilled.
-//		 * <p>
-//		 * If the partition is spilled, then this method never returns <code>-1</code>, because the
-//		 * partition automatically grabs another write-behind buffer once the current buffer is full.
-//		 * 
-//		 * @param object The object to be written to the partition.
-//		 * @return A pointer to the object in the partition, or <code>-1</code>, if the partition buffers are full.
-//		 * @throws IOException Thrown, when this is a spilled partition and the write failed.
-//		 */
-//		public final long insertIntoBuildBuffer(IOReadableWritable object) throws IOException
-//		{
-//			final int offset = insertIntoCurrentBuffer(object);
-//			
-//			if (isInMemory())
-//			{
-//				if (offset >= 0) {
-//					this.buildSideRecordCounter++;
-//					return (((long) (this.buildSideBlockCounter - 1)) << 32) | offset;
-//				}
-//				else {
-//					// signal buffer full
-//					return -1;
-//				}
-//			}
-//			else {
-//				// partition is a spilled partition
-//				if (offset == -1) {
-//					// buffer is full, send this buffer off
-//					spillBuffer(this.currentPartitionBuffer, this.buildSideChannel);
-//					
-//					// get a new one and insert the object
-//					this.currentPartitionBuffer = getNextWriteBehindBuffer();
-//					initBuffer(this.currentPartitionBuffer, this.buildSideBlockCounter);
-//					this.buildSideBlockCounter++;
-//					
-//					if (insertIntoBuildBuffer(object) == -1) {
-//						throw new IOException("Record could not be added to fresh buffer. " +
-//								"Probably cause: Record length exceeds buffer size limit.");
-//					}
-//				}
-//				
-//				this.buildSideRecordCounter++;
-//				return 0;
-//			}
-//		}
-//		
-//		
-//		/**
-//		 * Inserts the given record into the probe side buffers. This method is only applicable when the
-//		 * partition was spilled while processing the build side. In that case, it inserts the record to into
-//		 * the current buffer and add that one to the spilled channel once it is full.
-//		 * <p>
-//		 * If this method is invoked when the partition is still being built, it has undefined behavior.
-//		 *   
-//		 * @param object The record to be inserted into the probe side buffers.
-//		 * @throws IOException Thrown, if the buffer is full, needs to be spilled, and spilling causes an error.
-//		 */
-//		public final void insertIntoProbeBuffer(IOReadableWritable object) throws IOException
-//		{
-//			final int offset = insertIntoCurrentBuffer(object);
-//			if (offset == -1) {
-//				// buffer is full, send this buffer off
-//				spillBuffer(this.currentPartitionBuffer, this.probeSideChannel);
-//				
-//				// get a new one and insert the object
-//				this.currentPartitionBuffer = getNextWriteBehindBuffer();
-//				initBuffer(this.currentPartitionBuffer, this.probeBlockCounter);
-//				this.probeBlockCounter++;
-//				
-//				if (insertIntoBuildBuffer(object) == -1) {
-//					throw new IOException("Record could not be added to fresh buffer. " +
-//							"Probably cause: Record length exceeds buffer size limit.");
-//				}
-//			}
-//			
-//			this.probeSideRecordCounter++;
-//		}
-//		
-//		
-//		private final int insertIntoCurrentBuffer(IOReadableWritable record)
-//		{
-//			final DataOutputView outView = this.currentPartitionBuffer.outputView;
-//			final int startPos = this.currentPartitionBuffer.outputView.getPosition();
-//			
-//			// partition is a spilled partition
-//			try {
-////				this.currentPartitionBuffer.outputView.skip(2);
-//				record.write(outView);
-////				final int len = outView.getPosition() - startPos - 2;
-////				if (len > 0x7fff) {
-////					throw new RuntimeException("Record too long for serialization logic.");
-////				}
-////				this.currentPartitionBuffer.putShort(startPos, (short) len);
-//				return startPos;
-//			}
-//			catch (IOException ioex) {
-//				outView.setPosition(startPos);
-//				return -1;
-//			}
-//		}
-//		
-//		/**
-//		 * Adds a new buffer to this partition. This method should only be externally used on partitions that are
-//		 * in memory, though this method does not check that this is the case.
-//		 * 
-//		 * @param segment The new buffer for this partition.
-//		 */
-//		public void addBuildSideBuffer(MemorySegment segment)
-//		{
-//			initBuffer(segment, this.buildSideBlockCounter);
-//			
-//			// save the old buffer
-//			this.inMemoryBuffers.add(this.currentPartitionBuffer);
-//			
-//			// now add the buffer
-//			this.currentPartitionBuffer = segment;
-//			this.buildSideBlockCounter++;
-//		}
-//		
-//		/**
-//		 * Spills this partition to disk and sets it up such that it continues spilling records that are added to
-//		 * it. The spilling process must free at least one buffer, either in the partition's record buffers, or in
-//		 * the memory segments for overflow buckets.
-//		 * The partition immediately takes back one buffer to use it for further spilling.
-//		 * 
-//		 * @param target The list to which memory segments from overflow buckets are added.
-//		 * @param ioAccess The I/O manager to be used to create a writer to disk.
-//		 * @param targetChannel The id of the target channel for this partition.
-//		 * @return The number of buffers that were freed by spilling this partition.
-//		 * @throws IOException Thrown, if the writing failed.
-//		 */
-//		public int spillPartition(List<MemorySegment> target, IOManager ioAccess,
-//				Channel.ID targetChannel)
-//		throws IOException
-//		{
-//			// sanity checks
-//			if (!isInMemory()) {
-//				throw new RuntimeException("Bug in Hybrid Hash Join: " +
-//						"Request to spill a partition that has already been spilled.");
-//			}
-//			if (this.buildSideBlockCounter + this.numOverflowSegments < 2) {
-//				throw new RuntimeException("Bug in Hybrid Hash Join: " +
-//					"Request to spill a partition with less than two buffers.");
-//			}
-//			
-//			// return the memory from the overflow segments
-//			for (int i = 0; i < this.numOverflowSegments; i++) {
-//				target.add(this.overflowSegments[i]);
-//			}
-//			this.overflowSegments = null;
-//			this.numOverflowSegments = 0;
-//			this.nextOverflowBucket = 0;
-//			
-//			// create the channel block writer
-//			this.buildSideChannel = ioAccess.createBlockChannelWriter(targetChannel, this.bufferReturnQueue);
-//			int numBlocks = this.inMemoryBuffers.size();
-//			
-//			// spill all blocks and release them
-//			for (int i = 0; i < numBlocks; i++) {
-//				spillBuffer(this.inMemoryBuffers.get(i), this.buildSideChannel);
-//			}
-//			this.inMemoryBuffers.clear();
-//			
-//			// we keep the block that is currently being filled, as it is most likely not full, yet
-//			// return the number of blocks that become available
-//			return numBlocks;
-//		}
-//		
-//		
-//		/**
-//		 * @param spilledPartitions
-//		 * @param ioAccess
-//		 * @param probeChannelEnumerator
-//		 * @throws IOException
-//		 */
-//		public void finalizeBuildPhase(IOManager ioAccess, Channel.Enumerator probeChannelEnumerator)
-//		throws IOException
-//		{
-//			if (isInMemory()) {
-//				this.inMemoryBuffers.add(this.currentPartitionBuffer);
-//				this.currentPartitionBuffer = null;
-//			}
-//			else {
-//				// spilled partition: write the last buffer and close the channel
-//				spillBuffer(this.currentPartitionBuffer, this.buildSideChannel);
-//				this.buildSideChannel.close();
-//				
-//				// create the channel for the probe side and claim one buffer for it
-//				this.probeSideChannel = ioAccess.createBlockChannelWriter(probeChannelEnumerator.next(), this.bufferReturnQueue);
-//				this.currentPartitionBuffer = getNextWriteBehindBuffer();
-//				initBuffer(this.currentPartitionBuffer, 0);
-//				this.probeBlockCounter = 1;
-//			}
-//		}
-//		
-//		/**
-//		 * @param freeMemory
-//		 * @param spilledPartitions
-//		 * @throws IOException
-//		 */
-//		public int finalizeProbePhase(List<MemorySegment> freeMemory, List<Partition> spilledPartitions)
-//		throws IOException
-//		{
-//			if (isInMemory()) {
-//				// in this case, return all memory buffers
-//				
-//				// return the overflow segments
-//				for (int k = 0; k < this.numOverflowSegments; k++) {
-//					freeMemory.add(this.overflowSegments[k]);
-//				}
-//				this.overflowSegments = null;
-//				this.numOverflowSegments = 0;
-//				this.nextOverflowBucket = 0;
-//				
-//				// return the partition buffers
-//				for (int k = this.inMemoryBuffers.size() - 1; k >= 0; --k) {
-//					freeMemory.add(this.inMemoryBuffers.get(k));
-//				}
-//				this.inMemoryBuffers.clear();
-//				return 0;
-//			}
-//			else if (this.probeBlockCounter == 1 && this.currentPartitionBuffer.outputView.getPosition() == PARTITION_BLOCK_HEADER_LEN) {
-//				// partition is empty, no spilled buffers
-//				// return the memory buffer
-//				freeMemory.add(this.currentPartitionBuffer);
-//				this.currentPartitionBuffer = null;
-//				
-//				// delete the spill files
-//				this.probeSideChannel.close();
-//				this.buildSideChannel.deleteChannel();
-//				this.probeSideChannel.deleteChannel();
-//				
-//				return 0;
-//			}
-//			else {
-//				// flush the last probe side buffer and register this partition as pending
-//				spillBuffer(this.currentPartitionBuffer, this.probeSideChannel);
-//				this.currentPartitionBuffer = null;
-//				this.probeSideChannel.close();
-//				
-//				spilledPartitions.add(this);
-//				return 1;
-//			}
-//		}
-//		
-//		/**
-//		 * Initializes a memory segment to be used as a record buffer for the hash table. This method
-//		 * records the block sequence number and reserves header space.
-//		 * 
-//		 * @param segment The segment to be initialized.
-//		 * @param blockNumber The sequence number of the block in the collection of blocks.
-//		 */
-//		private final void initBuffer(MemorySegment segment, int blockNumber)
-//		{
-//			// write 4 bytes for the block number
-//			segment.putInt(0, blockNumber);
-//			
-//			// skip 4 bytes for the remaining header
-//			segment.outputView.setPosition(PARTITION_BLOCK_HEADER_LEN);
-//		}
-//		
-//		/**
-//		 * Finalizes and spills the given buffer.
-//		 * 
-//		 * @param buffer
-//		 * @throws IOException
-//		 */
-//		private final void spillBuffer(MemorySegment buffer, BlockChannelWriter writer)
-//		throws IOException
-//		{
-//			buffer.putInt(PARTITION_BLOCK_SIZE_OFFSET, buffer.outputView.getPosition());
-//			writer.writeBlock(buffer);
-//		}
-//		
-//		/**
-//		 * Gets the next write-behind buffer.
-//		 * 
-//		 * @return The next write-behind buffer.
-//		 * @throws IOException Thrown, if the thread was interrupted while waiting for the next buffer.
-//		 */
-//		private final MemorySegment getNextWriteBehindBuffer() throws IOException
-//		{
-//			try {
-//				return this.bufferReturnQueue.take();
-//			}
-//			catch (InterruptedException iex) {
-//				throw new IOException("Hybrid Hash Join Partition was interrupted while taking a buffer.");
-//			}
-//		}
-//		
-//		public PartitionIterator getPartitionIterator(int[] keyPositions, Key[] keyHolders)
-//		{
-//			return new PartitionIterator(keyPositions, keyHolders);
-//		}
-//		
-//		
-//		protected final class PartitionIterator
-//		{
-//			private final PactRecord record;
-//			
-//			private final int[] keyPositions;
-//			
-//			private final Key[] keyHolders;
-//			
-//			private DataInputView currentSeg;
-//			
-//			private int currentSegNum;
-//			
-//			private int currentEnd;
-//			
-//			private long currentPointer;
-//			
-//			
-//			private PartitionIterator(int[] keyPositions, Key[] keyHolders)
-//			{	
-//				this.record = new PactRecord();
-//				this.keyPositions = keyPositions;
-//				this.keyHolders = keyHolders;
-//				
-//				final MemorySegment seg = Partition.this.inMemoryBuffers.get(0); 
-//				this.currentSeg = seg.inputView;
-//				this.currentSeg.setPosition(PARTITION_BLOCK_HEADER_LEN);
-//				this.currentEnd = seg.getInt(PARTITION_BLOCK_SIZE_OFFSET);
-//			}
-//			
-//			
-//			protected final boolean next()
-//			{
-//				final int pos = this.currentSeg.getPosition();
-//				
-//				if (pos < this.currentEnd) {
-//					// compute the start pointer
-//					this.currentPointer = (((long) this.currentSegNum) << 32) | pos;
-//					
-//					// read key and also the value
-//					try {
-//						this.record.read(this.currentSeg);
-//						this.record.getFieldsInto(this.keyPositions, this.keyHolders);
-//					}
-//					catch (IOException e) {
-//						throw new RuntimeException("Error while deserializing record from spilled buffer. " +
-//							"Probably cause: Bad Serialization code.", e);
-//					}
-//					return true;
-//				}
-//				else {
-//					this.currentSegNum++;
-//					if (this.currentSegNum < Partition.this.inMemoryBuffers.size()) {
-//						final MemorySegment seg = Partition.this.inMemoryBuffers.get(this.currentSegNum); 
-//						this.currentSeg = seg.inputView;
-//						this.currentSeg.setPosition(PARTITION_BLOCK_HEADER_LEN);
-//						this.currentEnd = seg.getInt(PARTITION_BLOCK_SIZE_OFFSET);
-//						return next();
-//					}
-//					else {
-//						return false;
-//					}
-//				}
-//			}
-//			
-//			protected final long getPointer()
-//			{
-//				return this.currentPointer;
-//			}
-//		}
-//		
-//	} // end partition 
-	
 	
 	// ======================================================================================================
-	
 	
 	/**
 	 *
 	 */
-	protected static final class HashBucketIterator<BT>
+	protected static final class HashBucketIterator<BT, PT>
 	{
 		private final TypeAccessorsV2<BT> accessor;
+		
+		private final TypeComparator<PT, BT> comparator;
 		
 		private MemorySegment bucket;
 		
 		private MemorySegment[] overflowSegments;
 		
-		private HashPartition<BT, ?> partition;
+		private HashPartition<BT, PT> partition;
 		
 		private int bucketInSegmentOffset;
 		
@@ -1757,14 +1243,15 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		private MemorySegment originalBucket;
 		
 		
-		private HashBucketIterator(TypeAccessorsV2<BT> accessor)
+		private HashBucketIterator(TypeAccessorsV2<BT> accessor, TypeComparator<PT, BT> comparator)
 		{
 			this.accessor = accessor;
+			this.comparator = comparator;
 		}
 		
 		
-		private void set(MemorySegment bucket, MemorySegment[] overflowSegments, HashPartition<BT, ?> partition,
-				BT toFind, int searchHashCode, int bucketInSegmentOffset)
+		private void set(MemorySegment bucket, MemorySegment[] overflowSegments, HashPartition<BT, PT> partition,
+				int searchHashCode, int bucketInSegmentOffset)
 		{
 			this.bucket = bucket;
 			this.originalBucket = bucket;
@@ -1773,8 +1260,6 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 			this.searchHashCode = searchHashCode;
 			this.bucketInSegmentOffset = bucketInSegmentOffset;
 			this.originalBucketInSegmentOffset = bucketInSegmentOffset;
-			
-			this.accessor.setReferenceForEquality(toFind);
 			
 			this.posInSegment = this.bucketInSegmentOffset + BUCKET_HEADER_LENGTH;
 			this.countInSegment = bucket.getShort(bucketInSegmentOffset + HEADER_COUNT_OFFSET);
@@ -1803,7 +1288,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 						try {
 							this.partition.positionToPointer(pointer);
 							this.accessor.deserialize(target, this.partition);
-							if (this.accessor.equalToReference(target)) {
+							if (this.comparator.equalToReference(target, this.accessor)) {
 								return true;
 							}
 						}
@@ -1886,128 +1371,4 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 			return this.current;
 		}
 	}
-
-	// ======================================================================================================
-	
-	protected static class BlockReaderIterator implements MutableObjectIterator<PactRecord>
-	{		
-		private MemorySegment currentSegment;
-		
-		private int currentEndPos;
-	
-		private final BlockChannelReader reader;
-		
-		private final LinkedBlockingQueue<MemorySegment> returnQueue;
-		
-		private int numRequestsRemaining;
-		
-		private int numReturnsRemaining;
-		
-		private final List<MemorySegment> freeMemTarget;
-		
-		
-		public BlockReaderIterator(IOManager ioAccess, Channel.ID channel, List<MemorySegment> segments,
-				List<MemorySegment> freeMemTarget, int numBlocks)
-		throws IOException
-		{
-			this(ioAccess, channel, new LinkedBlockingQueue<MemorySegment>(), segments, freeMemTarget, numBlocks);
-		}
-		
-		
-		public BlockReaderIterator(IOManager ioAccess, Channel.ID channel,  LinkedBlockingQueue<MemorySegment> returnQueue,
-				List<MemorySegment> segments, List<MemorySegment> freeMemTarget, int numBlocks)
-		throws IOException
-		{
-			this(ioAccess.createBlockChannelReader(channel, returnQueue), returnQueue,
-				segments, freeMemTarget, numBlocks);
-		}
-		
-		
-		public BlockReaderIterator(BlockChannelReader reader, LinkedBlockingQueue<MemorySegment> returnQueue,
-				List<MemorySegment> segments, List<MemorySegment> freeMemTarget, int numBlocks)
-		throws IOException
-		{
-			this.reader = reader;
-			this.returnQueue = returnQueue;
-			this.freeMemTarget = freeMemTarget;
-			
-			this.numRequestsRemaining = numBlocks;
-			
-			// send off the first requests
-			for (; !segments.isEmpty() && this.numRequestsRemaining > 0; numRequestsRemaining--) {
-				this.reader.readBlock(segments.remove(segments.size() - 1));
-			}
-			
-			// return the remaining memory, if there is memory left
-			while (!segments.isEmpty()) {
-				freeMemTarget.add(segments.remove(segments.size() - 1));
-			}
-
-			this.numReturnsRemaining = numBlocks - 1;
-			
-			try {
-				this.currentSegment = returnQueue.take();
-				this.currentSegment.inputView.setPosition(PARTITION_BLOCK_HEADER_LEN);
-				this.currentEndPos = this.currentSegment.getInt(PARTITION_BLOCK_SIZE_OFFSET);
-			}
-			catch (InterruptedException iex) {
-				throw new RuntimeException(iex);
-			}
-		}
-
-		/* (non-Javadoc)
-		 * @see java.util.Iterator#next()
-		 */
-		@Override
-		public boolean next(PactRecord target) throws IOException
-		{
-			if (this.currentSegment != null) {
-				// get the next element from the buffer
-				target.read(this.currentSegment.inputView);
-				
-				int pos = this.currentSegment.inputView.getPosition();
-				if (pos < this.currentEndPos) {
-					return true;
-				}
-				else if (pos == this.currentEndPos) {
-					// segment done
-					// send another request, if more blocks remain
-					if (this.numRequestsRemaining > 0) {
-						this.reader.readBlock(this.currentSegment);
-						this.numRequestsRemaining--;
-					}
-					else {
-						this.freeMemTarget.add(this.currentSegment);
-					}
-					
-					// grab the next block
-					if (this.numReturnsRemaining > 0) {
-						try {
-							this.currentSegment = this.returnQueue.take();
-							this.numReturnsRemaining--;
-							this.currentSegment.inputView.setPosition(PARTITION_BLOCK_HEADER_LEN);
-							this.currentEndPos = this.currentSegment.getInt(PARTITION_BLOCK_SIZE_OFFSET);
-						}
-						catch (InterruptedException iex) {
-							throw new RuntimeException(iex);
-						}
-					}
-					else {
-						this.currentSegment = null;
-					}
-					
-					return true;
-				}
-				else {
-					// serialization error
-					throw new RuntimeException("Deserialization error while reading record from spilled partition. " +
-							"Deserialization consumed more bytes than serialization produced.");
-				}
-			}
-			else {
-				return false;
-			}
-		}
-		
-	} // end BlockReaderIterator
 }
