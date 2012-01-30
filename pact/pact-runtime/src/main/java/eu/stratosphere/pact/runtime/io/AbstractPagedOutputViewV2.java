@@ -114,6 +114,12 @@ public abstract class AbstractPagedOutputViewV2 implements DataOutputViewV2
 		this.positionInSegment = this.headerLength;
 	}
 	
+	protected void seekOutput(MemorySegment seg, int position)
+	{
+		this.currentSegment = seg;
+		this.positionInSegment = position;
+	}
+	
 	// --------------------------------------------------------------------------------------------
 	//                               Data Output Specific methods
 	// --------------------------------------------------------------------------------------------

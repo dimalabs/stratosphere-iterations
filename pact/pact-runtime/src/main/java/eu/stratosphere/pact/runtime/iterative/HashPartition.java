@@ -10,9 +10,12 @@ import eu.stratosphere.nephele.services.iomanager.BlockChannelWriter;
 import eu.stratosphere.nephele.services.iomanager.Channel;
 import eu.stratosphere.nephele.services.iomanager.IOManager;
 import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
+import eu.stratosphere.nephele.services.memorymanager.SeekableDataInputView;
+import eu.stratosphere.nephele.services.memorymanager.SeekableDataOutputView;
 import eu.stratosphere.pact.runtime.io.AbstractPagedInputViewV2;
 import eu.stratosphere.pact.runtime.io.AbstractPagedOutputViewV2;
 import eu.stratosphere.pact.runtime.io.ChannelWriterOutputViewV2;
+import eu.stratosphere.pact.runtime.io.FixedSizeOutputView;
 import eu.stratosphere.pact.runtime.io.MemorySegmentSource;
 import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
 
@@ -25,7 +28,7 @@ import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
  * @param BT The type of the build side records.
  * @param PT The type of the probe side records.
  */
-class HashPartition<BT, PT> extends AbstractPagedInputViewV2
+class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements SeekableDataInputView
 {
 	/**
 	 * The length of the header in the partition buffer blocks.
@@ -60,6 +63,8 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2
 	private BuildSideBuffer<BT> buildSideWriteBuffer;
 	
 	private ChannelWriterOutputViewV2 probeSideBuffer;
+	
+	private FixedSizeOutputView overwriteBuffer;
 	
 	// ------------------------------------------ Spilling ----------------------------------------------
 	
@@ -215,7 +220,7 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2
 		if (isInMemory()) {
 			final long pointer = this.buildSideWriteBuffer.getCurrentPointer();
 			this.buildSideAccessors.serialize(record, this.buildSideWriteBuffer);
-			return pointer;
+			return isInMemory() ? pointer : -1;
 		} else {
 			this.buildSideAccessors.serialize(record, this.buildSideWriteBuffer);
 			return -1;
@@ -405,11 +410,18 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2
 		return new PartitionIterator();
 	}
 	
+	final SeekableDataOutputView getWriteView() {
+		if (this.overwriteBuffer == null) {
+			this.overwriteBuffer = new FixedSizeOutputView(this.partitionBuffers, this.memorySegmentSize, PARTITION_BLOCK_HEADER_LEN);
+		}
+		return this.overwriteBuffer;
+	}
+	
 	// --------------------------------------------------------------------------------------------------
 	//                   Methods to provide input view abstraction for reading probe records
 	// --------------------------------------------------------------------------------------------------
 	
-	void positionToPointer(long pointer) throws IOException {
+	public void setReadPosition(long pointer) {
 		final int bufferNum = (int) (pointer >>> 32);
 		final int offset = (int) pointer;
 		final MemorySegment seg = this.partitionBuffers[bufferNum];
@@ -542,7 +554,7 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2
 		private PartitionIterator() throws IOException
 		{
 			this.record = HashPartition.this.buildSideAccessors.createInstance();
-			positionToPointer(PARTITION_BLOCK_HEADER_LEN);
+			setReadPosition(PARTITION_BLOCK_HEADER_LEN);
 		}
 		
 		

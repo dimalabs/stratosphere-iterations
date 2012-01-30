@@ -46,6 +46,7 @@ import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
 import eu.stratosphere.pact.runtime.plugable.TypeComparator;
 import eu.stratosphere.pact.runtime.test.util.DummyInvokable;
 import eu.stratosphere.pact.runtime.test.util.RegularlyGeneratedInputGenerator;
+import eu.stratosphere.pact.runtime.test.util.RegularlyIntPairGenerator;
 import eu.stratosphere.pact.runtime.test.util.UnionIterator;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -291,6 +292,10 @@ public class MutableHashTableITCase
 			}
 			while (buildSide.next(record)) {
 				numBuildValues++;
+			}
+			
+			if (numBuildValues != 3) {
+				fail("Other than 3 build values!!!");
 			}
 			
 			PactRecord pr = join.getCurrentProbeRecord();
@@ -737,7 +742,7 @@ public class MutableHashTableITCase
 	@Test
 	public void validateSpillingDuringInsertion() throws IOException, MemoryAllocationException {
 		int reqMem = 2785280;
-
+	
 		final int NUM_BUILD_KEYS = 500000;
 		final int NUM_BUILD_VALS = 1;
 		final int NUM_PROBE_KEYS = 10;
@@ -782,12 +787,778 @@ public class MutableHashTableITCase
 		
 		join.close();
 	}
-
-
+	
 	// ============================================================================================
-	//                                           Utilities
+	//                                 Integer Pairs based Tests
 	// ============================================================================================
 	
+	
+	@Test
+	public void testInMemoryMutableHashTableIntPair() throws IOException
+	{
+		final int NUM_KEYS = 100000;
+		final int BUILD_VALS_PER_KEY = 3;
+		final int PROBE_VALS_PER_KEY = 10;
+		
+		// create a build input that gives 3 million pairs with 3 values sharing the same key
+		MutableObjectIterator<IntPair> buildInput = new RegularlyIntPairGenerator(NUM_KEYS, BUILD_VALS_PER_KEY, false);
+
+		// create a probe input that gives 10 million pairs with 10 values sharing a key
+		MutableObjectIterator<IntPair> probeInput = new RegularlyIntPairGenerator(NUM_KEYS, PROBE_VALS_PER_KEY, true);
+
+		// allocate the memory for the HashTable
+		MemoryManager memMan; 
+		List<MemorySegment> memSegments;
+		
+		try {
+			memMan = new DefaultMemoryManager(32 * 1024 * 1024);
+			memSegments = memMan.allocateStrict(MEM_OWNER, 896, 32 * 1024);
+		}
+		catch (MemoryAllocationException maex) {
+			fail("Memory for the Join could not be provided.");
+			return;
+		}
+		
+		// create the I/O access for spilling
+		final IOManager ioManager = new IOManager();
+		
+		// ----------------------------------------------------------------------------------------
+		
+		final MutableHashTable<IntPair, IntPair> join = new MutableHashTable<IntPair, IntPair>(
+			this.pairBuildSideAccesssor, this.pairProbeSideAccesssor, this.pairComparator,
+			memSegments, ioManager);
+		join.open(buildInput, probeInput);
+		
+		final IntPair record = new IntPair();
+		int numRecordsInJoinResult = 0;
+		
+		while (join.nextRecord()) {
+			HashBucketIterator<IntPair, IntPair> buildSide = join.getBuildSideIterator();
+			while (buildSide.next(record)) {
+				numRecordsInJoinResult++;
+			}
+		}
+		Assert.assertEquals("Wrong number of records in join result.", NUM_KEYS * BUILD_VALS_PER_KEY * PROBE_VALS_PER_KEY, numRecordsInJoinResult);
+		
+		join.close();
+		
+		
+		// ----------------------------------------------------------------------------------------
+		
+		memMan.release(memSegments);
+		
+		// shut down I/O manager and Memory Manager and verify the correct shutdown
+		ioManager.shutdown();
+		if (!ioManager.isProperlyShutDown()) {
+			fail("I/O manager was not property shut down.");
+		}
+		if (!memMan.verifyEmpty()) {
+			fail("Not all memory was properly released to the memory manager --> Memory Leak.");
+		}
+	}
+	
+	@Test
+	public void testSpillingHashJoinOneRecursionPerformanceIntPair() throws IOException
+	{
+		final int NUM_KEYS = 1000000;
+		final int BUILD_VALS_PER_KEY = 3;
+		final int PROBE_VALS_PER_KEY = 10;
+		
+		// create a build input that gives 3 million pairs with 3 values sharing the same key
+		MutableObjectIterator<IntPair> buildInput = new RegularlyIntPairGenerator(NUM_KEYS, BUILD_VALS_PER_KEY, false);
+
+		// create a probe input that gives 10 million pairs with 10 values sharing a key
+		MutableObjectIterator<IntPair> probeInput = new RegularlyIntPairGenerator(NUM_KEYS, PROBE_VALS_PER_KEY, true);
+
+		// allocate the memory for the HashTable
+		MemoryManager memMan; 
+		List<MemorySegment> memSegments;
+		
+		try {
+			memMan = new DefaultMemoryManager(32 * 1024 * 1024);
+			memSegments = memMan.allocateStrict(MEM_OWNER, 896, 32 * 1024);
+		}
+		catch (MemoryAllocationException maex) {
+			fail("Memory for the Join could not be provided.");
+			return;
+		}
+		
+		// create the I/O access for spilling
+		IOManager ioManager = new IOManager();
+		
+		// ----------------------------------------------------------------------------------------
+		
+		final MutableHashTable<IntPair, IntPair> join = new MutableHashTable<IntPair, IntPair>(
+				this.pairBuildSideAccesssor, this.pairProbeSideAccesssor, this.pairComparator,
+				memSegments, ioManager);
+		join.open(buildInput, probeInput);
+		
+		final IntPair record = new IntPair();
+		int numRecordsInJoinResult = 0;
+		
+		while (join.nextRecord()) {
+			HashBucketIterator<IntPair, IntPair> buildSide = join.getBuildSideIterator();
+			while (buildSide.next(record)) {
+				numRecordsInJoinResult++;
+			}
+		}
+		Assert.assertEquals("Wrong number of records in join result.", NUM_KEYS * BUILD_VALS_PER_KEY * PROBE_VALS_PER_KEY, numRecordsInJoinResult);
+		
+		join.close();
+		
+		// ----------------------------------------------------------------------------------------
+		
+		memMan.release(memSegments);
+		
+		// shut down I/O manager and Memory Manager and verify the correct shutdown
+		ioManager.shutdown();
+		if (!ioManager.isProperlyShutDown()) {
+			fail("I/O manager was not property shut down.");
+		}
+		if (!memMan.verifyEmpty()) {
+			fail("Not all memory was properly released to the memory manager --> Memory Leak.");
+		}
+	}
+	
+	@Test
+	public void testSpillingHashJoinOneRecursionValidityIntPair() throws IOException
+	{
+		final int NUM_KEYS = 1000000;
+		final int BUILD_VALS_PER_KEY = 3;
+		final int PROBE_VALS_PER_KEY = 10;
+		
+		// create a build input that gives 3 million pairs with 3 values sharing the same key
+		MutableObjectIterator<IntPair> buildInput = new RegularlyIntPairGenerator(NUM_KEYS, BUILD_VALS_PER_KEY, false);
+
+		// create a probe input that gives 10 million pairs with 10 values sharing a key
+		MutableObjectIterator<IntPair> probeInput = new RegularlyIntPairGenerator(NUM_KEYS, PROBE_VALS_PER_KEY, true);
+
+		// allocate the memory for the HashTable
+		MemoryManager memMan; 
+		List<MemorySegment> memSegments;
+		
+		try {
+			memMan = new DefaultMemoryManager(32 * 1024 * 1024);
+			memSegments = memMan.allocateStrict(MEM_OWNER, 896, 32 * 1024);
+		}
+		catch (MemoryAllocationException maex) {
+			fail("Memory for the Join could not be provided.");
+			return;
+		}
+		
+		// create the I/O access for spilling
+		IOManager ioManager = new IOManager();
+		
+		// create the map for validating the results
+		HashMap<Integer, Long> map = new HashMap<Integer, Long>(NUM_KEYS);
+		
+		// ----------------------------------------------------------------------------------------
+		
+		final MutableHashTable<IntPair, IntPair> join = new MutableHashTable<IntPair, IntPair>(
+				this.pairBuildSideAccesssor, this.pairProbeSideAccesssor, this.pairComparator,
+				memSegments, ioManager);
+		join.open(buildInput, probeInput);
+	
+		final IntPair record = new IntPair();
+		
+		while (join.nextRecord())
+		{
+			int numBuildValues = 0;
+			
+			int key = 0;
+			
+			HashBucketIterator<IntPair, IntPair> buildSide = join.getBuildSideIterator();
+			if (buildSide.next(record)) {
+				numBuildValues = 1;
+				key = record.getKey();
+			}
+			else {
+				fail("No build side values found for a probe key.");
+			}
+			while (buildSide.next(record)) {
+				numBuildValues++;
+			}
+			
+			if (numBuildValues != 3) {
+				fail("Other than 3 build values!!!");
+			}
+			
+			IntPair pr = join.getCurrentProbeRecord();
+			Assert.assertEquals("Probe-side key was different than build-side key.", key, pr.getKey()); 
+			
+			Long contained = map.get(key);
+			if (contained == null) {
+				contained = new Long(numBuildValues);
+			}
+			else {
+				contained = new Long(contained.longValue() + (numBuildValues));
+			}
+			
+			map.put(key, contained);
+		}
+		
+		join.close();
+		
+		Assert.assertEquals("Wrong number of keys", NUM_KEYS, map.size());
+		for (Map.Entry<Integer, Long> entry : map.entrySet()) {
+			long val = entry.getValue();
+			int key = entry.getKey();
+	
+			Assert.assertEquals("Wrong number of values in per-key cross product for key " + key, 
+				PROBE_VALS_PER_KEY * BUILD_VALS_PER_KEY, val);
+		}
+		
+		
+		// ----------------------------------------------------------------------------------------
+		
+		memMan.release(memSegments);
+		
+		// shut down I/O manager and Memory Manager and verify the correct shutdown
+		ioManager.shutdown();
+		if (!ioManager.isProperlyShutDown()) {
+			fail("I/O manager was not property shut down.");
+		}
+		if (!memMan.verifyEmpty()) {
+			fail("Not all memory was properly released to the memory manager --> Memory Leak.");
+		}
+	}
+	
+
+	@Test
+	public void testSpillingHashJoinWithMassiveCollisionsIntPair() throws IOException
+	{
+		// the following two values are known to have a hash-code collision on the initial level.
+		// we use them to make sure one partition grows over-proportionally large
+		final int REPEATED_VALUE_1 = 40559;
+		final int REPEATED_VALUE_2 = 92882;
+		final int REPEATED_VALUE_COUNT_BUILD = 200000;
+		final int REPEATED_VALUE_COUNT_PROBE = 5;
+		
+		final int NUM_KEYS = 1000000;
+		final int BUILD_VALS_PER_KEY = 3;
+		final int PROBE_VALS_PER_KEY = 10;
+		
+		// create a build input that gives 3 million pairs with 3 values sharing the same key, plus 400k pairs with two colliding keys
+		MutableObjectIterator<IntPair> build1 = new RegularlyIntPairGenerator(NUM_KEYS, BUILD_VALS_PER_KEY, false);
+		MutableObjectIterator<IntPair> build2 = new ConstantsIntPairsIterator(REPEATED_VALUE_1, 17, REPEATED_VALUE_COUNT_BUILD);
+		MutableObjectIterator<IntPair> build3 = new ConstantsIntPairsIterator(REPEATED_VALUE_2, 23, REPEATED_VALUE_COUNT_BUILD);
+		List<MutableObjectIterator<IntPair>> builds = new ArrayList<MutableObjectIterator<IntPair>>();
+		builds.add(build1);
+		builds.add(build2);
+		builds.add(build3);
+		MutableObjectIterator<IntPair> buildInput = new UnionIterator<IntPair>(builds);
+	
+		// create a probe input that gives 10 million pairs with 10 values sharing a key
+		MutableObjectIterator<IntPair> probe1 = new RegularlyIntPairGenerator(NUM_KEYS, PROBE_VALS_PER_KEY, true);
+		MutableObjectIterator<IntPair> probe2 = new ConstantsIntPairsIterator(REPEATED_VALUE_1, 17, 5);
+		MutableObjectIterator<IntPair> probe3 = new ConstantsIntPairsIterator(REPEATED_VALUE_2, 23, 5);
+		List<MutableObjectIterator<IntPair>> probes = new ArrayList<MutableObjectIterator<IntPair>>();
+		probes.add(probe1);
+		probes.add(probe2);
+		probes.add(probe3);
+		MutableObjectIterator<IntPair> probeInput = new UnionIterator<IntPair>(probes);
+
+		// allocate the memory for the HashTable
+		MemoryManager memMan; 
+		List<MemorySegment> memSegments;
+		
+		try {
+			memMan = new DefaultMemoryManager(32 * 1024 * 1024);
+			memSegments = memMan.allocateStrict(MEM_OWNER, 896, 32 * 1024);
+		}
+		catch (MemoryAllocationException maex) {
+			fail("Memory for the Join could not be provided.");
+			return;
+		}
+		
+		// create the I/O access for spilling
+		IOManager ioManager = new IOManager();
+		
+		// create the map for validating the results
+		HashMap<Integer, Long> map = new HashMap<Integer, Long>(NUM_KEYS);
+		
+		// ----------------------------------------------------------------------------------------
+		
+		final MutableHashTable<IntPair, IntPair> join = new MutableHashTable<IntPair, IntPair>(
+				this.pairBuildSideAccesssor, this.pairProbeSideAccesssor, this.pairComparator,
+				memSegments, ioManager);
+		join.open(buildInput, probeInput);
+	
+		final IntPair record = new IntPair();
+		
+		while (join.nextRecord())
+		{	
+			int numBuildValues = 0;
+	
+			final IntPair probeRec = join.getCurrentProbeRecord();
+			int key = probeRec.getKey();
+			
+			HashBucketIterator<IntPair, IntPair> buildSide = join.getBuildSideIterator();
+			if (buildSide.next(record)) {
+				numBuildValues = 1;
+				Assert.assertEquals("Probe-side key was different than build-side key.", key, record.getKey()); 
+			}
+			else {
+				fail("No build side values found for a probe key.");
+			}
+			while (buildSide.next(record)) {
+				numBuildValues++;
+				Assert.assertEquals("Probe-side key was different than build-side key.", key, record.getKey());
+			}
+			
+			Long contained = map.get(key);
+			if (contained == null) {
+				contained = new Long(numBuildValues);
+			}
+			else {
+				contained = new Long(contained.longValue() + numBuildValues);
+			}
+			
+			map.put(key, contained);
+		}
+		
+		join.close();
+		
+		Assert.assertEquals("Wrong number of keys", NUM_KEYS, map.size());
+		for (Map.Entry<Integer, Long> entry : map.entrySet()) {
+			long val = entry.getValue();
+			int key = entry.getKey();
+	
+			Assert.assertEquals("Wrong number of values in per-key cross product for key " + key, 
+				(key == REPEATED_VALUE_1 || key == REPEATED_VALUE_2) ?
+					(PROBE_VALS_PER_KEY + REPEATED_VALUE_COUNT_PROBE) * (BUILD_VALS_PER_KEY + REPEATED_VALUE_COUNT_BUILD) : 
+					 PROBE_VALS_PER_KEY * BUILD_VALS_PER_KEY, val);
+		}
+		
+		
+		// ----------------------------------------------------------------------------------------
+		
+		memMan.release(memSegments);
+		
+		// shut down I/O manager and Memory Manager and verify the correct shutdown
+		ioManager.shutdown();
+		if (!ioManager.isProperlyShutDown()) {
+			fail("I/O manager was not property shut down.");
+		}
+		if (!memMan.verifyEmpty()) {
+			fail("Not all memory was properly released to the memory manager --> Memory Leak.");
+		}
+	}
+	
+	/*
+	 * This test is basically identical to the "testSpillingHashJoinWithMassiveCollisions" test, only that the number
+	 * of repeated values (causing bucket collisions) are large enough to make sure that their target partition no longer
+	 * fits into memory by itself and needs to be repartitioned in the recursion again.
+	 */
+	@Test
+	public void testSpillingHashJoinWithTwoRecursionsIntPair() throws IOException
+	{
+		// the following two values are known to have a hash-code collision on the first recursion level.
+		// we use them to make sure one partition grows over-proportionally large
+		final int REPEATED_VALUE_1 = 40559;
+		final int REPEATED_VALUE_2 = 92882;
+		final int REPEATED_VALUE_COUNT_BUILD = 200000;
+		final int REPEATED_VALUE_COUNT_PROBE = 5;
+		
+		final int NUM_KEYS = 1000000;
+		final int BUILD_VALS_PER_KEY = 3;
+		final int PROBE_VALS_PER_KEY = 10;
+		
+		// create a build input that gives 3 million pairs with 3 values sharing the same key, plus 400k pairs with two colliding keys
+		MutableObjectIterator<IntPair> build1 = new RegularlyIntPairGenerator(NUM_KEYS, BUILD_VALS_PER_KEY, false);
+		MutableObjectIterator<IntPair> build2 = new ConstantsIntPairsIterator(REPEATED_VALUE_1, 17, REPEATED_VALUE_COUNT_BUILD);
+		MutableObjectIterator<IntPair> build3 = new ConstantsIntPairsIterator(REPEATED_VALUE_2, 23, REPEATED_VALUE_COUNT_BUILD);
+		List<MutableObjectIterator<IntPair>> builds = new ArrayList<MutableObjectIterator<IntPair>>();
+		builds.add(build1);
+		builds.add(build2);
+		builds.add(build3);
+		MutableObjectIterator<IntPair> buildInput = new UnionIterator<IntPair>(builds);
+	
+		// create a probe input that gives 10 million pairs with 10 values sharing a key
+		MutableObjectIterator<IntPair> probe1 = new RegularlyIntPairGenerator(NUM_KEYS, PROBE_VALS_PER_KEY, true);
+		MutableObjectIterator<IntPair> probe2 = new ConstantsIntPairsIterator(REPEATED_VALUE_1, 17, 5);
+		MutableObjectIterator<IntPair> probe3 = new ConstantsIntPairsIterator(REPEATED_VALUE_2, 23, 5);
+		List<MutableObjectIterator<IntPair>> probes = new ArrayList<MutableObjectIterator<IntPair>>();
+		probes.add(probe1);
+		probes.add(probe2);
+		probes.add(probe3);
+		MutableObjectIterator<IntPair> probeInput = new UnionIterator<IntPair>(probes);
+
+		// allocate the memory for the HashTable
+		MemoryManager memMan; 
+		List<MemorySegment> memSegments;
+		
+		try {
+			memMan = new DefaultMemoryManager(32 * 1024 * 1024);
+			memSegments = memMan.allocateStrict(MEM_OWNER, 896, 32 * 1024);
+		}
+		catch (MemoryAllocationException maex) {
+			fail("Memory for the Join could not be provided.");
+			return;
+		}
+		
+		// create the I/O access for spilling
+		IOManager ioManager = new IOManager();
+		
+		// create the map for validating the results
+		HashMap<Integer, Long> map = new HashMap<Integer, Long>(NUM_KEYS);
+		
+		// ----------------------------------------------------------------------------------------
+		
+		final MutableHashTable<IntPair, IntPair> join = new MutableHashTable<IntPair, IntPair>(
+				this.pairBuildSideAccesssor, this.pairProbeSideAccesssor, this.pairComparator,
+				memSegments, ioManager);
+		join.open(buildInput, probeInput);
+		
+		final IntPair record = new IntPair();
+		
+		while (join.nextRecord())
+		{	
+			int numBuildValues = 0;
+			
+			final IntPair probeRec = join.getCurrentProbeRecord();
+			int key = probeRec.getKey();
+			
+			HashBucketIterator<IntPair, IntPair> buildSide = join.getBuildSideIterator();
+			if (buildSide.next(record)) {
+				numBuildValues = 1;
+				Assert.assertEquals("Probe-side key was different than build-side key.", key, record.getKey()); 
+			}
+			else {
+				fail("No build side values found for a probe key.");
+			}
+			while (buildSide.next(record)) {
+				numBuildValues++;
+				Assert.assertEquals("Probe-side key was different than build-side key.", key, record.getKey());
+			}
+			
+			Long contained = map.get(key);
+			if (contained == null) {
+				contained = new Long(numBuildValues);
+			}
+			else {
+				contained = new Long(contained.longValue() + numBuildValues);
+			}
+			
+			map.put(key, contained);
+		}
+		
+		join.close();
+		
+		Assert.assertEquals("Wrong number of keys", NUM_KEYS, map.size());
+		for (Map.Entry<Integer, Long> entry : map.entrySet()) {
+			long val = entry.getValue();
+			int key = entry.getKey();
+	
+			Assert.assertEquals("Wrong number of values in per-key cross product for key " + key, 
+				(key == REPEATED_VALUE_1 || key == REPEATED_VALUE_2) ?
+					(PROBE_VALS_PER_KEY + REPEATED_VALUE_COUNT_PROBE) * (BUILD_VALS_PER_KEY + REPEATED_VALUE_COUNT_BUILD) : 
+					 PROBE_VALS_PER_KEY * BUILD_VALS_PER_KEY, val);
+		}
+		
+		
+		// ----------------------------------------------------------------------------------------
+		
+		memMan.release(memSegments);
+		
+		// shut down I/O manager and Memory Manager and verify the correct shutdown
+		ioManager.shutdown();
+		if (!ioManager.isProperlyShutDown()) {
+			fail("I/O manager was not property shut down.");
+		}
+		if (!memMan.verifyEmpty()) {
+			fail("Not all memory was properly released to the memory manager --> Memory Leak.");
+		}
+	}
+	
+	/*
+	 * This test is basically identical to the "testSpillingHashJoinWithMassiveCollisions" test, only that the number
+	 * of repeated values (causing bucket collisions) are large enough to make sure that their target partition no longer
+	 * fits into memory by itself and needs to be repartitioned in the recursion again.
+	 */
+	@Test
+	public void testFailingHashJoinTooManyRecursionsIntPair() throws IOException
+	{
+		// the following two values are known to have a hash-code collision on the first recursion level.
+		// we use them to make sure one partition grows over-proportionally large
+		final int REPEATED_VALUE_1 = 40559;
+		final int REPEATED_VALUE_2 = 92882;
+		final int REPEATED_VALUE_COUNT = 3000000; 
+		
+		final int NUM_KEYS = 1000000;
+		final int BUILD_VALS_PER_KEY = 3;
+		final int PROBE_VALS_PER_KEY = 10;
+		
+		// create a build input that gives 3 million pairs with 3 values sharing the same key, plus 400k pairs with two colliding keys
+		MutableObjectIterator<IntPair> build1 = new RegularlyIntPairGenerator(NUM_KEYS, BUILD_VALS_PER_KEY, false);
+		MutableObjectIterator<IntPair> build2 = new ConstantsIntPairsIterator(REPEATED_VALUE_1, 17, REPEATED_VALUE_COUNT);
+		MutableObjectIterator<IntPair> build3 = new ConstantsIntPairsIterator(REPEATED_VALUE_2, 23, REPEATED_VALUE_COUNT);
+		List<MutableObjectIterator<IntPair>> builds = new ArrayList<MutableObjectIterator<IntPair>>();
+		builds.add(build1);
+		builds.add(build2);
+		builds.add(build3);
+		MutableObjectIterator<IntPair> buildInput = new UnionIterator<IntPair>(builds);
+	
+		// create a probe input that gives 10 million pairs with 10 values sharing a key
+		MutableObjectIterator<IntPair> probe1 = new RegularlyIntPairGenerator(NUM_KEYS, PROBE_VALS_PER_KEY, true);
+		MutableObjectIterator<IntPair> probe2 = new ConstantsIntPairsIterator(REPEATED_VALUE_1, 17, REPEATED_VALUE_COUNT);
+		MutableObjectIterator<IntPair> probe3 = new ConstantsIntPairsIterator(REPEATED_VALUE_2, 23, REPEATED_VALUE_COUNT);
+		List<MutableObjectIterator<IntPair>> probes = new ArrayList<MutableObjectIterator<IntPair>>();
+		probes.add(probe1);
+		probes.add(probe2);
+		probes.add(probe3);
+		MutableObjectIterator<IntPair> probeInput = new UnionIterator<IntPair>(probes);
+		
+		// allocate the memory for the HashTable
+		MemoryManager memMan; 
+		List<MemorySegment> memSegments;
+		
+		try {
+			memMan = new DefaultMemoryManager(32 * 1024 * 1024);
+			memSegments = memMan.allocateStrict(MEM_OWNER, 896, 32 * 1024);
+		}
+		catch (MemoryAllocationException maex) {
+			fail("Memory for the Join could not be provided.");
+			return;
+		}
+		
+		// create the I/O access for spilling
+		IOManager ioManager = new IOManager();
+		
+		// ----------------------------------------------------------------------------------------
+		
+		final MutableHashTable<IntPair, IntPair> join = new MutableHashTable<IntPair, IntPair>(
+				this.pairBuildSideAccesssor, this.pairProbeSideAccesssor, this.pairComparator,
+				memSegments, ioManager);
+		join.open(buildInput, probeInput);
+		
+		final IntPair record = new IntPair();
+		
+		try {
+			while (join.nextRecord())
+			{	
+				HashBucketIterator<IntPair, IntPair> buildSide = join.getBuildSideIterator();
+				if (!buildSide.next(record)) {
+					fail("No build side values found for a probe key.");
+				}
+				while (buildSide.next(record));
+			}
+			
+			fail("Hash Join must have failed due to too many recursions.");
+		}
+		catch (Exception ex) {
+			// expected
+		}
+		
+		join.close();
+		
+		
+		// ----------------------------------------------------------------------------------------
+		
+		memMan.release(memSegments);
+		
+		// shut down I/O manager and Memory Manager and verify the correct shutdown
+		ioManager.shutdown();
+		if (!ioManager.isProperlyShutDown()) {
+			fail("I/O manager was not property shut down.");
+		}
+		if (!memMan.verifyEmpty()) {
+			fail("Not all memory was properly released to the memory manager --> Memory Leak.");
+		}
+	}
+	
+	/*
+	 * Spills build records, so that probe records are also spilled. But only so
+	 * few probe records are used that some partitions remain empty.
+	 */
+	@Test
+	public void testSparseProbeSpillingIntPair() throws IOException, MemoryAllocationException
+	{
+		int reqMem = 4 * 1024 * 1024;
+
+		final int NUM_BUILD_KEYS = 1000000;
+		final int NUM_BUILD_VALS = 1;
+		final int NUM_PROBE_KEYS = 20;
+		final int NUM_PROBE_VALS = 1;
+
+		MutableObjectIterator<IntPair> buildInput = new RegularlyIntPairGenerator(NUM_BUILD_KEYS, NUM_BUILD_VALS, false);
+
+		// allocate the memory for the HashTable
+		MemoryManager memMan;
+		List<MemorySegment> memSegments;
+		try {
+			memMan = new DefaultMemoryManager(reqMem);
+			memSegments = memMan.allocate(MEM_OWNER, reqMem, 64, 32 * 1024);
+		} catch (MemoryAllocationException maex) {
+			fail("Memory for the Join could not be provided.");
+			return;
+		}
+
+		// I/O manager should be unnecessary
+		IOManager ioManager = new IOManager();
+
+		final MutableHashTable<IntPair, IntPair> join = new MutableHashTable<IntPair, IntPair>(
+				this.pairBuildSideAccesssor, this.pairProbeSideAccesssor, this.pairComparator,
+				memSegments, ioManager);
+		join.open(buildInput, new RegularlyIntPairGenerator(NUM_PROBE_KEYS, NUM_PROBE_VALS, true));
+
+		int expectedNumResults = (Math.min(NUM_PROBE_KEYS, NUM_BUILD_KEYS) * NUM_BUILD_VALS)
+				* NUM_PROBE_VALS;
+
+		final IntPair record = new IntPair();
+		int numRecordsInJoinResult = 0;
+		
+		while (join.nextRecord()) {
+			HashBucketIterator<IntPair, IntPair> buildSide = join.getBuildSideIterator();
+			while (buildSide.next(record)) {
+				numRecordsInJoinResult++;
+			}
+		}
+		Assert.assertEquals("Wrong number of records in join result.", expectedNumResults, numRecordsInJoinResult);
+
+		join.close();
+	}
+	
+	/*
+	 * This test validates a bug fix against former memory loss in the case where a partition was spilled
+	 * during an insert into the same.
+	 */
+	@Test
+	public void validateSpillingDuringInsertionIntPair() throws IOException, MemoryAllocationException {
+		int reqMem = 2785280;
+
+		final int NUM_BUILD_KEYS = 500000;
+		final int NUM_BUILD_VALS = 1;
+		final int NUM_PROBE_KEYS = 10;
+		final int NUM_PROBE_VALS = 1;
+		
+		MutableObjectIterator<IntPair> buildInput = new RegularlyIntPairGenerator(NUM_BUILD_KEYS, NUM_BUILD_VALS, false);
+		// allocate the memory for the HashTable
+		MemoryManager memMan; 
+		List<MemorySegment> memSegments;
+		try {
+			memMan = new DefaultMemoryManager(reqMem);
+			long memoryAmount = reqMem & ~(((long) BuildFirstHashMatchIterator.HASH_JOIN_PAGE_SIZE) - 1);
+			// NOTE: This calculation is erroneous if the total memory is above 63 TiBytes. 
+			final int numPages = (int) (memoryAmount / BuildFirstHashMatchIterator.HASH_JOIN_PAGE_SIZE);
+			memSegments = memMan.allocateStrict(MEM_OWNER, numPages, BuildFirstHashMatchIterator.HASH_JOIN_PAGE_SIZE);
+		}
+		catch (MemoryAllocationException maex) {
+			fail("Memory for the Join could not be provided.");
+			return;
+		}		
+		
+		IOManager ioManager = new IOManager();
+				
+		final MutableHashTable<IntPair, IntPair> join = new MutableHashTable<IntPair, IntPair>(
+				this.pairBuildSideAccesssor, this.pairProbeSideAccesssor, this.pairComparator,
+				memSegments, ioManager);
+		join.open(buildInput, new RegularlyIntPairGenerator(NUM_PROBE_KEYS, NUM_PROBE_VALS, true));
+		
+		final IntPair record = new IntPair();
+		int numRecordsInJoinResult = 0;
+		
+		int expectedNumResults = (Math.min(NUM_PROBE_KEYS, NUM_BUILD_KEYS) * NUM_BUILD_VALS)
+		* NUM_PROBE_VALS;
+		
+		while (join.nextRecord()) {
+			HashBucketIterator<IntPair, IntPair> buildSide = join.getBuildSideIterator();
+			while (buildSide.next(record)) {
+				numRecordsInJoinResult++;
+			}
+		}
+		Assert.assertEquals("Wrong number of records in join result.", expectedNumResults, numRecordsInJoinResult);
+		
+		join.close();
+	}
+	
+	@Test
+	public void testInMemoryReOpen() throws IOException
+	{
+		final int NUM_KEYS = 100000;
+		final int BUILD_VALS_PER_KEY = 3;
+		final int PROBE_VALS_PER_KEY = 10;
+		
+		// create a build input that gives 3 million pairs with 3 values sharing the same key
+		MutableObjectIterator<IntPair> buildInput = new RegularlyIntPairGenerator(NUM_KEYS, BUILD_VALS_PER_KEY, false);
+
+		// create a probe input that gives 10 million pairs with 10 values sharing a key
+		MutableObjectIterator<IntPair> probeInput = new RegularlyIntPairGenerator(NUM_KEYS, PROBE_VALS_PER_KEY, true);
+
+		// allocate the memory for the HashTable
+		MemoryManager memMan; 
+		List<MemorySegment> memSegments;
+		
+		try {
+			memMan = new DefaultMemoryManager(32 * 1024 * 1024);
+			memSegments = memMan.allocateStrict(MEM_OWNER, 896, 32 * 1024);
+		}
+		catch (MemoryAllocationException maex) {
+			fail("Memory for the Join could not be provided.");
+			return;
+		}
+		
+		// create the I/O access for spilling
+		final IOManager ioManager = new IOManager();
+		
+		// ----------------------------------------------------------------------------------------
+		
+		final MutableHashTable<IntPair, IntPair> join = new MutableHashTable<IntPair, IntPair>(
+			this.pairBuildSideAccesssor, this.pairProbeSideAccesssor, this.pairComparator,
+			memSegments, ioManager);
+		join.open(buildInput, probeInput);
+		
+		final IntPair record = new IntPair();
+		int numRecordsInJoinResult = 0;
+		
+		while (join.nextRecord()) {
+			HashBucketIterator<IntPair, IntPair> buildSide = join.getBuildSideIterator();
+			while (buildSide.next(record)) {
+				numRecordsInJoinResult++;
+			}
+		}
+		Assert.assertEquals("Wrong number of records in join result.", NUM_KEYS * BUILD_VALS_PER_KEY * PROBE_VALS_PER_KEY, numRecordsInJoinResult);
+		
+		join.close();
+
+		// ----------------------------------------------------------------------------------------
+		// recreate the inputs
+		
+		// create a build input that gives 3 million pairs with 3 values sharing the same key
+		buildInput = new RegularlyIntPairGenerator(NUM_KEYS, BUILD_VALS_PER_KEY, false);
+
+		// create a probe input that gives 10 million pairs with 10 values sharing a key
+		probeInput = new RegularlyIntPairGenerator(NUM_KEYS, PROBE_VALS_PER_KEY, true);
+
+		join.open(buildInput, probeInput);
+		
+		numRecordsInJoinResult = 0;
+		
+		while (join.nextRecord()) {
+			HashBucketIterator<IntPair, IntPair> buildSide = join.getBuildSideIterator();
+			while (buildSide.next(record)) {
+				numRecordsInJoinResult++;
+			}
+		}
+		Assert.assertEquals("Wrong number of records in join result.", NUM_KEYS * BUILD_VALS_PER_KEY * PROBE_VALS_PER_KEY, numRecordsInJoinResult);
+		
+		join.close();
+		
+		// ----------------------------------------------------------------------------------------
+		
+		memMan.release(memSegments);
+		
+		// shut down I/O manager and Memory Manager and verify the correct shutdown
+		ioManager.shutdown();
+		if (!ioManager.isProperlyShutDown()) {
+			fail("I/O manager was not property shut down.");
+		}
+		if (!memMan.verifyEmpty()) {
+			fail("Not all memory was properly released to the memory manager --> Memory Leak.");
+		}
+	}
+	
+	// ============================================================================================
 	
 	/**
 	 * An iterator that returns the Key/Value pairs with identical value a given number of times.
@@ -823,6 +1594,37 @@ public class MutableHashTableITCase
 	
 	// ============================================================================================
 	
+	/**
+	 * An iterator that returns the Key/Value pairs with identical value a given number of times.
+	 */
+	private static final class ConstantsIntPairsIterator implements MutableObjectIterator<IntPair>
+	{
+		private final int key;
+		private final int value;
+		
+		private int numLeft;
+		
+		public ConstantsIntPairsIterator(int key, int value, int count)
+		{
+			this.key =key;
+			this.value = value;
+			this.numLeft = count;
+		}
+
+		@Override
+		public boolean next(IntPair target) {
+			if (this.numLeft > 0) {
+				this.numLeft--;
+				target.setKey(this.key);
+				target.setValue(this.value);
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+	}
+	
 	// ============================================================================================
 	
 	private static final class PactRecordComparator implements TypeComparator<PactRecord, PactRecord>
@@ -855,6 +1657,7 @@ public class MutableHashTableITCase
 	}
 	
 	// ============================================================================================
+
 	
 	private static final class IntPairComparator implements TypeComparator<IntPair, IntPair>
 	{

@@ -84,7 +84,7 @@ import eu.stratosphere.pact.runtime.util.MathUtils;
  * @param <BT> The type of records from the build side that are stored in the hash table.
  * @param <PT> The type of records from the probe side that are stored in the hash table.
  */
-public class MutableHashTable<BT, PT> implements MemorySegmentSource
+public class MutableInMemoryHashTable<BT, PT> implements MemorySegmentSource
 {
 	private static final Log LOG = LogFactory.getLog(HashJoin.class);
 	
@@ -316,6 +316,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	 * with recursion depth <i>n</i> have a recursion depth of <i>n+1</i>. 
 	 */
 	private int currentRecursionDepth;
+
 	
 	/**
 	 * Flag indicating that the closing logic has been invoked.
@@ -327,7 +328,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	//                         Construction and Teardown
 	// ------------------------------------------------------------------------
 	
-	public MutableHashTable(TypeAccessorsV2<BT> buildSideAccessors, TypeAccessorsV2<PT> probeSideAccessors,
+	public MutableInMemoryHashTable(TypeAccessorsV2<BT> buildSideAccessors, TypeAccessorsV2<PT> probeSideAccessors,
 			TypeComparator<PT, BT> comparator, List<MemorySegment> memorySegments, IOManager ioManager)
 	{
 		this(buildSideAccessors, probeSideAccessors, comparator,
@@ -335,7 +336,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	}
 	
 	
-	public MutableHashTable(TypeAccessorsV2<BT> buildSideAccessors, TypeAccessorsV2<PT> probeSideAccessors,
+	public MutableInMemoryHashTable(TypeAccessorsV2<BT> buildSideAccessors, TypeAccessorsV2<PT> probeSideAccessors,
 			TypeComparator<PT, BT> comparator, List<MemorySegment> memorySegments,
 			IOManager ioManager, int avgRecordLen)
 	{
@@ -504,32 +505,6 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		else {
 			// no more data
 			return false;
-		}
-	}
-	
-	public HashBucketIterator<BT, PT> getMatchesFor(PT record) throws IOException
-	{
-		final TypeAccessorsV2<PT> probeAccessors = this.probeSideAccessors;
-		final int hash = hash(probeAccessors.hash(record), this.currentRecursionDepth);
-		final int posHashCode = hash % this.numBuckets;
-		
-		// get the bucket for the given hash code
-		final int bucketArrayPos = posHashCode >> this.bucketsPerSegmentBits;
-		final int bucketInSegmentOffset = (posHashCode & this.bucketsPerSegmentMask) << NUM_INTRA_BUCKET_BITS;
-		final MemorySegment bucket = this.buckets[bucketArrayPos];
-		
-		// get the basic characteristics of the bucket
-		final int partitionNumber = bucket.get(bucketInSegmentOffset + HEADER_PARTITION_OFFSET);
-		final HashPartition<BT, PT> p = this.partitionsBeingBuilt.get(partitionNumber);
-		
-		// for an in-memory partition, process set the return iterators, else spill the probe records
-		if (p.isInMemory()) {
-			this.recordComparator.setReference(record, this.probeSideAccessors);
-			this.bucketIterator.set(bucket, p.overflowSegments, p, hash, bucketInSegmentOffset);
-			return this.bucketIterator;
-		}
-		else {
-			throw new IllegalStateException("Method is not applicable to partially spilled hash tables.");
 		}
 	}
 	
@@ -1337,8 +1312,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 			}
 		}
 		
-		public void writeBack(BT value) throws IOException
-		{
+		public void writeBack(BT value) throws IOException {
 			final SeekableDataOutputView outView = this.partition.getWriteView();
 			outView.setWritePosition(this.lastPointer);
 			this.accessor.serialize(value, outView);

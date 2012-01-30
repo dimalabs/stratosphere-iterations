@@ -15,6 +15,8 @@
 
 package eu.stratosphere.nephele.services.memorymanager;
 
+import java.io.IOException;
+
 
 /**
  * Interface marking a {@link DataInputViewV2} as seekable. Seekable views can set the position where they
@@ -25,16 +27,9 @@ package eu.stratosphere.nephele.services.memorymanager;
 public interface SeekableDataInputView extends DataInputViewV2
 {
 	/**
-	 * Gets the current read position.
-	 * 
-	 * @return The current read position.
-	 */
-	public long getReadPosition();
-	
-	/**
 	 * Sets the current read position.
 	 * 
 	 * @param position The current read position.
 	 */
-	public void setReadPosition(long position);
+	public void setReadPosition(long position) throws IOException;
 }

@@ -15,37 +15,33 @@
 
 package eu.stratosphere.pact.runtime.test.util;
 
-import eu.stratosphere.pact.common.type.PactRecord;
-import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
+import eu.stratosphere.pact.runtime.plugable.IntPair;
 
-public class RegularlyGeneratedInputGenerator implements MutableObjectIterator<PactRecord> {
-
-	private final PactInteger key = new PactInteger();
-	private final PactInteger value = new PactInteger();
-	
-	int numKeys;
-	int numVals;
+public class RegularlyIntPairGenerator implements MutableObjectIterator<IntPair>
+{
+	final int numKeys;
+	final int numVals;
 	
 	int keyCnt = 0;
 	int valCnt = 0;
 	boolean repeatKey;
 	
-	public RegularlyGeneratedInputGenerator(int numKeys, int numVals, boolean repeatKey) {
+	public RegularlyIntPairGenerator(int numKeys, int numVals, boolean repeatKey) {
 		this.numKeys = numKeys;
 		this.numVals = numVals;
 		this.repeatKey = repeatKey;
 	}
 
 	@Override
-	public boolean next(PactRecord target) {
+	public boolean next(IntPair target) {
 		if(!repeatKey) {
 			if(valCnt >= numVals) {
 				return false;
 			}
 			
-			key.setValue(keyCnt++);
-			value.setValue(valCnt);
+			target.setKey(keyCnt++);
+			target.setValue(valCnt);
 			
 			if(keyCnt == numKeys) {
 				keyCnt = 0;
@@ -56,12 +52,8 @@ public class RegularlyGeneratedInputGenerator implements MutableObjectIterator<P
 				return false;
 			}
 			
-//			if (keyCnt == 979456) {
-//				System.out.println("case");
-//			}
-			
-			key.setValue(keyCnt);
-			value.setValue(valCnt++);
+			target.setKey(keyCnt);
+			target.setValue(valCnt++);
 			
 			if(valCnt == numVals) {
 				valCnt = 0;
@@ -69,9 +61,6 @@ public class RegularlyGeneratedInputGenerator implements MutableObjectIterator<P
 			}
 		}
 		
-		target.setField(0, this.key);
-		target.setField(1, this.value);
-		target.updateBinaryRepresenation();
 		return true;
 	}
 }
