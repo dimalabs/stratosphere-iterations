@@ -9,26 +9,26 @@ import eu.stratosphere.pact.runtime.plugable.TypeComparator;
  *
  * @author Stephan Ewen (stephan.ewen@tu-berlin.de)
  */
-public class TansClosureIntPairComparator implements TypeComparator<TransitiveClosureEntry, IntPair>
+public class LongPairTansClosureComparator implements TypeComparator<LongPair, TransitiveClosureEntry>
 {
-	private int referenceKey;
+	private long referenceKey;
 	
 	/* (non-Javadoc)
 	 * @see eu.stratosphere.pact.runtime.plugable.TypeComparator#setFirstAsReference(java.lang.Object, eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2)
 	 */
 	@Override
-	public void setReference(TransitiveClosureEntry reference, TypeAccessorsV2<TransitiveClosureEntry> accessor)
+	public void setReference(LongPair reference, TypeAccessorsV2<LongPair> accessor)
 	{
-		this.referenceKey = reference.getVid();
+		this.referenceKey = reference.getKey();
 	}
 
 	/* (non-Javadoc)
 	 * @see eu.stratosphere.pact.runtime.plugable.TypeComparator#equalsSecondToReference(java.lang.Object, eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2)
 	 */
 	@Override
-	public boolean equalToReference(IntPair candidate, TypeAccessorsV2<IntPair> accessor)
+	public boolean equalToReference(TransitiveClosureEntry candidate, TypeAccessorsV2<TransitiveClosureEntry> accessor)
 	{
-		return this.referenceKey == candidate.getKey();
+		return this.referenceKey == candidate.getVid();
 	}
 
 }

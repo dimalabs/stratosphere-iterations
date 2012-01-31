@@ -24,7 +24,7 @@ public class FixedSizeOutputView extends AbstractPagedOutputViewV2 implements Se
 	 */
 	public FixedSizeOutputView(MemorySegment[] segments, int segmentSize, int headerLength)
 	{
-		super(segmentSize, headerLength);
+		super(segments[0], segmentSize, headerLength);
 		
 		this.segments = segments;
 	}

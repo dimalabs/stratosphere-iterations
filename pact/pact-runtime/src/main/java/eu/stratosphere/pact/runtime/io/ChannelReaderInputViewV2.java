@@ -29,7 +29,7 @@ import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
 /**
  * A {@link DataInputView} that is backed by a {@link BlockChannelReader}, making it effectively a data input
  * stream. The view reads it data in blocks from the underlying channel. The view can only read data that
- * has been written by a {@link ChannelWriterOutputView}, due to block formatting.
+ * has been written by a {@link ChannelWriterOutputViewV2}, due to block formatting.
  *
  * @author Stephan Ewen (stephan.ewen@tu-berlin.de)
  */
@@ -144,7 +144,7 @@ public class ChannelReaderInputViewV2 extends AbstractPagedInputViewV2
 		// send a request first. if we have only a single segment, this same segment will be the one obtained in
 		// the next lines
 		if (current != null) {
-			this.positionBeforeSegment += getCurrentSegmentLimit() - ChannelWriterOutputView.HEADER_LENGTH;
+			this.positionBeforeSegment += getCurrentSegmentLimit() - ChannelWriterOutputViewV2.HEADER_LENGTH;
 			sendReadRequest(current);
 		}
 		
@@ -158,10 +158,10 @@ public class ChannelReaderInputViewV2 extends AbstractPagedInputViewV2
 		}
 		
 		// check the header
-		if (seg.getShort(0) != ChannelWriterOutputView.HEADER_MAGIC_NUMBER) {
+		if (seg.getShort(0) != ChannelWriterOutputViewV2.HEADER_MAGIC_NUMBER) {
 			throw new IOException("The current block does not belong to a ChannelWriterOutputView / ChannelReaderInputView: Wrong magic number.");
 		}
-		if ( (seg.getShort(ChannelWriterOutputView.HEADER_FLAGS_OFFSET) & ChannelWriterOutputView.FLAG_LAST_BLOCK) != 0) {
+		if ( (seg.getShort(ChannelWriterOutputViewV2.HEADER_FLAGS_OFFSET) & ChannelWriterOutputViewV2.FLAG_LAST_BLOCK) != 0) {
 			// last block
 			this.numRequestsRemaining = 0;
 			this.inLastBlock = true;
@@ -176,7 +176,7 @@ public class ChannelReaderInputViewV2 extends AbstractPagedInputViewV2
 	@Override
 	protected int getLimitForSegment(MemorySegment segment) throws IOException
 	{
-		return segment.getInt(ChannelWriterOutputView.HEAD_BLOCK_LENGTH_OFFSET);
+		return segment.getInt(ChannelWriterOutputViewV2.HEAD_BLOCK_LENGTH_OFFSET);
 	}
 	
 	private void sendReadRequest(MemorySegment seg) throws IOException

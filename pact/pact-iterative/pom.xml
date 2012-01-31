@@ -29,7 +29,6 @@
     	<groupId>eu.stratosphere</groupId>
     	<artifactId>pact-runtime</artifactId>
     	<version>${version}</version>
-    	<scope>test</scope>
     </dependency>
   </dependencies>
 

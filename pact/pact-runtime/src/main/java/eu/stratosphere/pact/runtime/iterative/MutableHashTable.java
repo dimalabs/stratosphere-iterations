@@ -1233,7 +1233,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	/**
 	 *
 	 */
-	protected static final class HashBucketIterator<BT, PT>
+	public static final class HashBucketIterator<BT, PT>
 	{
 		private final TypeAccessorsV2<BT> accessor;
 		

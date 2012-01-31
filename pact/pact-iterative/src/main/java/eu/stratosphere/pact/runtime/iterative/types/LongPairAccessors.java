@@ -12,33 +12,33 @@ import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
 /**
  * 
  */
-public class IntPairAccessors implements TypeAccessorsV2<IntPair>
+public class LongPairAccessors implements TypeAccessorsV2<LongPair>
 {
-	private int reference;
+	private long reference;
 	
 	/* (non-Javadoc)
 	 * @see eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2#createInstance()
 	 */
 	@Override
-	public IntPair createInstance()
+	public LongPair createInstance()
 	{
-		return new IntPair();
+		return new LongPair();
 	}
 
 	/* (non-Javadoc)
 	 * @see eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2#createCopy(java.lang.Object)
 	 */
 	@Override
-	public IntPair createCopy(IntPair from)
+	public LongPair createCopy(LongPair from)
 	{
-		return new IntPair(from.getKey(), from.getValue());
+		return new LongPair(from.getKey(), from.getValue());
 	}
 
 	/* (non-Javadoc)
 	 * @see eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2#copyTo(java.lang.Object, java.lang.Object)
 	 */
 	@Override
-	public void copyTo(IntPair from, IntPair to)
+	public void copyTo(LongPair from, LongPair to)
 	{
 		to.setKey(from.getKey());
 		to.setValue(from.getValue());
@@ -50,27 +50,27 @@ public class IntPairAccessors implements TypeAccessorsV2<IntPair>
 	@Override
 	public int getLength()
 	{
-		return 8;
+		return 16;
 	}
 
 	/* (non-Javadoc)
 	 * @see eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2#serialize(java.lang.Object, eu.stratosphere.nephele.services.memorymanager.DataOutputView)
 	 */
 	@Override
-	public long serialize(IntPair record, DataOutputViewV2 target) throws IOException
+	public long serialize(LongPair record, DataOutputViewV2 target) throws IOException
 	{
-		target.writeInt(record.getKey());
-		target.writeInt(record.getValue());
-		return 8;
+		target.writeLong(record.getKey());
+		target.writeLong(record.getValue());
+		return 16;
 	}
 
 	/* (non-Javadoc)
 	 * @see eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2#deserialize(java.lang.Object, eu.stratosphere.nephele.services.memorymanager.DataInputView)
 	 */
 	@Override
-	public void deserialize(IntPair target, DataInputViewV2 source) throws IOException {
-		target.setKey(source.readInt());
-		target.setValue(source.readInt());
+	public void deserialize(LongPair target, DataInputViewV2 source) throws IOException {
+		target.setKey(source.readLong());
+		target.setValue(source.readLong());
 	}
 
 	/* (non-Javadoc)
@@ -79,7 +79,7 @@ public class IntPairAccessors implements TypeAccessorsV2<IntPair>
 	@Override
 	public void copy(DataInputViewV2 source, DataOutputViewV2 target) throws IOException
 	{
-		for (int i = 0; i < 8; i++) {
+		for (int i = 0; i < 16; i++) {
 			target.writeByte(source.readUnsignedByte());
 		}
 	}
@@ -88,15 +88,16 @@ public class IntPairAccessors implements TypeAccessorsV2<IntPair>
 	 * @see eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2#hash(java.lang.Object)
 	 */
 	@Override
-	public int hash(IntPair object) {
-		return object.getKey();
+	public int hash(LongPair object) {
+		final long key = object.getKey();
+		return ((int) (key >>> 32)) ^ ((int) key);
 	}
 	
-	public void setReferenceForEquality(IntPair reference) {
+	public void setReferenceForEquality(LongPair reference) {
 		this.reference = reference.getKey();
 	}
 	
-	public boolean equalToReference(IntPair candidate) {
+	public boolean equalToReference(LongPair candidate) {
 		return candidate.getKey() == this.reference;
 	}
 
@@ -104,7 +105,7 @@ public class IntPairAccessors implements TypeAccessorsV2<IntPair>
 	 * @see eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2#compare(java.lang.Object, java.lang.Object, java.util.Comparator)
 	 */
 	@Override
-	public int compare(IntPair first, IntPair second, Comparator<Key> comparator) {
+	public int compare(LongPair first, LongPair second, Comparator<Key> comparator) {
 		throw new UnsupportedOperationException();
 	}
 
@@ -113,7 +114,8 @@ public class IntPairAccessors implements TypeAccessorsV2<IntPair>
 	 */
 	@Override
 	public int compare(DataInputViewV2 source1, DataInputViewV2 source2) throws IOException {
-		return source1.readInt() - source2.readInt();
+		long diff =  source1.readLong() - source2.readLong();
+		return diff < 0 ? -1 : diff > 0 ? 1 : 0;
 	}
 
 	/* (non-Javadoc)
@@ -129,7 +131,7 @@ public class IntPairAccessors implements TypeAccessorsV2<IntPair>
 	 */
 	@Override
 	public int getNormalizeKeyLen() {
-		return 4;
+		return 8;
 	}
 
 	/* (non-Javadoc)
@@ -144,38 +146,46 @@ public class IntPairAccessors implements TypeAccessorsV2<IntPair>
 	 * @see eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2#putNormalizedKey(java.lang.Object, byte[], int, int)
 	 */
 	@Override
-	public void putNormalizedKey(IntPair record, byte[] target, int offset, int numBytes)
+	public void putNormalizedKey(LongPair record, byte[] target, int offset, int len)
 	{
-		final int value = record.getKey();
+		final long value = record.getKey();
 		
-		if (numBytes == 4) {
+		if (len == 8) {
 			// default case, full normalized key
-			int highByte = ((value >>> 24) & 0xff);
+			long highByte = ((value >>> 56) & 0xff);
 			highByte -= Byte.MIN_VALUE;
 			target[offset    ] = (byte) highByte;
-			target[offset + 1] = (byte) ((value >>> 16) & 0xff);
-			target[offset + 2] = (byte) ((value >>>  8) & 0xff);
-			target[offset + 3] = (byte) ((value       ) & 0xff);
+			target[offset + 1] = (byte) (value >>> 48);
+			target[offset + 2] = (byte) (value >>> 40);
+			target[offset + 3] = (byte) (value >>> 32);
+			target[offset + 4] = (byte) (value >>> 24);
+			target[offset + 5] = (byte) (value >>> 16);
+			target[offset + 6] = (byte) (value >>>  8);
+			target[offset + 7] = (byte) (value       );
 		}
-		else if (numBytes <= 0) {
+		else if (len <= 0) {
 		}
-		else if (numBytes < 4) {
-			int highByte = ((value >>> 24) & 0xff);
+		else if (len < 8) {
+			long highByte = ((value >>> 56) & 0xff);
 			highByte -= Byte.MIN_VALUE;
-			target[offset    ] = (byte) highByte;
-			numBytes--;
-			for (int i = 1; numBytes > 0; numBytes--, i++) {
-				target[offset + i] = (byte) ((value >>> ((3-i)<<3)) & 0xff);
+			target[offset] = (byte) highByte;
+			len--;
+			for (int i = 1; len > 0; len--, i++) {
+				target[offset + i] = (byte) (value >>> ((7-i)<<3));
 			}
 		}
 		else {
-			int highByte = ((value >>> 24) & 0xff);
+			long highByte = ((value >>> 56) & 0xff);
 			highByte -= Byte.MIN_VALUE;
 			target[offset    ] = (byte) highByte;
-			target[offset + 1] = (byte) ((value >>> 16) & 0xff);
-			target[offset + 2] = (byte) ((value >>>  8) & 0xff);
-			target[offset + 3] = (byte) ((value       ) & 0xff);
-			for (int i = 4; i < numBytes; i++) {
+			target[offset + 1] = (byte) (value >>> 48);
+			target[offset + 2] = (byte) (value >>> 40);
+			target[offset + 3] = (byte) (value >>> 32);
+			target[offset + 4] = (byte) (value >>> 24);
+			target[offset + 5] = (byte) (value >>> 16);
+			target[offset + 6] = (byte) (value >>>  8);
+			target[offset + 7] = (byte) (value       );
+			for (int i = 8; i < len; i++) {
 				target[offset + i] = 0;
 			}
 		}
@@ -185,7 +195,7 @@ public class IntPairAccessors implements TypeAccessorsV2<IntPair>
 	 * @see eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2#duplicate()
 	 */
 	@Override
-	public IntPairAccessors duplicate() {
-		return new IntPairAccessors();
+	public LongPairAccessors duplicate() {
+		return new LongPairAccessors();
 	}
 }

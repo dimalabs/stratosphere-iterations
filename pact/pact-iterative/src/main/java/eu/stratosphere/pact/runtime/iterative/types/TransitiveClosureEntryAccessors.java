@@ -15,7 +15,7 @@ import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
  */
 public class TransitiveClosureEntryAccessors implements TypeAccessorsV2<TransitiveClosureEntry>
 {
-	private int referenceKey;
+	private long referenceKey;
 	
 	/* (non-Javadoc)
 	 * @see eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2#createInstance()
@@ -60,7 +60,7 @@ public class TransitiveClosureEntryAccessors implements TypeAccessorsV2<Transiti
 	@Override
 	public int getLength()
 	{
-		return 8;
+		return -1;
 	}
 
 	/* (non-Javadoc)
@@ -69,18 +69,18 @@ public class TransitiveClosureEntryAccessors implements TypeAccessorsV2<Transiti
 	@Override
 	public long serialize(TransitiveClosureEntry record, DataOutputViewV2 target) throws IOException
 	{
-		target.writeInt(record.getVid());
-		target.writeInt(record.getCid());
+		target.writeLong(record.getVid());
+		target.writeLong(record.getCid());
 		
-		final int[] n = record.getNeighbors();
+		final long[] n = record.getNeighbors();
 		final int num = record.getNumNeighbors();
 		
-		target.write(num);
+		target.writeInt(num);
 		for (int i = 0; i < num; i++) {
-			target.writeInt(n[i]);
+			target.writeLong(n[i]);
 		}
 		
-		return (num * 4) + 12;
+		return (num * 8) + 20;
 	}
 
 	/* (non-Javadoc)
@@ -89,21 +89,21 @@ public class TransitiveClosureEntryAccessors implements TypeAccessorsV2<Transiti
 	@Override
 	public void deserialize(TransitiveClosureEntry target, DataInputViewV2 source) throws IOException
 	{
-		target.setVid(source.readInt());
-		target.setCid(source.readInt());
+		target.setVid(source.readLong());
+		target.setCid(source.readLong());
 		
 		final int num = source.readInt();
 		target.setNumNeighbors(num);
 		
-		final int[] n;
+		final long[] n;
 		if (target.getNeighbors().length >= num) {
 			n = target.getNeighbors();
 		} else {
-			n = new int[num];
+			n = new long[num];
 			target.setNeighbors(n);
 		}
 		for (int i = 0; i < num; i++) {
-			n[i] = source.readInt();
+			n[i] = source.readLong();
 		}
 	}
 
@@ -114,13 +114,13 @@ public class TransitiveClosureEntryAccessors implements TypeAccessorsV2<Transiti
 	public void copy(DataInputViewV2 source, DataOutputViewV2 target) throws IOException
 	{
 		// copy vid, cid
-		for (int i = 0; i < 8; i++) {
+		for (int i = 0; i < 16; i++) {
 			target.writeByte(source.readUnsignedByte());
 		}
 		
 		int num = source.readInt();
 		target.writeInt(num);
-		for (int i = 4 * num; i > 0; --i) {
+		for (int i = 8 * num; i > 0; --i) {
 			target.writeByte(source.readUnsignedByte());
 		}
 	}
@@ -130,7 +130,8 @@ public class TransitiveClosureEntryAccessors implements TypeAccessorsV2<Transiti
 	 */
 	@Override
 	public int hash(TransitiveClosureEntry object) {
-		return object.getVid();
+		final long vid = object.getVid();
+		return ((int) (vid >>> 32)) ^ ((int) vid);
 	}
 	
 	@Override
@@ -156,7 +157,8 @@ public class TransitiveClosureEntryAccessors implements TypeAccessorsV2<Transiti
 	 */
 	@Override
 	public int compare(DataInputViewV2 source1, DataInputViewV2 source2) throws IOException {
-		return source1.readInt() - source2.readInt();
+		long diff =  source1.readLong() - source2.readLong();
+		return diff < 0 ? -1 : diff > 0 ? 1 : 0;
 	}
 
 	/* (non-Javadoc)
@@ -172,7 +174,7 @@ public class TransitiveClosureEntryAccessors implements TypeAccessorsV2<Transiti
 	 */
 	@Override
 	public int getNormalizeKeyLen() {
-		return 4;
+		return 8;
 	}
 
 	/* (non-Javadoc)
@@ -187,38 +189,46 @@ public class TransitiveClosureEntryAccessors implements TypeAccessorsV2<Transiti
 	 * @see eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2#putNormalizedKey(java.lang.Object, byte[], int, int)
 	 */
 	@Override
-	public void putNormalizedKey(TransitiveClosureEntry record, byte[] target, int offset, int numBytes)
+	public void putNormalizedKey(TransitiveClosureEntry record, byte[] target, int offset, int len)
 	{
-		final int value = record.getVid();
+		final long value = record.getVid();
 		
-		if (numBytes == 4) {
+		if (len == 8) {
 			// default case, full normalized key
-			int highByte = ((value >>> 24) & 0xff);
+			long highByte = ((value >>> 56) & 0xff);
 			highByte -= Byte.MIN_VALUE;
 			target[offset    ] = (byte) highByte;
-			target[offset + 1] = (byte) ((value >>> 16) & 0xff);
-			target[offset + 2] = (byte) ((value >>>  8) & 0xff);
-			target[offset + 3] = (byte) ((value       ) & 0xff);
+			target[offset + 1] = (byte) (value >>> 48);
+			target[offset + 2] = (byte) (value >>> 40);
+			target[offset + 3] = (byte) (value >>> 32);
+			target[offset + 4] = (byte) (value >>> 24);
+			target[offset + 5] = (byte) (value >>> 16);
+			target[offset + 6] = (byte) (value >>>  8);
+			target[offset + 7] = (byte) (value       );
 		}
-		else if (numBytes <= 0) {
+		else if (len <= 0) {
 		}
-		else if (numBytes < 4) {
-			int highByte = ((value >>> 24) & 0xff);
+		else if (len < 8) {
+			long highByte = ((value >>> 56) & 0xff);
 			highByte -= Byte.MIN_VALUE;
-			target[offset    ] = (byte) highByte;
-			numBytes--;
-			for (int i = 1; numBytes > 0; numBytes--, i++) {
-				target[offset + i] = (byte) ((value >>> ((3-i)<<3)) & 0xff);
+			target[offset] = (byte) highByte;
+			len--;
+			for (int i = 1; len > 0; len--, i++) {
+				target[offset + i] = (byte) (value >>> ((7-i)<<3));
 			}
 		}
 		else {
-			int highByte = ((value >>> 24) & 0xff);
+			long highByte = ((value >>> 56) & 0xff);
 			highByte -= Byte.MIN_VALUE;
 			target[offset    ] = (byte) highByte;
-			target[offset + 1] = (byte) ((value >>> 16) & 0xff);
-			target[offset + 2] = (byte) ((value >>>  8) & 0xff);
-			target[offset + 3] = (byte) ((value       ) & 0xff);
-			for (int i = 4; i < numBytes; i++) {
+			target[offset + 1] = (byte) (value >>> 48);
+			target[offset + 2] = (byte) (value >>> 40);
+			target[offset + 3] = (byte) (value >>> 32);
+			target[offset + 4] = (byte) (value >>> 24);
+			target[offset + 5] = (byte) (value >>> 16);
+			target[offset + 6] = (byte) (value >>>  8);
+			target[offset + 7] = (byte) (value       );
+			for (int i = 8; i < len; i++) {
 				target[offset + i] = 0;
 			}
 		}
