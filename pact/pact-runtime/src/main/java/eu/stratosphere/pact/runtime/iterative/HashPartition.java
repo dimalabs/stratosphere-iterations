@@ -15,9 +15,10 @@ import eu.stratosphere.nephele.services.memorymanager.SeekableDataOutputView;
 import eu.stratosphere.pact.runtime.io.AbstractPagedInputViewV2;
 import eu.stratosphere.pact.runtime.io.AbstractPagedOutputViewV2;
 import eu.stratosphere.pact.runtime.io.ChannelWriterOutputViewV2;
-import eu.stratosphere.pact.runtime.io.FixedSizeOutputView;
+import eu.stratosphere.pact.runtime.io.HeaderlessFixedSizeOutputView;
 import eu.stratosphere.pact.runtime.io.MemorySegmentSource;
 import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
+import eu.stratosphere.pact.runtime.util.MathUtils;
 
 
 /**
@@ -30,16 +31,6 @@ import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
  */
 class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements SeekableDataInputView
 {
-	/**
-	 * The length of the header in the partition buffer blocks.
-	 */
-	protected static final int PARTITION_BLOCK_HEADER_LEN = 8;
-	
-	/**
-	 * The offset of the field where the length (size) of the partition block is stored in its header.
-	 */
-	protected static final int PARTITION_BLOCK_SIZE_OFFSET = 4;
-	
 	// --------------------------------- Table Structure Auxiliaries ------------------------------------
 	
 	MemorySegment[] overflowSegments;	// segments in which overflow buckets from the table structure are stored
@@ -60,31 +51,33 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 	
 	private int currentBufferNum;
 	
+	private int finalBufferLimit;
+	
 	private BuildSideBuffer<BT> buildSideWriteBuffer;
 	
 	private ChannelWriterOutputViewV2 probeSideBuffer;
 	
-	private FixedSizeOutputView overwriteBuffer;
+	private HeaderlessFixedSizeOutputView overwriteBuffer;
+	
+	private long buildSideRecordCounter;				// number of build-side records in this partition
+	
+	private long probeSideRecordCounter;				// number of probe-side records in this partition 
+	
+	// ----------------------------------------- General ------------------------------------------------
+	
+	private final int segmentSizeBits;					// the number of bits in the mem segment size;
+	
+	private final int memorySegmentSize;				// the size of the memory segments being used
+	
+	private final int partitionNumber;					// the number of the partition
+	
+	private final int recursionLevel;					// the recursion level on which this partition lives
 	
 	// ------------------------------------------ Spilling ----------------------------------------------
 	
 	private BlockChannelWriter buildSideChannel;		// the channel writer for the build side, if partition is spilled
 	
 	private BlockChannelWriter probeSideChannel;		// the channel writer from the probe side, if partition is spilled
-	
-	private long buildSideRecordCounter;				// number of build-side records in this partition
-	
-	private long probeSideRecordCounter;				// number of probe-side records in this partition 
-	
-	
-	// ----------------------------------------- General ------------------------------------------------
-	
-	private final int partitionNumber;					// the number of the partition
-	
-	private final int recursionLevel;					// the recursion level on which this partition lives
-	
-	private final int memorySegmentSize;				// the size of the memory segments being used
-	
 	
 	// --------------------------------------------------------------------------------------------------
 	
@@ -102,13 +95,15 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 			int partitionNumber, int recursionLevel, MemorySegment initialBuffer, MemorySegmentSource memSource,
 			int segmentSize)
 	{
-		super(PARTITION_BLOCK_HEADER_LEN);
+		super(0);
 		
 		this.buildSideAccessors = buildSideAccessors;
 		this.probeSideAccessors = probeSideAccessors;
 		this.partitionNumber = partitionNumber;
 		this.recursionLevel = recursionLevel;
+		
 		this.memorySegmentSize = segmentSize;
+		this.segmentSizeBits = MathUtils.log2strict(segmentSize);
 		
 		this.overflowSegments = new MemorySegment[2];
 		this.numOverflowSegments = 0;
@@ -131,15 +126,18 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 	 */
 	HashPartition(TypeAccessorsV2<BT> buildSideAccessors, TypeAccessorsV2<PT> probeSideAccessors,
 			int partitionNumber, int recursionLevel, List<MemorySegment> buffers,
-			long buildSideRecordCounter, int segmentSize)
+			long buildSideRecordCounter, int segmentSize, int lastSegmentLimit)
 	{
-		super(PARTITION_BLOCK_HEADER_LEN);
+		super(0);
 		
 		this.buildSideAccessors = buildSideAccessors;
 		this.probeSideAccessors = probeSideAccessors;
 		this.partitionNumber = partitionNumber;
 		this.recursionLevel = recursionLevel;
+		
 		this.memorySegmentSize = segmentSize;
+		this.segmentSizeBits = MathUtils.log2strict(segmentSize);
+		this.finalBufferLimit = lastSegmentLimit;
 		
 		this.partitionBuffers = (MemorySegment[]) buffers.toArray(new MemorySegment[buffers.size()]);
 		this.buildSideRecordCounter = buildSideRecordCounter;
@@ -294,6 +292,7 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 			LinkedBlockingQueue<MemorySegment> bufferReturnQueue)
 	throws IOException
 	{
+		this.finalBufferLimit = this.buildSideWriteBuffer.getCurrentPositionInSegment();
 		this.partitionBuffers = this.buildSideWriteBuffer.close();
 		
 		if (!isInMemory()) {
@@ -410,9 +409,13 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 		return new PartitionIterator();
 	}
 	
+	final int getLastSegmentLimit() {
+		return this.finalBufferLimit;
+	}
+	
 	final SeekableDataOutputView getWriteView() {
 		if (this.overwriteBuffer == null) {
-			this.overwriteBuffer = new FixedSizeOutputView(this.partitionBuffers, this.memorySegmentSize, PARTITION_BLOCK_HEADER_LEN);
+			this.overwriteBuffer = new HeaderlessFixedSizeOutputView(this.partitionBuffers, this.memorySegmentSize);
 		}
 		return this.overwriteBuffer;
 	}
@@ -421,14 +424,17 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 	//                   Methods to provide input view abstraction for reading probe records
 	// --------------------------------------------------------------------------------------------------
 	
-	public void setReadPosition(long pointer) {
-		final int bufferNum = (int) (pointer >>> 32);
-		final int offset = (int) pointer;
-		final MemorySegment seg = this.partitionBuffers[bufferNum];
+	public void setReadPosition(long pointer)
+	{	
+		final int bufferNum = (int) (pointer >>> this.segmentSizeBits);
+		final int offset = (int) (pointer & (this.memorySegmentSize - 1));
 		
-		seekInput(seg, offset, this.memorySegmentSize);
 		this.currentBufferNum = bufferNum;
+		seekInput(this.partitionBuffers[bufferNum], offset,
+					bufferNum < this.partitionBuffers.length-1 ? this.memorySegmentSize : this.finalBufferLimit);
+		
 	}
+
 	
 	/* (non-Javadoc)
 	 * @see eu.stratosphere.pact.runtime.io.AbstractPagedInputViewV2#nextSegment(eu.stratosphere.nephele.services.memorymanager.MemorySegment)
@@ -448,7 +454,7 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 	 */
 	@Override
 	protected int getLimitForSegment(MemorySegment segment) throws IOException {
-		return segment.getInt(PARTITION_BLOCK_SIZE_OFFSET);
+		return segment == this.partitionBuffers[partitionBuffers.length - 1] ? this.finalBufferLimit : this.memorySegmentSize;
 	}
 	
 	// ============================================================================================
@@ -463,13 +469,16 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 		
 		private int currentBlockNumber;
 		
+		private final int sizeBits;
+		
 		
 		private BuildSideBuffer(MemorySegment initialSegment, MemorySegmentSource memSource)
 		{
-			super(initialSegment, initialSegment.size(), PARTITION_BLOCK_HEADER_LEN);
+			super(initialSegment, initialSegment.size(), 0);
 			
 			this.targetList = new ArrayList<MemorySegment>();
 			this.memSource = memSource;
+			this.sizeBits = MathUtils.log2strict(initialSegment.size());
 		}
 		
 		/* (non-Javadoc)
@@ -498,7 +507,9 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 		}
 		
 		long getCurrentPointer() {
-			return (((long) this.currentBlockNumber) << 32) | getCurrentPositionInSegment();
+			return getCurrentPositionInSegment() != this.segmentSize ?
+				(((long) this.currentBlockNumber) << this.sizeBits) | getCurrentPositionInSegment() :
+				((long) this.currentBlockNumber + 1) << this.sizeBits;
 		}
 		
 		int getBlockCount() {
@@ -519,10 +530,12 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 		MemorySegment[] close() throws IOException
 		{
 			final MemorySegment current = getCurrentSegment();
-			if (current != null) {
-				finalizeSegment(current, getCurrentPositionInSegment());
-				clear();
+			if (current == null) {
+				throw new IllegalStateException("Illegal State in HashPartition: No current buffer when finilizing build side.");
 			}
+			finalizeSegment(current, getCurrentPositionInSegment());
+			clear();
+			
 			if (this.writer == null) {
 				this.targetList.add(current);
 				MemorySegment[] buffers = (MemorySegment[]) this.targetList.toArray(new MemorySegment[this.targetList.size()]);
@@ -535,8 +548,6 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 		}
 		
 		private final void finalizeSegment(MemorySegment seg, int bytesUsed) {
-			seg.putInt(0, this.currentBlockNumber);
-			seg.putInt(PARTITION_BLOCK_SIZE_OFFSET, bytesUsed);
 		}
 	}
 	
@@ -550,11 +561,10 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 		
 		private int currentHashCode;
 		
-		
 		private PartitionIterator() throws IOException
 		{
 			this.record = HashPartition.this.buildSideAccessors.createInstance();
-			setReadPosition(PARTITION_BLOCK_HEADER_LEN);
+			setReadPosition(0);
 		}
 		
 		
@@ -563,9 +573,12 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 			final int pos = getCurrentPositionInSegment();
 			final int buffer = HashPartition.this.currentBufferNum;
 			
+			this.currentPointer = pos < HashPartition.this.memorySegmentSize ?
+				(((long) buffer) << HashPartition.this.segmentSizeBits) | pos :
+				((long) buffer + 1) << HashPartition.this.segmentSizeBits;
+			
 			try {
 				HashPartition.this.buildSideAccessors.deserialize(this.record, HashPartition.this);
-				this.currentPointer = (((long) buffer) << 32) | pos;
 				this.currentHashCode = HashPartition.this.buildSideAccessors.hash(this.record);
 				return true;
 			} catch (EOFException eofex) {

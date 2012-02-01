@@ -17,7 +17,7 @@ import eu.stratosphere.nephele.template.AbstractInvokable;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.runtime.io.SerializedFifoBuffer;
 import eu.stratosphere.pact.runtime.iterative.MutableHashTable;
-import eu.stratosphere.pact.runtime.iterative.MutableHashTable.HashBucketIterator;
+import eu.stratosphere.pact.runtime.iterative.MutableHashTable.LazyHashBucketIterator;
 import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
 import eu.stratosphere.pact.runtime.plugable.TypeComparator;
 import eu.stratosphere.pact.runtime.util.EmptyMutableObjectIterator;
@@ -63,26 +63,27 @@ public class TransClosureTest
 		// iterate
 		final DataInputViewV2 inView = fifo.getReadEnd();
 		final DataOutputViewV2 outView = fifo.getWriteEnd();
-		final TransitiveClosureEntry tcEntry = new TransitiveClosureEntry();
+		final LazyTransitiveClosureEntry tcEntry = new LazyTransitiveClosureEntry();
 		final LongPair pair = new LongPair();
 		long numModifications = 0;
 		
 		final long iterationStart = System.nanoTime();
+		boolean flushed = false;
 		
 		// read until the fifo buffer is exhausted
 		while (true) {
 			try {
 				ipAccessors.deserialize(pair, inView);
-				HashBucketIterator<TransitiveClosureEntry, LongPair> matches = table.getMatchesFor(pair);
+				LazyHashBucketIterator<TransitiveClosureEntry, LongPair> matches = table.getLazyMatchesFor(pair);
 				
 				while (matches.next(tcEntry)) {
 					final long newCid = pair.getValue();
 					if (tcEntry.getCid() > newCid) {
 						numModifications++;
+						flushed = false;
 						
 						// need to update entry
 						tcEntry.setCid(newCid);
-						matches.writeBack(tcEntry);
 						
 						// send out updates
 						long[] neighbors = tcEntry.getNeighbors();
@@ -95,12 +96,18 @@ public class TransClosureTest
 				}
 			}
 			catch (EOFException eofex) {
-				break;
+				if (!flushed) {
+					fifo.flush();
+					flushed = true;
+				} else {
+					break;
+				}
 			}
 		}
 		
 		final long iterationsElapsed = System.nanoTime() - iterationStart;
 		System.out.println("Iterations took " + (iterationsElapsed / 1000000) + "msecs");
+		System.out.println("Modifications: " + numModifications);
 	}
 	
 	
@@ -160,7 +167,6 @@ public class TransClosureTest
 							long[] a = new long[Math.max(numNeighbors * 2, 2)];
 							System.arraycopy(neighbors, 0, a, 0, numNeighbors);
 							neighbors = a;
-							target.setNeighbors(a);
 						}
 						neighbors[numNeighbors++] = current;
 						current = 0;
@@ -174,7 +180,7 @@ public class TransClosureTest
 						// set target fields
 						target.setVid(vid);
 						target.setCid(min);
-						target.setNumNeighbors(numNeighbors);
+						target.setNeighbors(neighbors, numNeighbors);
 						
 						// create initial updates
 						final LongPair pair = this.pair;
@@ -193,7 +199,6 @@ public class TransClosureTest
 							long[] a = new long[Math.max(numNeighbors * 2, 2)];
 							System.arraycopy(neighbors, 0, a, 0, numNeighbors);
 							neighbors = a;
-							target.setNeighbors(a);
 						}
 						
 						neighbors[numNeighbors++] =current;

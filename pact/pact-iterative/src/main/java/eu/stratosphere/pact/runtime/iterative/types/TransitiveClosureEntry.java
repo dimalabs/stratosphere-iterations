@@ -8,15 +8,15 @@ package eu.stratosphere.pact.runtime.iterative.types;
  */
 public class TransitiveClosureEntry
 {
-	private static final long[] EMPTY_NEIGHBORS = new long[0];
+	protected static final long[] EMPTY_NEIGHBORS = new long[0];
 	
-	private long vid;
+	protected long vid;
 	
-	private long cid;
+	protected long cid;
 	
-	private long[] neighbors;
+	protected long[] neighbors;
 	
-	private int numNeighbors;
+	protected int numNeighbors;
 	
 	
 	public TransitiveClosureEntry()
@@ -24,14 +24,14 @@ public class TransitiveClosureEntry
 		this.neighbors = EMPTY_NEIGHBORS;
 	}
 
-	public TransitiveClosureEntry(long vid, long cid, long[] neighbors) {
+	TransitiveClosureEntry(long vid, long cid, long[] neighbors) {
 		this.vid = vid;
 		this.cid = cid;
 		this.neighbors = neighbors;
 		this.numNeighbors = this.neighbors.length;
 	}
 	
-	public TransitiveClosureEntry(long vid, long cid, long[] neighbors, int numNeighbors) {
+	TransitiveClosureEntry(long vid, long cid, long[] neighbors, int numNeighbors) {
 		this.vid = vid;
 		this.cid = cid;
 		this.neighbors = neighbors;
@@ -59,15 +59,12 @@ public class TransitiveClosureEntry
 		return neighbors;
 	}
 	
-	public void setNeighbors(long[] neighbors) {
+	public void setNeighbors(long[] neighbors, int num) {
 		this.neighbors = neighbors;
+		this.numNeighbors = num;
 	}
 	
 	public int getNumNeighbors() {
 		return this.numNeighbors;
-	}
-	
-	public void setNumNeighbors(int num) {
-		this.numNeighbors = num;
 	}
 }

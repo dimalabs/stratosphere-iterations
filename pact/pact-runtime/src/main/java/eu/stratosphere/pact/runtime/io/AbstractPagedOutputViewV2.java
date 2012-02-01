@@ -35,9 +35,9 @@ public abstract class AbstractPagedOutputViewV2 implements DataOutputViewV2
 	
 	private byte[] utfBuffer;						// the reusable array for UTF encodings
 	
-	private final int segmentSize;					// the size of the memory segments
+	protected final int segmentSize;					// the size of the memory segments
 	
-	private final int headerLength;					// the number of bytes to skip at the beginning of each segment
+	protected final int headerLength;					// the number of bytes to skip at the beginning of each segment
 	
 	private int positionInSegment;					// the offset in the current segment
 	
@@ -102,7 +102,7 @@ public abstract class AbstractPagedOutputViewV2 implements DataOutputViewV2
 	}
 	
 	
-	void advance() throws IOException
+	protected void advance() throws IOException
 	{
 		this.currentSegment = nextSegment(this.currentSegment, this.positionInSegment);
 		this.positionInSegment = this.headerLength;

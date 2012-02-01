@@ -32,7 +32,7 @@ public abstract class AbstractPagedInputViewV2 implements DataInputViewV2
 {
 	private MemorySegment currentSegment;
 	
-	private final int headerLength;					// the number of bytes to skip at the beginning of each segment
+	protected final int headerLength;				// the number of bytes to skip at the beginning of each segment
 	
 	private int positionInSegment;					// the offset in the current segment
 	

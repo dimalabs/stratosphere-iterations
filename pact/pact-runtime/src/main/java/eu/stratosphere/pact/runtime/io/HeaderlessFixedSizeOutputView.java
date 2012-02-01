@@ -5,6 +5,7 @@ import java.io.IOException;
 
 import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
 import eu.stratosphere.nephele.services.memorymanager.SeekableDataOutputView;
+import eu.stratosphere.pact.runtime.util.MathUtils;
 
 
 /**
@@ -12,21 +13,27 @@ import eu.stratosphere.nephele.services.memorymanager.SeekableDataOutputView;
  *
  * @author Stephan Ewen (stephan.ewen@tu-berlin.de)
  */
-public class FixedSizeOutputView extends AbstractPagedOutputViewV2 implements SeekableDataOutputView
+public class HeaderlessFixedSizeOutputView extends AbstractPagedOutputViewV2 implements SeekableDataOutputView
 {
 	private final MemorySegment[] segments;
 	
 	private int currentSegmentIndex;
 	
+	private final int segmentSizeBits;
+	
 	/**
 	 * @param segmentSize
 	 * @param headerLength
 	 */
-	public FixedSizeOutputView(MemorySegment[] segments, int segmentSize, int headerLength)
+	public HeaderlessFixedSizeOutputView(MemorySegment[] segments, int segmentSize)
 	{
-		super(segments[0], segmentSize, headerLength);
+		super(segments[0], segmentSize, 0);
+		
+		if ((segmentSize & (segmentSize - 1)) != 0)
+			throw new IllegalArgumentException("Segment size must be a power of 2!");
 		
 		this.segments = segments;
+		this.segmentSizeBits = MathUtils.log2floor(segmentSize);
 	}
 
 	/* (non-Javadoc)
@@ -48,12 +55,10 @@ public class FixedSizeOutputView extends AbstractPagedOutputViewV2 implements Se
 	@Override
 	public void setWritePosition(long position)
 	{
-		final int bufferNum = (int) (position >>> 32);
-		final int offset = (int) position;
+		final int bufferNum = (int) (position >>> this.segmentSizeBits);
+		final int offset = (int) (position & (this.segmentSize - 1));
 		
 		this.currentSegmentIndex = bufferNum;
-		final MemorySegment seg = this.segments[bufferNum];
-		
-		seekOutput(seg, offset);
+		seekOutput(this.segments[bufferNum], offset);
 	}
 }

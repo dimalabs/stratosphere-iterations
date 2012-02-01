@@ -275,6 +275,8 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	 */
 	private HashBucketIterator<BT, PT> bucketIterator;
 	
+	private LazyHashBucketIterator<BT, PT> lazyBucketIterator;
+	
 	/**
 	 * Iterator over the elements from the probe side.
 	 */
@@ -418,6 +420,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		
 		// the bucket iterator can remain constant over the time
 		this.bucketIterator = new HashBucketIterator<BT, PT>(this.buildSideAccessors.duplicate(), this.recordComparator);
+		this.lazyBucketIterator = new LazyHashBucketIterator<BT, PT>(this.buildSideAccessors.duplicate(), this.recordComparator);
 	}
 	
 	/**
@@ -527,6 +530,32 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 			this.recordComparator.setReference(record, this.probeSideAccessors);
 			this.bucketIterator.set(bucket, p.overflowSegments, p, hash, bucketInSegmentOffset);
 			return this.bucketIterator;
+		}
+		else {
+			throw new IllegalStateException("Method is not applicable to partially spilled hash tables.");
+		}
+	}
+	
+	public LazyHashBucketIterator<BT, PT> getLazyMatchesFor(PT record) throws IOException
+	{
+		final TypeAccessorsV2<PT> probeAccessors = this.probeSideAccessors;
+		final int hash = hash(probeAccessors.hash(record), this.currentRecursionDepth);
+		final int posHashCode = hash % this.numBuckets;
+		
+		// get the bucket for the given hash code
+		final int bucketArrayPos = posHashCode >> this.bucketsPerSegmentBits;
+		final int bucketInSegmentOffset = (posHashCode & this.bucketsPerSegmentMask) << NUM_INTRA_BUCKET_BITS;
+		final MemorySegment bucket = this.buckets[bucketArrayPos];
+		
+		// get the basic characteristics of the bucket
+		final int partitionNumber = bucket.get(bucketInSegmentOffset + HEADER_PARTITION_OFFSET);
+		final HashPartition<BT, PT> p = this.partitionsBeingBuilt.get(partitionNumber);
+		
+		// for an in-memory partition, process set the return iterators, else spill the probe records
+		if (p.isInMemory()) {
+			this.recordComparator.setReference(record, this.probeSideAccessors);
+			this.lazyBucketIterator.set(bucket, p.overflowSegments, p, hash, bucketInSegmentOffset);
+			return this.lazyBucketIterator;
 		}
 		else {
 			throw new IllegalStateException("Method is not applicable to partially spilled hash tables.");
@@ -684,7 +713,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 			reader.closeAndDelete(); // call waits until all is read
 			final List<MemorySegment> partitionBuffers = reader.getFullSegments();
 			final HashPartition<BT, PT> newPart = new HashPartition<BT, PT>(this.buildSideAccessors, this.probeSideAccessors,
-					0, nextRecursionLevel, partitionBuffers, p.getBuildSideRecordCount(), this.segmentSize);
+					0, nextRecursionLevel, partitionBuffers, p.getBuildSideRecordCount(), this.segmentSize, p.getLastSegmentLimit());
 			
 			this.partitionsBeingBuilt.add(newPart);
 			
@@ -710,7 +739,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		else {
 			// we need to partition and partially spill
 			final int avgRecordLenPartition = (int) (((long) p.getBuildSideBlockCount()) * 
-					(this.segmentSize - HashPartition.PARTITION_BLOCK_HEADER_LEN) / p.getBuildSideRecordCount());
+					this.segmentSize / p.getBuildSideRecordCount());
 			
 			final int bucketCount = (int) (((long) totalBuffersAvailable) * RECORD_TABLE_BYTES / 
 					(avgRecordLenPartition + RECORD_OVERHEAD_BYTES));
@@ -1233,7 +1262,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	/**
 	 *
 	 */
-	public static final class HashBucketIterator<BT, PT>
+	public static class HashBucketIterator<BT, PT>
 	{
 		private final TypeAccessorsV2<BT> accessor;
 		
@@ -1262,14 +1291,14 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		private long lastPointer;
 		
 		
-		private HashBucketIterator(TypeAccessorsV2<BT> accessor, TypeComparator<PT, BT> comparator)
+		HashBucketIterator(TypeAccessorsV2<BT> accessor, TypeComparator<PT, BT> comparator)
 		{
 			this.accessor = accessor;
 			this.comparator = comparator;
 		}
 		
 		
-		private void set(MemorySegment bucket, MemorySegment[] overflowSegments, HashPartition<BT, PT> partition,
+		void set(MemorySegment bucket, MemorySegment[] overflowSegments, HashPartition<BT, PT> partition,
 				int searchHashCode, int bucketInSegmentOffset)
 		{
 			this.bucket = bucket;
@@ -1302,7 +1331,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 						final long pointer = this.bucket.getLong(this.bucketInSegmentOffset + 
 													BUCKET_POINTER_START_OFFSET + (this.numInSegment * POINTER_LEN));
 						this.numInSegment++;
-							
+						
 						// deserialize the key to check whether it is really equal, or whether we had only a hash collision
 						try {
 							this.partition.setReadPosition(pointer);
@@ -1354,6 +1383,100 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 			this.numInSegment = 0;
 		}
 
+	} // end HashBucketIterator
+	
+
+	// ======================================================================================================
+	
+	/**
+	 *
+	 */
+	public static final class LazyHashBucketIterator<BT, PT>
+	{
+		private final TypeAccessorsV2<BT> accessor;
+		
+		private final TypeComparator<PT, BT> comparator;
+		
+		private MemorySegment bucket;
+		
+		private MemorySegment[] overflowSegments;
+		
+		private HashPartition<BT, PT> partition;
+		
+		private int bucketInSegmentOffset;
+		
+		private int searchHashCode;
+		
+		private int posInSegment;
+		
+		private int countInSegment;
+		
+		private int numInSegment;
+		
+		private LazyHashBucketIterator(TypeAccessorsV2<BT> accessor, TypeComparator<PT, BT> comparator)
+		{
+			this.accessor = accessor;
+			this.comparator = comparator;
+		}
+		
+		
+		void set(MemorySegment bucket, MemorySegment[] overflowSegments, HashPartition<BT, PT> partition,
+				int searchHashCode, int bucketInSegmentOffset)
+		{
+			this.bucket = bucket;
+			this.overflowSegments = overflowSegments;
+			this.partition = partition;
+			this.searchHashCode = searchHashCode;
+			this.bucketInSegmentOffset = bucketInSegmentOffset;
+			
+			this.posInSegment = this.bucketInSegmentOffset + BUCKET_HEADER_LENGTH;
+			this.countInSegment = bucket.getShort(bucketInSegmentOffset + HEADER_COUNT_OFFSET);
+			this.numInSegment = 0;
+		}
+
+		public boolean next(BT target)
+		{
+			// loop over all segments that are involved in the bucket (original bucket plus overflow buckets)
+			while (true)
+			{
+				while (this.numInSegment < this.countInSegment)
+				{
+					final int thisCode = this.bucket.getInt(this.posInSegment);
+					this.posInSegment += HASH_CODE_LEN;
+						
+					// check if the hash code matches
+					if (thisCode == this.searchHashCode) {
+						// get the pointer to the pair
+						final long pointer = this.bucket.getLong(this.bucketInSegmentOffset + 
+													BUCKET_POINTER_START_OFFSET + (this.numInSegment * POINTER_LEN));
+						this.numInSegment++;
+							
+						// check whether it is really equal, or whether we had only a hash collision
+						LazyDeSerializable lds = (LazyDeSerializable) target;
+						lds.setDeserializer(this.partition, this.partition.getWriteView(), pointer);
+						if (this.comparator.equalToReference(target, this.accessor)) {
+							return true;
+						}
+					}
+					else {
+						this.numInSegment++;
+					}
+				}
+				
+				// this segment is done. check if there is another chained bucket
+				final long forwardPointer = this.bucket.getLong(this.bucketInSegmentOffset + HEADER_FORWARD_OFFSET);
+				if (forwardPointer == BUCKET_FORWARD_POINTER_NOT_SET) {
+					return false;
+				}
+				
+				final int overflowSegNum = (int) (forwardPointer >>> 32);
+				this.bucket = this.overflowSegments[overflowSegNum];
+				this.bucketInSegmentOffset = (int) (forwardPointer & 0xffffffff);
+				this.countInSegment = this.bucket.getShort(this.bucketInSegmentOffset + HEADER_COUNT_OFFSET);
+				this.posInSegment = this.bucketInSegmentOffset + BUCKET_HEADER_LENGTH;
+				this.numInSegment = 0;
+			}
+		}
 	} // end HashBucketIterator
 	
 

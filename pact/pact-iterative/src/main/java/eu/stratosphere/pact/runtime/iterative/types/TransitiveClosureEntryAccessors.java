@@ -45,12 +45,11 @@ public class TransitiveClosureEntryAccessors implements TypeAccessorsV2<Transiti
 	{
 		to.setVid(from.getVid());
 		to.setCid(from.getCid());
-		to.setNumNeighbors(from.getNumNeighbors());
 		
 		if (to.getNeighbors().length < from.getNumNeighbors()) {
 			System.arraycopy(from.getNeighbors(), 0, to.getNeighbors(), 0, from.getNumNeighbors());
 		} else {
-			to.setNeighbors(Arrays.copyOf(from.getNeighbors(), from.getNumNeighbors()));
+			to.setNeighbors(Arrays.copyOf(from.getNeighbors(), from.getNumNeighbors()), from.getNumNeighbors());
 		}
 	}
 	
@@ -93,14 +92,14 @@ public class TransitiveClosureEntryAccessors implements TypeAccessorsV2<Transiti
 		target.setCid(source.readLong());
 		
 		final int num = source.readInt();
-		target.setNumNeighbors(num);
 		
 		final long[] n;
 		if (target.getNeighbors().length >= num) {
 			n = target.getNeighbors();
+			target.setNeighbors(n, num);
 		} else {
 			n = new long[num];
-			target.setNeighbors(n);
+			target.setNeighbors(n, num);
 		}
 		for (int i = 0; i < num; i++) {
 			n[i] = source.readLong();
