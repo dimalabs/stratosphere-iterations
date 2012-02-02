@@ -30,7 +30,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	
 	private ClosedListener channelStateListener;
 	private ClosedListener terminationStateListener;
-	private long memorySize;
+	private long updateMemorySize;
 	private int numInternalOutputs;
 	
 	private volatile boolean finished = false;
@@ -82,7 +82,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		BackTrafficQueueStore.getInstance().addStructures(
 				getEnvironment().getJobID(), 
 				getEnvironment().getIndexInSubtaskGroup(),
-				memorySize);
+				updateMemorySize);
 		BackTrafficQueueStore.getInstance().publishUpdateQueue(
 				getEnvironment().getJobID(), 
 				getEnvironment().getIndexInSubtaskGroup(),

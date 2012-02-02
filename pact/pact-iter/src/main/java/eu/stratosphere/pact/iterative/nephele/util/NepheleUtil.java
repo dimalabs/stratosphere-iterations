@@ -26,6 +26,7 @@ import eu.stratosphere.pact.common.stubs.MatchStub;
 import eu.stratosphere.pact.common.stubs.ReduceStub;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.base.PactLong;
 import eu.stratosphere.pact.iterative.nephele.bulk.BulkIterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
@@ -243,13 +244,14 @@ public class NepheleUtil {
 		
 
 		//Create a connection between iteration input and iteration head
-		connectJobVertices(iterationInputShipStrategy, iterationInput, iterationHead, null, null);
+		final Class<? extends Key> keyType = PactLong.class;
+		connectJobVertices(iterationInputShipStrategy, iterationInput, iterationHead, new int[] {0}, new Class[] {keyType});
 		
 		//Create a connection between iteration head and iteration output
 		connectJobVertices(ShipStrategy.FORWARD, iterationHead, iterationOutput, null, null);
 		
 		//Create a connection between inner loop end and iteration tail
-		connectJobVertices(iterationInputShipStrategy, innerLoopEnd, iterationTail, null, null);
+		connectJobVertices(iterationInputShipStrategy, innerLoopEnd, iterationTail, new int[] {0}, new Class[] {keyType});
 		
 		//Create a connection between termination output and termination decider
 		connectJobVertices(ShipStrategy.BROADCAST, terminationDataVertex, terminationDeciderTask, null, null);

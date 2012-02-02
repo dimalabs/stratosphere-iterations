@@ -2,18 +2,12 @@ package eu.stratosphere.pact.programs.preparation.tasks;
 
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactLong;
-import eu.stratosphere.pact.common.type.base.PactString;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 
-public class Longify extends AbstractMinimalTask {
+public class Undirect extends AbstractMinimalTask {
 	PactRecord record = new PactRecord();
 	PactRecord result = new PactRecord();
-	
-	PactString key = new PactString();
-	PactString value = new PactString();
-	PactLong newKey = new PactLong();
-	PactLong newValue = new PactLong();
 	
 	
 	@Override
@@ -28,13 +22,16 @@ public class Longify extends AbstractMinimalTask {
 	@Override
 	public void invoke() throws Exception {
 		MutableObjectIterator<PactRecord> input = inputs[0];
+		PactLong pid = new PactLong();
+		PactLong nid = new PactLong();
+		
 		while(input.next(record)) {
-			key = record.getField(0, key);
-			value = record.getField(1, value);
-			newKey.setValue(key.getValue().hashCode());
-			newValue.setValue(value.getValue().hashCode());
-			result.setField(0, newKey);
-			result.setField(1, newValue);
+			pid = record.getField(0, pid);
+			nid = record.getField(1, nid);
+			
+			output.collect(record);
+			result.setField(0, nid);
+			result.setField(1, pid);
 			output.collect(result);
 		}
 	}

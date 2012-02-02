@@ -31,8 +31,8 @@ public class LongList implements Value {
 	@Override
 	public void write(DataOutput out) throws IOException {
 		out.writeInt(length);
-		for (long value : list) {
-			out.writeLong(value);
+		for (int i = 0; i < length; i++) {
+			out.writeLong(list[i]);
 		}
 	}
 

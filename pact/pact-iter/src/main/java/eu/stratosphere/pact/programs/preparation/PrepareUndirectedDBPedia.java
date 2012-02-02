@@ -24,9 +24,11 @@ import eu.stratosphere.pact.programs.inputs.DBPediaPageLinkInput;
 import eu.stratosphere.pact.programs.preparation.tasks.AdjListOutput;
 import eu.stratosphere.pact.programs.preparation.tasks.CreateAdjList;
 import eu.stratosphere.pact.programs.preparation.tasks.Longify;
+import eu.stratosphere.pact.programs.preparation.tasks.Undirect;
+import eu.stratosphere.pact.programs.preparation.tasks.UniqueReduce;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
-public class PrepareDirectedDBPedia {	
+public class PrepareUndirectedDBPedia {	
 	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
@@ -50,6 +52,15 @@ public class PrepareDirectedDBPedia {
 		JobTaskVertex longify = createTask(Longify.class, graph, dop, spi);
 		longify.setVertexToShareInstancesWith(sourceVertex);
 		
+		JobTaskVertex undirect = createTask(Undirect.class, graph, dop, spi);
+		undirect.setVertexToShareInstancesWith(sourceVertex);
+		
+		JobTaskVertex uniqueify = createTask(UniqueReduce.class, graph, dop, spi);
+		uniqueify.setVertexToShareInstancesWith(sourceVertex);
+		setMemorySize(uniqueify, baseMemory/3);
+		setReduceInformation(uniqueify, RankReduce.class, 
+				new int[] {0,1}, new Class[] {keyType, keyType});
+		
 		JobTaskVertex adjList = createTask(CreateAdjList.class, graph, dop, spi);
 		adjList.setVertexToShareInstancesWith(sourceVertex);
 		setMemorySize(adjList, baseMemory/3);
@@ -62,8 +73,12 @@ public class PrepareDirectedDBPedia {
 		//Connect tasks
 		connectJobVertices(ShipStrategy.FORWARD, sourceVertex, longify, null, null);
 		
-		connectJobVertices(ShipStrategy.PARTITION_HASH, longify, adjList, 
+		connectJobVertices(ShipStrategy.FORWARD, longify, undirect, null, null);
+		
+		connectJobVertices(ShipStrategy.PARTITION_HASH, undirect, uniqueify, 
 				new int[] {0}, new Class[] {keyType});
+		
+		connectJobVertices(ShipStrategy.FORWARD, uniqueify, adjList, null, null);
 		
 		connectJobVertices(ShipStrategy.FORWARD, adjList, sinkVertex, null, null);
 		
