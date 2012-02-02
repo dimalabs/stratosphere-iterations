@@ -12,6 +12,7 @@ import eu.stratosphere.nephele.services.iomanager.IOManager;
 import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
 import eu.stratosphere.nephele.services.memorymanager.SeekableDataInputView;
 import eu.stratosphere.nephele.services.memorymanager.SeekableDataOutputView;
+import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.runtime.io.AbstractPagedInputViewV2;
 import eu.stratosphere.pact.runtime.io.AbstractPagedOutputViewV2;
 import eu.stratosphere.pact.runtime.io.ChannelWriterOutputViewV2;
@@ -553,22 +554,19 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 	
 	// ============================================================================================
 	
-	final class PartitionIterator
+	final class PartitionIterator implements MutableObjectIterator<BT>
 	{
-		private final BT record;
-		
 		private long currentPointer;
 		
 		private int currentHashCode;
 		
 		private PartitionIterator() throws IOException
 		{
-			this.record = HashPartition.this.buildSideAccessors.createInstance();
 			setReadPosition(0);
 		}
 		
 		
-		protected final boolean next() throws IOException
+		public final boolean next(BT record) throws IOException
 		{
 			final int pos = getCurrentPositionInSegment();
 			final int buffer = HashPartition.this.currentBufferNum;
@@ -578,8 +576,8 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 				((long) buffer + 1) << HashPartition.this.segmentSizeBits;
 			
 			try {
-				HashPartition.this.buildSideAccessors.deserialize(this.record, HashPartition.this);
-				this.currentHashCode = HashPartition.this.buildSideAccessors.hash(this.record);
+				HashPartition.this.buildSideAccessors.deserialize(record, HashPartition.this);
+				this.currentHashCode = HashPartition.this.buildSideAccessors.hash(record);
 				return true;
 			} catch (EOFException eofex) {
 				return false;
