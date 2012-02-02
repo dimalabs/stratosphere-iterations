@@ -1,6 +1,6 @@
 /***********************************************************************************************************************
  *
- * Copyright (C) 2010 by the Stratosphere project (http://stratosphere.eu)
+ * Copyright (C) 2012 by the Stratosphere project (http://stratosphere.eu)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -13,17 +13,37 @@
  *
  **********************************************************************************************************************/
 
-package eu.stratosphere.pact.common.util;
+package eu.stratosphere.pact.runtime.plugable;
 
-public class ArrayUtil {
-	public static int[] parse(String sequence) {
-		String[] chunks = sequence.split(",");
-		int[] parsed = new int[chunks.length];
-
-		for (int i = 0; i < chunks.length; i++) {
-			parsed[i] = Integer.parseInt(chunks[i].trim());
-		}
-
-		return parsed;
+public class IntPair
+{
+	private int key;
+	private int value;
+	
+	
+	public IntPair()
+	{}
+	
+	public IntPair(int key, int value)
+	{
+		this.key = key;
+		this.value = value;
+	}
+	
+	
+	public int getKey() {
+		return key;
+	}
+	
+	public void setKey(int key) {
+		this.key = key;
+	}
+	
+	public int getValue() {
+		return value;
+	}
+	
+	public void setValue(int value) {
+		this.value = value;
 	}
 }
