@@ -721,9 +721,10 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 			initTable((int) numBuckets, (byte) 1);
 			
 			// now, index the partition through a hash table
-			HashPartition<BT, PT>.PartitionIterator pIter = newPart.getPartitionIterator();
+			final HashPartition<BT, PT>.PartitionIterator pIter = newPart.getPartitionIterator();
+			final BT record = this.buildSideAccessors.createInstance();
 			
-			while (pIter.next()) {
+			while (pIter.next(record)) {
 				final int hashCode = hash(pIter.getCurrentHashCode(), nextRecursionLevel);
 				final int posHashCode = hashCode % this.numBuckets;
 				final long pointer = pIter.getPointer();
