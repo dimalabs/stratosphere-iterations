@@ -33,7 +33,7 @@ public class IterationTail extends AbstractMinimalTask {
 	}
 	
 	@Override
-	public void invoke() throws Exception {
+	public void run() throws Exception {
 		//For the iteration internal state tracking, events like iteration close are forwarded using
 		//the nephele event mechanisms. The input data for this task should
 		//have the same partitioning as the iteration head.

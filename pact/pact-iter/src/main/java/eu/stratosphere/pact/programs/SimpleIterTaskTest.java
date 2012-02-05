@@ -109,7 +109,7 @@ public class SimpleIterTaskTest {
 		}
 
 		@Override
-		public void invokeIter(IterationIterator iterationIter)
+		public void runIteration(IterationIterator iterationIter)
 				throws Exception {
 			while(iterationIter.next(rec)) {
 				output.collect(rec);

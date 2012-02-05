@@ -38,7 +38,7 @@ public class SortByNeighbour extends AbstractMinimalTask {
 
 	@Override
 	public void invoke() throws Exception {
-		initEnvManagers();
+		initEnvironmentManagers();
 		
 		try {
 			sorter = new UnilateralSortMerger(memoryManager, ioManager, memorySize, 64, comparators, 

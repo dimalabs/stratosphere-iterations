@@ -27,7 +27,7 @@ public class SecondCachingCoGroup extends AbstractIterativeTask {
 	
 	@Override
 	public void invokeStart() throws Exception {
-		initEnvManagers();
+		initEnvironmentManagers();
 		iter2 = new SpillingResettableMutableObjectIterator(
 				memoryManager, ioManager, inputs[1],
 				memorySize, this);
@@ -35,7 +35,7 @@ public class SecondCachingCoGroup extends AbstractIterativeTask {
 	}
 	
 	@Override
-	public void invokeIter(IterationIterator iter1) throws Exception {
+	public void runIteration(IterationIterator iter1) throws Exception {
 		iter2.reset();
 		
 		SortMergeCoGroupIterator coGroupIter = new SortMergeCoGroupIterator(memoryManager, ioManager, 

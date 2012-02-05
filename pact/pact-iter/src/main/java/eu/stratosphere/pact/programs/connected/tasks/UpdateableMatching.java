@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.iterative.nephele.tasks;
+package eu.stratosphere.pact.programs.connected.tasks;
 
 import java.util.List;
 
@@ -8,6 +8,7 @@ import org.apache.commons.logging.LogFactory;
 import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
 import eu.stratosphere.pact.common.type.Value;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
+import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.util.OutputCollectorV2;
 import eu.stratosphere.pact.programs.connected.types.ComponentUpdate;
 import eu.stratosphere.pact.programs.connected.types.ComponentUpdateAccessor;
@@ -36,9 +37,7 @@ public class UpdateableMatching extends IterationHead {
 
 	@Override
 	public void processInput(MutableObjectIterator<Value> iter,
-			OutputCollectorV2 output) throws Exception {
-		initEnvManagers();
-		
+			OutputCollectorV2 output) throws Exception {		
 		// Load build side into table		
 		int chunckSize = 32*1024;
 		List<MemorySegment> joinMem = memoryManager.allocateStrict(this, (int) (memorySize/chunckSize), chunckSize);

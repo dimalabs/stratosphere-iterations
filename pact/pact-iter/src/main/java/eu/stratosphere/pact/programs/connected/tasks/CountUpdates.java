@@ -10,17 +10,9 @@ public class CountUpdates extends AbstractIterativeTask {
 	TransitiveClosureEntry tc = new TransitiveClosureEntry();
 	PactRecord result = new PactRecord();
 	PactLong count = new PactLong();
-	
-	@Override
-	public void invokeStart() throws Exception {
-	}
 
 	@Override
-	public void cleanup() throws Exception {
-	}
-
-	@Override
-	public void invokeIter(IterationIterator iterationIter) throws Exception {
+	public void runIteration(IterationIterator iterationIter) throws Exception {
 		int counter = 0;
 		
 		while(iterationIter.next(tc)) {

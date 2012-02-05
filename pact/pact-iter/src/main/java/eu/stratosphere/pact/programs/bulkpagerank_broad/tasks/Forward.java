@@ -16,7 +16,7 @@ public class Forward extends AbstractIterativeTask {
 	}
 
 	@Override
-	public void invokeIter(IterationIterator iterationIter) throws Exception {
+	public void runIteration(IterationIterator iterationIter) throws Exception {
 		while(iterationIter.next(rec)) {
 			output.collect(rec);
 		}

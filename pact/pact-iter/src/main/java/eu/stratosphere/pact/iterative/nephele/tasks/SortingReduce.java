@@ -36,11 +36,11 @@ public class SortingReduce extends AbstractIterativeTask {
 	
 	@Override
 	public void invokeStart() throws Exception {
-		initEnvManagers();
+		initEnvironmentManagers();
 	}
 	
 	@Override
-	public void invokeIter(IterationIterator iterationIter) throws Exception {
+	public void runIteration(IterationIterator iterationIter) throws Exception {
 		try {
 			sorter = new UnilateralSortMerger(memoryManager, ioManager, memorySize, 64, comparators, 
 					keyPos, keyClasses, iterationIter, this, 0.8f);

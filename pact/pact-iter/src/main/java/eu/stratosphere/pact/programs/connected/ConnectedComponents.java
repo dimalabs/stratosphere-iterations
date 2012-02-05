@@ -17,7 +17,6 @@ import eu.stratosphere.nephele.jobgraph.JobGraphDefinitionException;
 import eu.stratosphere.nephele.jobgraph.JobInputVertex;
 import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
-import eu.stratosphere.pact.iterative.nephele.tasks.UpdateableMatching;
 import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.RankOutput;
 import eu.stratosphere.pact.programs.connected.tasks.ConvertToTransitiveClosureTypes;
 import eu.stratosphere.pact.programs.connected.tasks.CountUpdates;
@@ -26,6 +25,7 @@ import eu.stratosphere.pact.programs.connected.tasks.InitialStateComponents;
 import eu.stratosphere.pact.programs.connected.tasks.InitialUpdates;
 import eu.stratosphere.pact.programs.connected.tasks.SendUpdates;
 import eu.stratosphere.pact.programs.connected.tasks.UpdateTempTask;
+import eu.stratosphere.pact.programs.connected.tasks.UpdateableMatching;
 import eu.stratosphere.pact.programs.inputs.AdjListInput;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 

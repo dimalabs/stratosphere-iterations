@@ -28,7 +28,7 @@ public class IterationStateSynchronizer extends AbstractMinimalTask {
 	}
 
 	@Override
-	public void invoke() throws Exception {
+	public void run() throws Exception {
 		MutableObjectIterator<Value> input = inputs[0];
 		ChannelStateTracker stateListener = stateListeners[0];
 		

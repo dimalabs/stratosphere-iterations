@@ -41,7 +41,7 @@ public class CreateAdjList extends AbstractMinimalTask {
 
 	@Override
 	public void invoke() throws Exception {
-		initEnvManagers();
+		initEnvironmentManagers();
 		
 		RecordWriter<PactRecord> listWriter = output.getWriters().get(0);
 		

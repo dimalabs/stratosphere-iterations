@@ -28,11 +28,11 @@ public abstract class PreSortedReduce<T> extends AbstractIterativeTask {
 	
 	@Override
 	public void invokeStart() throws Exception {
-		initEnvManagers();
+		initEnvironmentManagers();
 	}
 	
 	@Override
-	public void invokeIter(IterationIterator iterationIter) throws Exception {
+	public void runIteration(IterationIterator iterationIter) throws Exception {
 		KeyGroupedMutableObjectIteratorV2<? extends Value> iter = 
 				new KeyGroupedMutableObjectIteratorV2(iterationIter, accessor);
 		

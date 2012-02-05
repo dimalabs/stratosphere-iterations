@@ -24,11 +24,11 @@ public class NonCachingIterativeMatch extends AbstractDualIterativeTask {
 	
 	@Override
 	public void invokeStart() throws Exception {
-		initEnvManagers();
+		initEnvironmentManagers();
 	}
 	
 	@Override
-	public void invokeIter(IterationIterator buildIter) throws Exception {
+	public void runIteration(IterationIterator buildIter) throws Exception {
 		MatchTaskIterator joinIter = new BuildFirstHashMatchIterator(buildIter, 
 				iterationIterB, buildKeyPos, probeKeyPos, keyClasses, 
 				memoryManager, ioManager, this, memorySize);

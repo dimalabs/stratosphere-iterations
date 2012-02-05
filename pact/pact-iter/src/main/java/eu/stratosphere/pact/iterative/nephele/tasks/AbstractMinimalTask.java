@@ -51,9 +51,6 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 			throw new RuntimeException("The ClassLoader for the user code could not be instantiated from the library cache.", ioe);
 		}
 		
-		Environment env = getEnvironment();
-		memoryManager = env.getMemoryManager();
-		ioManager = env.getIOManager();
 		memorySize = config.getMemorySize();
 		
 		initInputs();
@@ -63,7 +60,6 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 	}
 	
 	protected void initInternal() {
-		//Can be used by subclasses
 	}
 	
 	protected abstract void initTask();
@@ -135,6 +131,43 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 		this.inputs = inputs;
 	}
 	
+	@Override
+	public final void invoke() throws Exception {
+		initEnvironmentManagers();
+		setOutputAccessors();
+		
+		try {
+			prepareInternal();
+			
+			prepare();
+			
+			run();
+		} catch (Exception ex) {
+			throw new Exception("Error during execution of task ", ex);
+		} finally {
+			cleanup();
+			output.close();
+		}
+	}
+	
+	protected void prepareInternal() throws Exception {
+		
+	}
+	
+	public void prepare() throws Exception {
+		
+	}
+	
+	public abstract void run() throws Exception;
+	
+	public void cleanup() throws Exception {
+		
+	}
+	
+	@Override
+	public void cancel() throws Exception {
+		cleanup();
+	}
 	/**
 	 * Creates a writer for each output. Creates an OutputCollector which forwards its input to all writers.
 	 * The output collector applies the configured shipping strategies for each writer.
@@ -150,23 +183,18 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 		// create a writer for each output
 		for (int i = 0; i < numOutputs; i++)
 		{
-			// create the OutputEmitter from output ship strategy
-			final ShipStrategy strategy = config.getOutputShipStrategy(i);
 			initOutputAccessor(i);
-			output.addWriter((RecordWriter<Value>) getOutputWriter(strategy, i));
+			
+			// create the OutputEmitter from output ship strategy			
+			final OutputEmitterV2 oe = new OutputEmitterV2(
+					config.getOutputShipStrategy(i), 
+					getEnvironment().getJobID(), 
+					(TypeAccessorsV2<Value>) outputAccessors[i]);
+			
+			output.addWriter(new RecordWriter<Value>((AbstractTask) this, Value.class, oe));
 		}
 		
 		this.output = output;
-	}
-	
-	protected RecordWriter<? extends Value> getOutputWriter(ShipStrategy strategy, 
-			int outputIndex) {
-		final OutputEmitterV2 oe = new OutputEmitterV2(
-				config.getOutputShipStrategy(outputIndex), 
-				getEnvironment().getJobID(), 
-				(TypeAccessorsV2<Value>) outputAccessors[outputIndex]);
-		
-		return new RecordWriter<Value>((AbstractTask) this, Value.class, oe);
 	}
 	
 	protected void initOutputAccessor(int outputIndex) {
@@ -232,7 +260,7 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 		}
 	}
 	
-	protected void initEnvManagers() {
+	protected void initEnvironmentManagers() {
 		Environment env = getEnvironment();
 		memoryManager = env.getMemoryManager();
 		ioManager = env.getIOManager();

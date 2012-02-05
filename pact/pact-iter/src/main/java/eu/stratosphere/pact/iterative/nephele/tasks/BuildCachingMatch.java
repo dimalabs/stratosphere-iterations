@@ -27,7 +27,7 @@ public class BuildCachingMatch extends AbstractIterativeTask {
 	
 	@Override
 	public void invokeStart() throws Exception {
-		initEnvManagers();
+		initEnvironmentManagers();
 		buildIter = new SpillingResettableMutableObjectIterator(
 				memoryManager, ioManager, inputs[1],
 				memorySize, this);
@@ -35,7 +35,7 @@ public class BuildCachingMatch extends AbstractIterativeTask {
 	}
 	
 	@Override
-	public void invokeIter(IterationIterator probeIter) throws Exception {
+	public void runIteration(IterationIterator probeIter) throws Exception {
 		buildIter.reset();
 		
 		MatchTaskIterator joinIter = new BuildSecondHashMatchIterator(probeIter, 

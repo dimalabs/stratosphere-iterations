@@ -11,6 +11,7 @@ public class ConvertToTransitiveClosureTypes extends AbstractMinimalTask {
 
 	@Override
 	protected void initTask() {
+		outputAccessors[0] = new TransitiveClosureEntryAccessors();
 	}
 
 	@Override
@@ -19,10 +20,7 @@ public class ConvertToTransitiveClosureTypes extends AbstractMinimalTask {
 	}
 
 	@Override
-	public void invoke() throws Exception {
-		outputAccessors[0] = new TransitiveClosureEntryAccessors();
-		setOutputAccessors();
-		
+	public void run() throws Exception {		
 		PactRecord record = new PactRecord();
 		TransitiveClosureEntry tc = new TransitiveClosureEntry();
 		

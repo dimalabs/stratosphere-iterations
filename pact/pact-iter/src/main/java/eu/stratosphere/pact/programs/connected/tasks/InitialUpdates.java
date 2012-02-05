@@ -16,7 +16,7 @@ public class InitialUpdates extends AbstractMinimalTask {
 	}
 
 	@Override
-	public void invoke() throws Exception {
+	public void run() throws Exception {
 		TransitiveClosureEntry tc = new TransitiveClosureEntry();
 		ComponentUpdate update = new ComponentUpdate();
 		

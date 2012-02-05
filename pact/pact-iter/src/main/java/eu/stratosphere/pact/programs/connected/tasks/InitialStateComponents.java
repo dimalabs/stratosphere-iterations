@@ -15,13 +15,12 @@ public class InitialStateComponents extends AbstractMinimalTask {
 	}
 
 	@Override
-	public void invoke() throws Exception {
+	public void run() throws Exception {
 		TransitiveClosureEntry tc = new TransitiveClosureEntry();
 		
 		while (inputs[0].next(tc))
 		{	
 			tc.setCid(tc.getVid());
-			
 			output.collect(tc);
 		}
 	}

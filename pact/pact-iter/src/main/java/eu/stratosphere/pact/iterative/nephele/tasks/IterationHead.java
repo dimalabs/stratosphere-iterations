@@ -62,9 +62,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	}
 
 	@Override
-	public void invoke() throws Exception {
-		initEnvManagers();
-		
+	public void run() throws Exception {		
 		//Setup variables for easier access to the correct output gates / writers
 		//Create output collector for intermediate results
 		OutputCollectorV2 innerOutput = new OutputCollectorV2();
@@ -169,13 +167,16 @@ public abstract class IterationHead extends AbstractMinimalTask {
 			//TODO!
 			updatesBuffer.close();
 		}
+		memoryManager.release(updateMemory);
+		
+		finished = true;
+	}
+	
+	@Override
+	public void cleanup() throws Exception {
 		BackTrafficQueueStore.getInstance().releaseStructures(
 				getEnvironment().getJobID(), 
 				getEnvironment().getIndexInSubtaskGroup());
-		
-		finished = true;
-		//Close output
-		output.close();
 	}
 	
 	public abstract void finish(MutableObjectIterator<Value> iter, OutputCollectorV2 output) throws Exception;

@@ -30,7 +30,7 @@ public class ProbeCachingMatch extends AbstractIterativeTask {
 	
 	@Override
 	public void invokeStart() throws Exception {
-		initEnvManagers();
+		initEnvironmentManagers();
 		probeIter = new SpillingResettableMutableObjectIteratorV2(
 				memoryManager, ioManager, inputs[1], accessor,
 				memorySize, this);
@@ -38,7 +38,7 @@ public class ProbeCachingMatch extends AbstractIterativeTask {
 	}
 	
 	@Override
-	public void invokeIter(IterationIterator buildIter) throws Exception {
+	public void runIteration(IterationIterator buildIter) throws Exception {
 		probeIter.reset();
 		
 		BuildFirstHashMatchIterator joinIter = new BuildFirstHashMatchIterator(buildIter, 

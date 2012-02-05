@@ -18,7 +18,7 @@ public class Max extends AbstractIterativeTask {
 	}
 
 	@Override
-	public void invokeIter(IterationIterator iterationIter) throws Exception {
+	public void runIteration(IterationIterator iterationIter) throws Exception {
 		double max = Double.NEGATIVE_INFINITY;
 		
 		while(iterationIter.next(rec)) {

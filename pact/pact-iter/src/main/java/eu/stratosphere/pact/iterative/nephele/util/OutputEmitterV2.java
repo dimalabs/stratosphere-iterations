@@ -4,14 +4,11 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-import eu.stratosphere.nephele.execution.librarycache.LibraryCacheManager;
 import eu.stratosphere.nephele.io.ChannelSelector;
 import eu.stratosphere.nephele.jobgraph.JobID;
-import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.Value;
 import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
-import eu.stratosphere.pact.runtime.task.util.PartitionFunction;
 
 /**
 * @author Erik Nijkamp
@@ -37,7 +34,7 @@ public class OutputEmitterV2 implements ChannelSelector<Value>
 	
 	private JobID jobId;						// the job ID is necessary to obtain the class loader
 
-	private PartitionFunction partitionFunction;
+//	private PartitionFunction partitionFunction;
 	
 	private TypeAccessorsV2<Value> accessor;
 
@@ -103,21 +100,21 @@ public class OutputEmitterV2 implements ChannelSelector<Value>
 		}
 	}
 	
-	/**
-	 * Set the partition function that is used for range partitioning
-	 * @param func
-	 */
-	public void setPartitionFunction(PartitionFunction func) {
-		this.partitionFunction = func;
-	}
+//	/**
+//	 * Set the partition function that is used for range partitioning
+//	 * @param func
+//	 */
+//	public void setPartitionFunction(PartitionFunction func) {
+//		this.partitionFunction = func;
+//	}
 	
 	public void setTypeAccessor(TypeAccessorsV2<Value> accessor) {
 		this.accessor = accessor;
 	}
 
-	private int[] partition_range(PactRecord record, int numberOfChannels) {
-		return partitionFunction.selectChannels(record, numberOfChannels);
-	}
+//	private int[] partition_range(PactRecord record, int numberOfChannels) {
+//		return partitionFunction.selectChannels(record, numberOfChannels);
+//	}
 	
 	// --------------------------------------------------------------------------------------------
 
@@ -183,7 +180,7 @@ public class OutputEmitterV2 implements ChannelSelector<Value>
 			// read the jobID to find the classloader
 			this.jobId = new JobID();
 			this.jobId.read(in);			
-			final ClassLoader loader = LibraryCacheManager.getClassLoader(this.jobId);
+//			final ClassLoader loader = LibraryCacheManager.getClassLoader(this.jobId);
 			
 			//String className = in.readUTF();
 			//accessor = Class.forName(className, true, loader).asSubclass(Key.class).newInstance();

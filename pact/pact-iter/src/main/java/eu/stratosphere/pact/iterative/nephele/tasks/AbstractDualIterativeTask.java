@@ -12,13 +12,13 @@ public abstract class AbstractDualIterativeTask extends AbstractIterativeTask {
 	protected IterationIterator iterationIterB;
 	
 	@Override
-	public void invoke() throws Exception {
+	public final void run() throws Exception {
 		MutableObjectIterator<Value> inputA = inputs[0];
 		MutableObjectIterator<Value> inputB = inputs[1];
 		ChannelStateTracker stateListenerA = stateListeners[0];
 		ChannelStateTracker stateListenerB = stateListeners[1];
 		
-		boolean firstRound = true;
+//		boolean firstRound = true;
 		
 		IterationIterator iterationIterA = new IterationIterator(inputA, stateListenerA);
 		iterationIterB = new IterationIterator(inputB, stateListenerB);
@@ -27,13 +27,13 @@ public abstract class AbstractDualIterativeTask extends AbstractIterativeTask {
 			//Send iterative open state to output gates
 			publishState(ChannelState.OPEN, getEnvironment().getOutputGate(0));
 			
-			if(firstRound) {
-				invokeStart();
-				firstRound = false;
-			}
+//			if(firstRound) {
+//				invokeStart();
+//				firstRound = false;
+//			}
 			
 			//Call iteration stub function with the data for this iteration
-			invokeIter(iterationIterA);
+			runIteration(iterationIterA);
 			
 			if(stateListenerA.getState() == ChannelState.CLOSED &&
 					stateListenerB.getState() == ChannelState.CLOSED) {
@@ -42,10 +42,6 @@ public abstract class AbstractDualIterativeTask extends AbstractIterativeTask {
 				throw new RuntimeException("Illegal state after iteration call");
 			}
 		}
-		
-		cleanup();
-		
-		output.close();
 	}
 	
 	public boolean checkTermination(IterationIterator iterA, IterationIterator iterB) throws IOException {

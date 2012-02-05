@@ -11,18 +11,7 @@ public class SendUpdates extends AbstractIterativeTask {
 	ComponentUpdate update = new ComponentUpdate();
 	
 	@Override
-	public void invokeStart() throws Exception {
-	}
-
-	@Override
-	public void cleanup() throws Exception {
-	}
-
-	@Override
-	public void invokeIter(IterationIterator iterationIter) throws Exception {
-		outputAccessors[0] = new ComponentUpdateAccessor();
-		setOutputAccessors();
-		
+	public void runIteration(IterationIterator iterationIter) throws Exception {		
 		while(iterationIter.next(tc)) {
 			long cid = tc.getCid();
 			
@@ -39,6 +28,7 @@ public class SendUpdates extends AbstractIterativeTask {
 
 	@Override
 	protected void initTask() {
+		outputAccessors[0] = new ComponentUpdateAccessor();
 	}
 
 	@Override

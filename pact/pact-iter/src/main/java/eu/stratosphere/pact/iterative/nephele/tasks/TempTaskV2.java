@@ -24,8 +24,6 @@ public class TempTaskV2 extends AbstractMinimalTask
 	 */
 	public void prepare() throws Exception
 	{
-		setOutputAccessors();
-		
 		// set up memory and I/O parameters
 		final long availableMemory = this.config.getMemorySize();
 		
@@ -51,9 +49,7 @@ public class TempTaskV2 extends AbstractMinimalTask
 	 * @see eu.stratosphere.pact.runtime.task.AbstractPactTask#run()
 	 */
 	@Override
-	public void invoke() throws Exception {
-		prepare();
-		
+	public void run() throws Exception {		
 		// cache references on the stack
 		final SpillingResettableMutableObjectIteratorV2<Value> iter = this.tempIterator;
 		final OutputCollectorV2 output = this.output;

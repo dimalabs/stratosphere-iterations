@@ -5,11 +5,9 @@ import eu.stratosphere.pact.programs.connected.types.ComponentUpdateAccessor;
 
 public class UpdateTempTask extends TempTaskV2 {
 	
-	@Override
-	public void prepare() throws Exception {
+	protected void initTask() {
 		accessors[0] = new ComponentUpdateAccessor();
 		outputAccessors[0] = new ComponentUpdateAccessor();
-		
-		super.prepare();
 	}
+	
 }

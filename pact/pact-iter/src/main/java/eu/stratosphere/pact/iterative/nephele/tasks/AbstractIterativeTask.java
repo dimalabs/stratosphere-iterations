@@ -18,7 +18,7 @@ public abstract class AbstractIterativeTask extends AbstractMinimalTask {
 	
 	@SuppressWarnings("unchecked")
 	@Override
-	protected void initInternal() {		
+	protected final void initInternal() {		
 		int numInputs = getNumberOfInputs();
 		stateListeners = new ChannelStateTracker[numInputs];
 		
@@ -32,24 +32,24 @@ public abstract class AbstractIterativeTask extends AbstractMinimalTask {
 	}
 
 	@Override
-	public void invoke() throws Exception {
+	public void run() throws Exception {
 		MutableObjectIterator<Value> input = inputs[0];
 		ChannelStateTracker stateListener = stateListeners[0];
 		
-		boolean firstRound = true;
+//		boolean firstRound = true;
 		
 		IterationIterator iterationIter = new IterationIterator(input, stateListener);
 		while(!iterationIter.checkTermination()) {
 			//Send iterative open state to output gates
 			publishState(ChannelState.OPEN, iterStateGates);
 			
-			if(firstRound) {
-				invokeStart();
-				firstRound = false;
-			}
+//			if(firstRound) {
+//				invokeStart();
+//				firstRound = false;
+//			}
 			
 			//Call iteration stub function with the data for this iteration
-			invokeIter(iterationIter);
+			runIteration(iterationIter);
 			
 			if(stateListener.getState() == ChannelState.CLOSED) {
 				publishState(ChannelState.CLOSED, iterStateGates);
@@ -57,10 +57,6 @@ public abstract class AbstractIterativeTask extends AbstractMinimalTask {
 				throw new RuntimeException("Illegal state after iteration call");
 			}
 		}
-		
-		cleanup();
-		
-		output.close();
 	}
 	
 	private OutputGate<? extends Record>[] getIterationOutputGates() {
@@ -75,15 +71,13 @@ public abstract class AbstractIterativeTask extends AbstractMinimalTask {
 		return gates;
 	}
 	
-	/**
-	 * Allows to run code that should only be run once in the beginning
-	 * @throws Exception
-	 */
-	public abstract void invokeStart() throws Exception;
-	
-	public abstract void cleanup() throws Exception;
+//	/**
+//	 * Allows to run code that should only be run once in the beginning
+//	 * @throws Exception
+//	 */
+//	public abstract void invokeStart() throws Exception;
 
-	public abstract void invokeIter(IterationIterator iterationIter) throws Exception;
+	public abstract void runIteration(IterationIterator iterationIter) throws Exception;
 	
 	public static ChannelStateTracker initStateTracking(InputGate<PactRecord> gate) {
 		ChannelStateTracker tracker = new ChannelStateTracker(gate.getNumberOfInputChannels());
