@@ -32,7 +32,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	private ClosedListener channelStateListener;
 	private ClosedListener terminationStateListener;
 	private int numInternalOutputs;
-	private int updateBufferSize = 10*1024*1024;
+	private int updateBufferSize = 30*1024*1024;
 	
 	private volatile boolean finished = false;
 	

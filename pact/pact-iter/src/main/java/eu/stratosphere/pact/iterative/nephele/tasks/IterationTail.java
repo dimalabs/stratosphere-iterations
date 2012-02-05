@@ -12,6 +12,7 @@ import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelStat
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateTracker;
 import eu.stratosphere.pact.iterative.nephele.util.SerializedUpdateBuffer;
 import eu.stratosphere.pact.iterative.nephele.util.StateChangeException;
+import eu.stratosphere.pact.programs.connected.types.ComponentUpdate;
 
 
 public class IterationTail extends AbstractMinimalTask {
@@ -40,7 +41,7 @@ public class IterationTail extends AbstractMinimalTask {
 		SerializedUpdateBuffer buffer = null;
 		DataOutputViewV2 writeOutput = null;
 		
-		PactRecord rec = new PactRecord();
+		ComponentUpdate rec = new ComponentUpdate();
 		while(true) {
 			try {
 				boolean success = input.next(rec);

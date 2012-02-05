@@ -7,7 +7,6 @@ import org.apache.commons.logging.LogFactory;
 
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactLong;
-import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.util.TerminationDecider;
 
 public class EmptyTerminationDecider extends TerminationDecider {

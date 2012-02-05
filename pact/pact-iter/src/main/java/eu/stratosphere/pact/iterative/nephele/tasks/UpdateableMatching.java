@@ -6,39 +6,24 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
-import eu.stratosphere.pact.common.type.Key;
-import eu.stratosphere.pact.common.type.NullKeyFieldException;
-import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.Value;
-import eu.stratosphere.pact.common.type.base.PactLong;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.util.OutputCollectorV2;
+import eu.stratosphere.pact.programs.connected.types.ComponentUpdate;
+import eu.stratosphere.pact.programs.connected.types.ComponentUpdateAccessor;
+import eu.stratosphere.pact.programs.connected.types.TransitiveClosureEntry;
+import eu.stratosphere.pact.programs.connected.types.TransitiveClosureEntryAccessors;
 import eu.stratosphere.pact.runtime.iterative.MutableHashTable;
 import eu.stratosphere.pact.runtime.iterative.MutableHashTable.HashBucketIterator;
-import eu.stratosphere.pact.runtime.plugable.PactRecordAccessorsV2;
 import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
 import eu.stratosphere.pact.runtime.plugable.TypeComparator;
-import eu.stratosphere.pact.runtime.task.util.OutputCollector;
 import eu.stratosphere.pact.runtime.util.EmptyMutableObjectIterator;
 
 public class UpdateableMatching extends IterationHead {
 	
 	protected static final Log LOG = LogFactory.getLog(UpdateableMatching.class);
-
-	private int[] buildKeyPos;
-	private int[] probeKeyPos;
-	private Class<? extends Key>[] keyClasses;
 	
-	private MutableHashTable<Value, Value> table;
-	
-	@Override
-	protected void initTask() {
-		super.initTask();
-		
-		buildKeyPos = config.getLocalStrategyKeyPositions(0);
-		probeKeyPos = config.getLocalStrategyKeyPositions(1);
-		keyClasses =  loadKeyClasses();
-	}
+	private MutableHashTable<Value, ComponentUpdate> table;
 	
 	@Override
 	public void finish(MutableObjectIterator<Value> iter,
@@ -58,13 +43,13 @@ public class UpdateableMatching extends IterationHead {
 		int chunckSize = 32*1024;
 		List<MemorySegment> joinMem = memoryManager.allocateStrict(this, (int) (memorySize/chunckSize), chunckSize);
 		
-		TypeAccessorsV2 buildAccess = new PactRecordAccessorsV2(buildKeyPos, keyClasses);
-		TypeAccessorsV2 probeAccess = new PactRecordAccessorsV2(probeKeyPos, keyClasses);
-		TypeComparator comp = new PactRecordComparator();
+		TypeAccessorsV2 buildAccess = new TransitiveClosureEntryAccessors();
+		TypeAccessorsV2 probeAccess = new ComponentUpdateAccessor();
+		TypeComparator comp = new MatchComparator();
 		
-		table = new MutableHashTable<Value, Value>(buildAccess, probeAccess, comp, 
+		table = new MutableHashTable<Value, ComponentUpdate>(buildAccess, probeAccess, comp, 
 				joinMem, ioManager);
-		table.open(inputs[1], EmptyMutableObjectIterator.<Value>get());
+		table.open(inputs[1], EmptyMutableObjectIterator.<ComponentUpdate>get());
 		
 		// Process input as normally
 		processUpdates(iter, output);
@@ -73,22 +58,20 @@ public class UpdateableMatching extends IterationHead {
 	@Override
 	public void processUpdates(MutableObjectIterator<Value> iter,
 			OutputCollectorV2 output) throws Exception {
-		PactRecord state = new PactRecord();
-		PactRecord probe = new PactRecord();
-		PactLong value = new PactLong();
+		TransitiveClosureEntry state = new TransitiveClosureEntry();
+		ComponentUpdate probe = new ComponentUpdate();
 		
 		int countUpdated = 0;
 		int countUnchanged = 0;
 		
 		while(iter.next(probe)) {
-			HashBucketIterator<Value, Value> tableIter = table.getMatchesFor(probe);
+			HashBucketIterator<Value, ComponentUpdate> tableIter = table.getMatchesFor(probe);
 			if(tableIter.next(state)) {
-				long oldCid = state.getField(2, value).getValue();
-				long updateCid = probe.getField(1, value).getValue();
+				long oldCid = state.getCid();
+				long updateCid = probe.getCid();
 				
 				if(updateCid < oldCid) {
-					value.setValue(updateCid);
-					state.setField(2, value);
+					state.setCid(updateCid);
 					tableIter.writeBack(state);
 					output.collect(state);
 					countUpdated++;
@@ -109,26 +92,19 @@ public class UpdateableMatching extends IterationHead {
 		return 2;
 	}
 
-	private static final class PactRecordComparator implements TypeComparator<PactRecord, PactRecord>
+	private static final class MatchComparator implements TypeComparator<ComponentUpdate, TransitiveClosureEntry>
 	{
 		private long key;
 
 		@Override
-		public void setReference(PactRecord reference, TypeAccessorsV2<PactRecord> accessor) {
-			try {
-				this.key = reference.getField(0, PactLong.class).getValue();
-			} catch (NullPointerException npex) {
-				throw new NullKeyFieldException();
-			}
+		public void setReference(ComponentUpdate reference, 
+				TypeAccessorsV2<ComponentUpdate> accessor) {
+			this.key = reference.getVid();
 		}
 
 		@Override
-		public boolean equalToReference(PactRecord candidate, TypeAccessorsV2<PactRecord> accessor) {
-			try {
-				return this.key == candidate.getField(0, PactLong.class).getValue();
-			} catch (NullPointerException npex) {
-				throw new NullKeyFieldException();
-			}
+		public boolean equalToReference(TransitiveClosureEntry candidate, TypeAccessorsV2<TransitiveClosureEntry> accessor) {
+			return this.key == candidate.getVid();
 		}
 	}
 }

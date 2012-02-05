@@ -1,8 +1,7 @@
 package eu.stratosphere.pact.programs.connected.tasks;
 
-import eu.stratosphere.pact.common.type.PactRecord;
-import eu.stratosphere.pact.common.type.base.PactLong;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
+import eu.stratosphere.pact.programs.connected.types.TransitiveClosureEntry;
 
 public class InitialStateComponents extends AbstractMinimalTask {
 
@@ -17,16 +16,13 @@ public class InitialStateComponents extends AbstractMinimalTask {
 
 	@Override
 	public void invoke() throws Exception {
-		PactRecord record = new PactRecord();
-		PactLong initialId = new PactLong();
+		TransitiveClosureEntry tc = new TransitiveClosureEntry();
 		
-		while (inputs[0].next(record))
+		while (inputs[0].next(tc))
 		{	
-			initialId = record.getField(0, initialId);
+			tc.setCid(tc.getVid());
 			
-			record.setField(2, initialId);
-			
-			output.collect(record);
+			output.collect(tc);
 		}
 	}
 
