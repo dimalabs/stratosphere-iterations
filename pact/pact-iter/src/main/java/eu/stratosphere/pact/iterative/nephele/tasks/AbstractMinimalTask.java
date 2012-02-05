@@ -5,27 +5,36 @@ import java.io.IOException;
 import eu.stratosphere.nephele.execution.Environment;
 import eu.stratosphere.nephele.execution.librarycache.LibraryCacheManager;
 import eu.stratosphere.nephele.io.BipartiteDistributionPattern;
+import eu.stratosphere.nephele.io.ChannelSelector;
 import eu.stratosphere.nephele.io.DistributionPattern;
+import eu.stratosphere.nephele.io.MutableReader;
 import eu.stratosphere.nephele.io.MutableRecordReader;
 import eu.stratosphere.nephele.io.PointwiseDistributionPattern;
+import eu.stratosphere.nephele.io.RecordWriter;
 import eu.stratosphere.nephele.services.iomanager.IOManager;
 import eu.stratosphere.nephele.services.memorymanager.MemoryManager;
 import eu.stratosphere.nephele.template.AbstractTask;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.Value;
 import eu.stratosphere.pact.common.util.InstantiationUtil;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
-import eu.stratosphere.pact.runtime.task.AbstractPactTask;
-import eu.stratosphere.pact.runtime.task.util.NepheleReaderIterator;
-import eu.stratosphere.pact.runtime.task.util.OutputCollector;
+import eu.stratosphere.pact.iterative.nephele.util.OutputCollectorV2;
+import eu.stratosphere.pact.iterative.nephele.util.OutputEmitterV2;
+import eu.stratosphere.pact.runtime.plugable.PactRecordAccessorsV2;
+import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 import eu.stratosphere.pact.runtime.task.util.TaskConfig;
 
 public abstract class AbstractMinimalTask extends AbstractTask {
+	
+	public static final String TYPE = "minimal.task.type.accessor";
 
-	protected MutableObjectIterator<PactRecord>[] inputs;
+	protected MutableObjectIterator<Value>[] inputs;
+	protected TypeAccessorsV2<? extends Value>[] accessors;
+	protected TypeAccessorsV2<? extends Value>[] outputAccessors;
 	protected TaskConfig config;
-	protected OutputCollector output;
+	protected OutputCollectorV2 output;
 	protected ClassLoader classLoader;
 	protected MemoryManager memoryManager;
 	protected IOManager ioManager;
@@ -67,7 +76,9 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 		int numInputs = getNumberOfInputs();
 		
 		@SuppressWarnings("unchecked")
-		final MutableObjectIterator<PactRecord>[] inputs = new MutableObjectIterator[numInputs];
+		final MutableObjectIterator<Value>[] inputs = new MutableObjectIterator[numInputs];
+		@SuppressWarnings("unchecked")
+		final TypeAccessorsV2<? extends Value>[] accessors = new TypeAccessorsV2[numInputs];
 		
 		for (int i = 0; i < numInputs; i++)
 		{
@@ -92,9 +103,35 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 					i + ": " + shipStrategy.name());
 			}
 			
-			inputs[i] = new NepheleReaderIterator(new MutableRecordReader<PactRecord>(this, dp));
+			inputs[i] = new RecordReaderIterator(new MutableRecordReader<Value>(this, dp));
+			
+			//Get type accessor for that input
+			@SuppressWarnings("unchecked")
+			Class<? extends TypeAccessorsV2<? extends Value>> clsAccessor = 
+				(Class<? extends TypeAccessorsV2<? extends Value>>)
+				getRuntimeConfiguration().getClass(TYPE+i, PactRecordAccessorsV2.class);
+			
+			try {
+				if(clsAccessor == PactRecordAccessorsV2.class) {
+					int[] pos = config.getLocalStrategyKeyPositions(i);
+					Class<? extends Key>[] clss = 
+							config.getLocalStrategyKeyClasses(classLoader);
+					
+					pos = pos!=null?pos:new int[] {};
+					clss = clss!=null?clss:new Class[] {};
+					
+					accessors[i] = new PactRecordAccessorsV2(
+							pos,
+							clss);
+				} else {
+					accessors[i] = clsAccessor.newInstance();
+				}
+			} catch (Exception e) {
+				throw new RuntimeException("Error instantiating accessor", e);
+			}
 		}
 		
+		this.accessors = accessors;
 		this.inputs = inputs;
 	}
 	
@@ -102,9 +139,67 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 	 * Creates a writer for each output. Creates an OutputCollector which forwards its input to all writers.
 	 * The output collector applies the configured shipping strategies for each writer.
 	 */
+	@SuppressWarnings("unchecked")
 	protected void initOutputs()
 	{
-		this.output = AbstractPactTask.getOutputCollector(this, this.config, getClass().getClassLoader(), this.config.getNumOutputs());
+		int numOutputs = this.config.getNumOutputs();
+		
+		OutputCollectorV2 output = new OutputCollectorV2();
+		outputAccessors = new TypeAccessorsV2[numOutputs];
+		
+		// create a writer for each output
+		for (int i = 0; i < numOutputs; i++)
+		{
+			// create the OutputEmitter from output ship strategy
+			final ShipStrategy strategy = config.getOutputShipStrategy(i);
+			initOutputAccessor(i);
+			output.addWriter((RecordWriter<Value>) getOutputWriter(strategy, i));
+		}
+		
+		this.output = output;
+	}
+	
+	protected RecordWriter<? extends Value> getOutputWriter(ShipStrategy strategy, 
+			int outputIndex) {
+		final OutputEmitterV2 oe = new OutputEmitterV2(
+				config.getOutputShipStrategy(outputIndex), 
+				getEnvironment().getJobID(), 
+				(TypeAccessorsV2<Value>) outputAccessors[outputIndex]);
+		
+		return new RecordWriter<Value>((AbstractTask) this, Value.class, oe);
+	}
+	
+	protected void initOutputAccessor(int outputIndex) {
+		ClassLoader cl = getClass().getClassLoader();
+		
+		// create the OutputEmitter from output ship strategy
+		int[] keyPositions = config.getOutputShipKeyPositions(outputIndex);
+		Class<? extends Key>[] keyClasses;
+		try {
+			keyClasses = config.getOutputShipKeyTypes(outputIndex, cl);
+		}
+		catch (ClassNotFoundException cnfex) {
+			throw new RuntimeException("The classes for the keys determining the partitioning for output " + 
+				outputIndex + "  could not be loaded.");
+		}
+		
+		keyPositions = keyPositions!=null?keyPositions:new int[] {};
+		keyClasses = keyClasses!=null?keyClasses:new Class[] {};
+		outputAccessors[outputIndex] = new PactRecordAccessorsV2(keyPositions, keyClasses);
+		
+	}
+	
+	protected void setOutputAccessors() {
+		int numOutputs = this.config.getNumOutputs();
+		
+		// create a writer for each output
+		for (int i = 0; i < numOutputs; i++)
+		{
+			ChannelSelector selector =
+					output.getWriters().get(i).getOutputGate().getChannelSelector();
+			((OutputEmitterV2) selector).setTypeAccessor(
+					(TypeAccessorsV2<Value>) outputAccessors[i]);
+		}
 	}
 	
 	protected void waitForPreviousTask(MutableObjectIterator<PactRecord> input) throws IOException {
@@ -150,4 +245,32 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 	 */
 	public abstract int getNumberOfInputs();
 
+	private static final class RecordReaderIterator implements MutableObjectIterator<Value>
+	{
+		private final MutableReader<Value> reader;		// the source
+
+		/**
+		 * Creates a new iterator, wrapping the given reader.
+		 * 
+		 * @param reader The reader to wrap.
+		 */
+		public RecordReaderIterator(MutableReader<Value> reader)
+		{
+			this.reader = reader;
+		}
+
+		/* (non-Javadoc)
+		 * @see eu.stratosphere.pact.runtime.util.MutableObjectIterator#next(java.lang.Object)
+		 */
+		@Override
+		public boolean next(Value target) throws IOException
+		{
+			try {
+				return this.reader.next(target);
+			}
+			catch (InterruptedException iex) {
+				throw new IOException("Reader was interrupted.");
+			}
+		}
+	}
 }

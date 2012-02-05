@@ -7,6 +7,7 @@ import java.util.List;
 
 import eu.stratosphere.nephele.io.InputGate;
 import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.Value;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
@@ -43,7 +44,7 @@ public class IterationTerminationChecker extends AbstractMinimalTask {
 
 	@Override
 	public void invoke() throws Exception {
-		MutableObjectIterator<PactRecord> input = inputs[0];
+		MutableObjectIterator<Value> input = inputs[0];
 		ChannelStateTracker stateListener = stateListeners[0];
 		
 		List<PactRecord> values = new ArrayList<PactRecord>();

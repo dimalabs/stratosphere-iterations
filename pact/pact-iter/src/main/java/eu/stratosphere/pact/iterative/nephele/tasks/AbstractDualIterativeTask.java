@@ -2,19 +2,19 @@ package eu.stratosphere.pact.iterative.nephele.tasks;
 
 import java.io.IOException;
 
-import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.Value;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
+import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateTracker;
 import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
-import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 
 public abstract class AbstractDualIterativeTask extends AbstractIterativeTask {
 	protected IterationIterator iterationIterB;
 	
 	@Override
 	public void invoke() throws Exception {
-		MutableObjectIterator<PactRecord> inputA = inputs[0];
-		MutableObjectIterator<PactRecord> inputB = inputs[1];
+		MutableObjectIterator<Value> inputA = inputs[0];
+		MutableObjectIterator<Value> inputB = inputs[1];
 		ChannelStateTracker stateListenerA = stateListeners[0];
 		ChannelStateTracker stateListenerB = stateListeners[1];
 		

@@ -3,23 +3,24 @@ package eu.stratosphere.pact.iterative.nephele.util;
 import java.io.IOException;
 
 import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.Value;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 
-public class IterationIterator implements MutableObjectIterator<PactRecord> {
-	private MutableObjectIterator<PactRecord> iter;
+public class IterationIterator implements MutableObjectIterator<Value> {
+	private MutableObjectIterator<Value> iter;
 	private ChannelStateTracker listener;
 	private PactRecord dummyRecord;
 	private boolean closed = true;
 	
-	public IterationIterator(MutableObjectIterator<PactRecord> input, ChannelStateTracker listener) {
+	public IterationIterator(MutableObjectIterator<Value> input, ChannelStateTracker listener) {
 		this.iter = input;
 		this.listener = listener;
 		this.dummyRecord = new PactRecord();
 	}
 
 	@Override
-	public boolean next(PactRecord target) throws IOException {		
+	public boolean next(Value target) throws IOException {		
 		if(closed) {
 			return false;
 		}

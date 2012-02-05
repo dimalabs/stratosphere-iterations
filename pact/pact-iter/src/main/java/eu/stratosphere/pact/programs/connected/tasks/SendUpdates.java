@@ -23,6 +23,8 @@ public class SendUpdates extends AbstractIterativeTask {
 
 	@Override
 	public void invokeIter(IterationIterator iterationIter) throws Exception {
+		setOutputAccessors();
+		
 		while(iterationIter.next(record)) {
 			cid = record.getField(2, cid);
 			neighbours = record.getField(1, neighbours);

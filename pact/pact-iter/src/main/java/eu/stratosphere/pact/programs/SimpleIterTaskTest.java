@@ -16,6 +16,7 @@ import eu.stratosphere.nephele.jobgraph.JobInputVertex;
 import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.Value;
 import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.io.EdgeInput;
@@ -23,7 +24,7 @@ import eu.stratosphere.pact.iterative.nephele.io.EdgeOutput;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractIterativeTask;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
-import eu.stratosphere.pact.runtime.task.util.OutputCollector;
+import eu.stratosphere.pact.iterative.nephele.util.OutputCollectorV2;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
 public class SimpleIterTaskTest {
@@ -62,16 +63,16 @@ public class SimpleIterTaskTest {
 		private PactRecord rec = new PactRecord();
 
 		@Override
-		public void finish(MutableObjectIterator<PactRecord> iter,
-				OutputCollector output) throws Exception {
+		public void finish(MutableObjectIterator<Value> iter,
+				OutputCollectorV2 output) throws Exception {
 			while(iter.next(rec)) {
 				output.collect(rec);
 			}
 		}
 
 		@Override
-		public void processInput(MutableObjectIterator<PactRecord> iter,
-				OutputCollector output) throws Exception {
+		public void processInput(MutableObjectIterator<Value> iter,
+				OutputCollectorV2 output) throws Exception {
 			
 			while(iter.next(rec)) {
 			}
@@ -84,8 +85,8 @@ public class SimpleIterTaskTest {
 		}
 
 		@Override
-		public void processUpdates(MutableObjectIterator<PactRecord> iter,
-				OutputCollector output) throws Exception {
+		public void processUpdates(MutableObjectIterator<Value> iter,
+				OutputCollectorV2 output) throws Exception {
 			PactRecord rec = new PactRecord();
 			while(iter.next(rec)) {
 				output.collect(rec);

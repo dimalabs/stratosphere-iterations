@@ -1,7 +1,6 @@
 package eu.stratosphere.pact.iterative.nephele.tasks;
 
-import java.io.IOException;
-import java.util.Queue;
+import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -10,28 +9,30 @@ import eu.stratosphere.nephele.event.task.AbstractTaskEvent;
 import eu.stratosphere.nephele.event.task.EventListener;
 import eu.stratosphere.nephele.io.OutputGate;
 import eu.stratosphere.nephele.io.RecordWriter;
+import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
 import eu.stratosphere.nephele.template.AbstractInvokable;
 import eu.stratosphere.nephele.types.Record;
-import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.Value;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.util.BackTrafficQueueStore;
-import eu.stratosphere.pact.iterative.nephele.util.BackTrafficQueueStore.UpdateQueueStrategy;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
-import eu.stratosphere.pact.runtime.task.util.OutputCollector;
+import eu.stratosphere.pact.iterative.nephele.util.DeserializingIterator;
+import eu.stratosphere.pact.iterative.nephele.util.OutputCollectorV2;
+import eu.stratosphere.pact.iterative.nephele.util.SerializedUpdateBuffer;
 
 public abstract class IterationHead extends AbstractMinimalTask {
 	
 	protected static final Log LOG = LogFactory.getLog(IterationHead.class);
-	protected static final int INITIAL_QUEUE_SIZE = 100;
+	protected static final int MEMORY_SEGMENT_SIZE = 64*1024;
 	
 	public static final String FIXED_POINT_TERMINATOR = "pact.iter.fixedpoint";
 	public static final String NUMBER_OF_ITERATIONS = "pact.iter.numiterations";
 	
 	private ClosedListener channelStateListener;
 	private ClosedListener terminationStateListener;
-	private long updateMemorySize;
 	private int numInternalOutputs;
+	private int updateBufferSize = 10*1024*1024;
 	
 	private volatile boolean finished = false;
 	
@@ -62,39 +63,43 @@ public abstract class IterationHead extends AbstractMinimalTask {
 
 	@Override
 	public void invoke() throws Exception {
+		initEnvManagers();
+		
 		//Setup variables for easier access to the correct output gates / writers
 		//Create output collector for intermediate results
-		OutputCollector innerOutput = new OutputCollector();
-		RecordWriter<PactRecord>[] innerWriters = getIterationRecordWriters();
-		for (RecordWriter<PactRecord> writer : innerWriters) {
+		OutputCollectorV2 innerOutput = new OutputCollectorV2();
+		RecordWriter<Value>[] innerWriters = getIterationRecordWriters();
+		for (RecordWriter<Value> writer : innerWriters) {
 			innerOutput.addWriter(writer);
 		}
 		
 		//Create output collector for final iteration output
-		OutputCollector taskOutput = new OutputCollector();
+		OutputCollectorV2 taskOutput = new OutputCollectorV2();
 		taskOutput.addWriter(output.getWriters().get(0));
 		
 		//Gates where the iterative channel state is send to
 		OutputGate<? extends Record>[] iterStateGates = getIterationOutputGates();
 		
+		//Allocate memory for update queue
+		List<MemorySegment> updateMemory = memoryManager.allocateStrict(this,
+				updateBufferSize / MEMORY_SEGMENT_SIZE, MEMORY_SEGMENT_SIZE);
+		SerializedUpdateBuffer buffer = new SerializedUpdateBuffer(updateMemory, MEMORY_SEGMENT_SIZE);
+		
 		//Create and initialize internal structures for the transport of the iteration
 		//updates from the tail to the head (this class)
 		BackTrafficQueueStore.getInstance().addStructures(
 				getEnvironment().getJobID(), 
-				getEnvironment().getIndexInSubtaskGroup(),
-				updateMemorySize);
-		BackTrafficQueueStore.getInstance().publishUpdateQueue(
+				getEnvironment().getIndexInSubtaskGroup());
+		BackTrafficQueueStore.getInstance().publishUpdateBuffer(
 				getEnvironment().getJobID(), 
 				getEnvironment().getIndexInSubtaskGroup(),
-				INITIAL_QUEUE_SIZE,
-				this,
-				UpdateQueueStrategy.IN_MEMORY_SERIALIZED);
+				buffer);
 		
 		//Start with a first iteration run using the input data
 		AbstractIterativeTask.publishState(ChannelState.OPEN, iterStateGates);
 
 		//Process all input records by passing them to the processInput method (supplied by the user)
-		MutableObjectIterator<PactRecord> input = inputs[0];
+		MutableObjectIterator<Value> input = inputs[0];
 		processInput(input, innerOutput);
 		
 		//Send iterative close event to indicate that this round is finished
@@ -103,14 +108,15 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		
 		//Loop until iteration terminates
 		int iterationCounter = 0;
-		Queue<PactRecord> updateQueue = null;
+		SerializedUpdateBuffer updatesBuffer = null;
 		while(true) {
 			//Wait until previous iteration run is finished for this subtask
 			//and retrieve buffered updates
 			try {
-				updateQueue = BackTrafficQueueStore.getInstance().receiveIterationEnd(
+				updatesBuffer = BackTrafficQueueStore.getInstance().receiveIterationEnd(
 						getEnvironment().getJobID(), 
 						getEnvironment().getIndexInSubtaskGroup());
+				updatesBuffer.switchBuffers();
 			} catch (InterruptedException ex) {	
 				throw new RuntimeException("Internal Error");
 			}
@@ -134,21 +140,20 @@ public abstract class IterationHead extends AbstractMinimalTask {
 						LOG.info(constructLogString("Starting Iteration: " + iterationCounter, getEnvironment().getTaskName(), this));
 					}
 					
-					BackTrafficQueueStore.getInstance().publishUpdateQueue(
+					BackTrafficQueueStore.getInstance().publishUpdateBuffer(
 							getEnvironment().getJobID(), 
 							getEnvironment().getIndexInSubtaskGroup(),
-							updateQueue.size()>0?updateQueue.size():INITIAL_QUEUE_SIZE,
-							this);
+							buffer);
 					
 					//Start new iteration run
 					AbstractIterativeTask.publishState(ChannelState.OPEN, iterStateGates);
 					
 					//Call stub function to process updates
-					processUpdates(new QueueIterator(updateQueue), innerOutput);
+					processUpdates(new DeserializingIterator(updatesBuffer.getReadEnd()), innerOutput);
 					
 					AbstractIterativeTask.publishState(ChannelState.CLOSED, iterStateGates);
 					
-					updateQueue = null;
+					updatesBuffer = null;
 					iterationCounter++;
 				}				
 			} else {
@@ -157,11 +162,12 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		}
 		
 		//Call stub so that it can finish its code
-		finish(new QueueIterator(updateQueue), taskOutput); 
+		finish(new DeserializingIterator(updatesBuffer.getReadEnd()), taskOutput); 
 		
 		//Release the structures for this iteration
-		if(updateQueue != null) {
-			updateQueue.clear();
+		if(updatesBuffer != null) {
+			//TODO!
+			updatesBuffer.close();
 		}
 		BackTrafficQueueStore.getInstance().releaseStructures(
 				getEnvironment().getJobID(), 
@@ -172,11 +178,11 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		output.close();
 	}
 	
-	public abstract void finish(MutableObjectIterator<PactRecord> iter, OutputCollector output) throws Exception;
+	public abstract void finish(MutableObjectIterator<Value> iter, OutputCollectorV2 output) throws Exception;
 
-	public abstract void processInput(MutableObjectIterator<PactRecord> iter, OutputCollector output) throws Exception;
+	public abstract void processInput(MutableObjectIterator<Value> iter, OutputCollectorV2 output) throws Exception;
 	
-	public abstract void processUpdates(MutableObjectIterator<PactRecord> iter, OutputCollector output) throws Exception;
+	public abstract void processUpdates(MutableObjectIterator<Value> iter, OutputCollectorV2 output) throws Exception;
 	
 	public static String constructLogString(String message, String taskName, AbstractInvokable parent)
 	{
@@ -192,11 +198,11 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		return bld.toString();
 	}
 	
-	private RecordWriter<PactRecord>[] getIterationRecordWriters() {
+	private RecordWriter<Value>[] getIterationRecordWriters() {
 		int numIterOutputs = this.config.getNumOutputs() - numInternalOutputs;
 		
 		@SuppressWarnings("unchecked")
-		RecordWriter<PactRecord>[] writers = new RecordWriter[numIterOutputs];
+		RecordWriter<Value>[] writers = new RecordWriter[numIterOutputs];
 		for (int i = 0; i < numIterOutputs; i++) {
 			writers[i]  = output.getWriters().get(numInternalOutputs + i);
 		}
@@ -214,25 +220,6 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		}
 		
 		return gates;
-	}
-	
-	private static class QueueIterator implements MutableObjectIterator<PactRecord> {
-		Queue<PactRecord> queue;
-		
-		public QueueIterator(Queue<PactRecord> queue) {
-			this.queue = queue;
-		}
-
-		@Override
-		public boolean next(PactRecord target) throws IOException {
-			if(!queue.isEmpty()) {
-				queue.remove().copyTo(target);
-				return true;
-			} else {
-				return false;
-			}
-		}
-		
 	}
 	
 	private class ClosedListener implements EventListener {

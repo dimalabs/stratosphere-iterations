@@ -9,8 +9,10 @@ import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.NullKeyFieldException;
 import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.Value;
 import eu.stratosphere.pact.common.type.base.PactLong;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
+import eu.stratosphere.pact.iterative.nephele.util.OutputCollectorV2;
 import eu.stratosphere.pact.runtime.iterative.MutableHashTable;
 import eu.stratosphere.pact.runtime.iterative.MutableHashTable.HashBucketIterator;
 import eu.stratosphere.pact.runtime.plugable.PactRecordAccessorsV2;
@@ -27,7 +29,7 @@ public class UpdateableMatching extends IterationHead {
 	private int[] probeKeyPos;
 	private Class<? extends Key>[] keyClasses;
 	
-	private MutableHashTable<PactRecord, PactRecord> table;
+	private MutableHashTable<Value, Value> table;
 	
 	@Override
 	protected void initTask() {
@@ -39,8 +41,8 @@ public class UpdateableMatching extends IterationHead {
 	}
 	
 	@Override
-	public void finish(MutableObjectIterator<PactRecord> iter,
-			OutputCollector output) throws Exception {
+	public void finish(MutableObjectIterator<Value> iter,
+			OutputCollectorV2 output) throws Exception {
 		//HashBucketIterator<PactRecord, PactRecord> stateIter = table.getBuildSideIterator();
 		
 		//PactRecord record = new PactRecord();
@@ -48,29 +50,29 @@ public class UpdateableMatching extends IterationHead {
 	}
 
 	@Override
-	public void processInput(MutableObjectIterator<PactRecord> iter,
-			OutputCollector output) throws Exception {
+	public void processInput(MutableObjectIterator<Value> iter,
+			OutputCollectorV2 output) throws Exception {
 		initEnvManagers();
 		
 		// Load build side into table		
 		int chunckSize = 32*1024;
 		List<MemorySegment> joinMem = memoryManager.allocateStrict(this, (int) (memorySize/chunckSize), chunckSize);
 		
-		TypeAccessorsV2<PactRecord> buildAccess = new PactRecordAccessorsV2(buildKeyPos, keyClasses);
-		TypeAccessorsV2<PactRecord> probeAccess = new PactRecordAccessorsV2(probeKeyPos, keyClasses);
-		TypeComparator<PactRecord, PactRecord> comp = new PactRecordComparator();
+		TypeAccessorsV2 buildAccess = new PactRecordAccessorsV2(buildKeyPos, keyClasses);
+		TypeAccessorsV2 probeAccess = new PactRecordAccessorsV2(probeKeyPos, keyClasses);
+		TypeComparator comp = new PactRecordComparator();
 		
-		table = new MutableHashTable<PactRecord, PactRecord>(buildAccess, probeAccess, comp, 
+		table = new MutableHashTable<Value, Value>(buildAccess, probeAccess, comp, 
 				joinMem, ioManager);
-		table.open(inputs[1], EmptyMutableObjectIterator.<PactRecord>get());
+		table.open(inputs[1], EmptyMutableObjectIterator.<Value>get());
 		
 		// Process input as normally
 		processUpdates(iter, output);
 	}
 
 	@Override
-	public void processUpdates(MutableObjectIterator<PactRecord> iter,
-			OutputCollector output) throws Exception {
+	public void processUpdates(MutableObjectIterator<Value> iter,
+			OutputCollectorV2 output) throws Exception {
 		PactRecord state = new PactRecord();
 		PactRecord probe = new PactRecord();
 		PactLong value = new PactLong();
@@ -79,7 +81,7 @@ public class UpdateableMatching extends IterationHead {
 		int countUnchanged = 0;
 		
 		while(iter.next(probe)) {
-			HashBucketIterator<PactRecord, PactRecord> tableIter = table.getMatchesFor(probe);
+			HashBucketIterator<Value, Value> tableIter = table.getMatchesFor(probe);
 			if(tableIter.next(state)) {
 				long oldCid = state.getField(2, value).getValue();
 				long updateCid = probe.getField(1, value).getValue();

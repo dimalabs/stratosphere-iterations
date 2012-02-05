@@ -1,21 +1,18 @@
 package eu.stratosphere.pact.iterative.nephele.util;
 
-import java.util.ArrayDeque;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.Queue;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
 import eu.stratosphere.nephele.jobgraph.JobID;
-import eu.stratosphere.nephele.template.AbstractTask;
-import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
 
 public class BackTrafficQueueStore {
-	private volatile HashMap<String, BlockingQueue<Queue<PactRecord>>> iterOpenMap =
-			new HashMap<String, BlockingQueue<Queue<PactRecord>>>();
-	private volatile HashMap<String, BlockingQueue<Queue<PactRecord>>> iterEndMap =
-			new HashMap<String, BlockingQueue<Queue<PactRecord>>>();
+	private volatile HashMap<String, BlockingQueue<SerializedUpdateBuffer>> iterOpenMap =
+			new HashMap<String, BlockingQueue<SerializedUpdateBuffer>>();
+	private volatile HashMap<String, BlockingQueue<SerializedUpdateBuffer>> iterEndMap =
+			new HashMap<String, BlockingQueue<SerializedUpdateBuffer>>();
 	
 	private static final BackTrafficQueueStore store = new BackTrafficQueueStore();
 	
@@ -23,17 +20,17 @@ public class BackTrafficQueueStore {
 		return store;
 	}
 
-	public void addStructures(JobID jobID, int subTaskId, long memorySize) {
+	public void addStructures(JobID jobID, int subTaskId) {
 		synchronized(iterOpenMap) {
 			synchronized(iterEndMap) {
 				if(iterOpenMap.containsKey(getIdentifier(jobID, subTaskId))) {
 					throw new RuntimeException("Internal Error");
 				}
 				
-				BlockingQueue<Queue<PactRecord>> openQueue = 
-						new ArrayBlockingQueue<Queue<PactRecord>>(1);
-				BlockingQueue<Queue<PactRecord>> endQueue = 
-						new ArrayBlockingQueue<Queue<PactRecord>>(1);
+				BlockingQueue<SerializedUpdateBuffer> openQueue = 
+						new ArrayBlockingQueue<SerializedUpdateBuffer>(1);
+				BlockingQueue<SerializedUpdateBuffer> endQueue = 
+						new ArrayBlockingQueue<SerializedUpdateBuffer>(1);
 				
 				iterOpenMap.put(getIdentifier(jobID, subTaskId), openQueue);
 				iterEndMap.put(getIdentifier(jobID, subTaskId), endQueue);
@@ -54,30 +51,37 @@ public class BackTrafficQueueStore {
 		}
 	}
 	
-	public void publishUpdateQueue(JobID jobID, int subTaskId, int initialSize, AbstractTask task) {
-		publishUpdateQueue(jobID, subTaskId, initialSize, task, UpdateQueueStrategy.IN_MEMORY_SERIALIZED);
-	}
-	
-	public void publishUpdateQueue(JobID jobID, int subTaskId, int initialSize, AbstractTask task, 
-			UpdateQueueStrategy strategy) {
-		BlockingQueue<Queue<PactRecord>> queue = 
+	public void publishUpdateBuffer(JobID jobID, int subTaskId, SerializedUpdateBuffer buffer) {
+		//publishUpdateBuffer(jobID, subTaskId, memorySegments, segmentSize, UpdateQueueStrategy.IN_MEMORY_SERIALIZED);
+		BlockingQueue<SerializedUpdateBuffer> queue = 
 				 safeRetrieval(iterOpenMap, getIdentifier(jobID, subTaskId));
 		if(queue == null) {
 			throw new RuntimeException("Internal Error");
 		}
 		
-		queue.add(strategy.getUpdateQueueFactory().createQueue(jobID, subTaskId, initialSize, task));
+		queue.add(buffer);
 	}
 	
-	public synchronized Queue<PactRecord> receiveUpdateQueue(JobID jobID, int subTaskId) throws InterruptedException {
-		BlockingQueue<Queue<PactRecord>> queue = null;
+	public void publishUpdateBuffer(JobID jobID, int subTaskId, List<MemorySegment> memorySegments, int segmentSize, 
+			UpdateQueueStrategy strategy) {
+		BlockingQueue<SerializedUpdateBuffer> queue = 
+				 safeRetrieval(iterOpenMap, getIdentifier(jobID, subTaskId));
+		if(queue == null) {
+			throw new RuntimeException("Internal Error");
+		}
+		
+		queue.add(strategy.getUpdateBufferFactory().createBuffer(jobID, subTaskId, memorySegments, segmentSize));
+	}
+	
+	public synchronized SerializedUpdateBuffer receiveUpdateBuffer(JobID jobID, int subTaskId) throws InterruptedException {
+		BlockingQueue<SerializedUpdateBuffer> queue = null;
 		int count = 0;
 		while(queue == null) {
 			queue = safeRetrieval(iterOpenMap, getIdentifier(jobID, subTaskId));
 			if(queue == null) {
-				Thread.sleep(1000);
+				Thread.sleep(100);
 				count++;
-				if(count == 10) {
+				if(count == 100) {
 					throw new RuntimeException("Internal Error");
 				}
 			}
@@ -86,18 +90,18 @@ public class BackTrafficQueueStore {
 		return queue.take();
 	}
 	
-	public void publishIterationEnd(JobID jobID, int subTaskId, Queue<PactRecord> outputQueue) {
-		BlockingQueue<Queue<PactRecord>> queue = 
+	public void publishIterationEnd(JobID jobID, int subTaskId, SerializedUpdateBuffer outputBuffer) {
+		BlockingQueue<SerializedUpdateBuffer> queue = 
 				 safeRetrieval(iterEndMap, getIdentifier(jobID, subTaskId));
 		if(queue == null) {
 			throw new RuntimeException("Internal Error");
 		}
 		
-		queue.add(outputQueue);
+		queue.add(outputBuffer);
 	}
 	
-	public Queue<PactRecord> receiveIterationEnd(JobID jobID, int subTaskId) throws InterruptedException {
-		BlockingQueue<Queue<PactRecord>> queue = 
+	public SerializedUpdateBuffer receiveIterationEnd(JobID jobID, int subTaskId) throws InterruptedException {
+		BlockingQueue<SerializedUpdateBuffer> queue = 
 				safeRetrieval(iterEndMap, getIdentifier(jobID, subTaskId));
 		if(queue == null) {
 			throw new RuntimeException("Internal Error");
@@ -117,51 +121,52 @@ public class BackTrafficQueueStore {
 		return jobID.toString() + "#" + subTaskId;
 	}
 	
-	private interface UpdateQueueFactory {
-		public Queue<PactRecord> createQueue(JobID id, int subTaskId, int initialSize, AbstractTask task);
+	private interface UpdateBufferFactory {
+		public SerializedUpdateBuffer createBuffer(JobID id, int subTaskId, 
+				List<MemorySegment> memorySegments, int segmentSize);
 	}
 	
 	public enum UpdateQueueStrategy {
-		IN_MEMORY_OBJECTS(getInstance().new ObjectQueueFactory()),
-		IN_MEMORY_SERIALIZED(getInstance().new SerializingQueueFactory());
+		//IN_MEMORY_OBJECTS(getInstance().new ObjectQueueFactory()),
+		IN_MEMORY_SERIALIZED(getInstance().new SerializingBufferFactory());
 		
-		UpdateQueueFactory factory;
+		UpdateBufferFactory factory;
 		
-		UpdateQueueStrategy(UpdateQueueFactory factory) {
+		UpdateQueueStrategy(UpdateBufferFactory factory) {
 			this.factory = factory;
 		}
 		
-		protected UpdateQueueFactory getUpdateQueueFactory() {
+		protected UpdateBufferFactory getUpdateBufferFactory() {
 			return factory;
 		}
 	}
 	
-	private class ObjectQueueFactory implements UpdateQueueFactory {
-		@Override
-		@SuppressWarnings("serial")
-		public Queue<PactRecord> createQueue(JobID id, int subTaskId, int initialSize, final AbstractTask task) {
-			return new ArrayDeque<PactRecord>(initialSize) {
-				@Override
-				public boolean add(PactRecord rec) {
-					PactRecord copy = new PactRecord(rec.getNumFields());
-					rec.copyTo(copy);
-					
-					return super.add(copy);
-				}
-				
-				@Override
-				public boolean addAll(Collection<? extends PactRecord> c) {
-					throw new UnsupportedOperationException("Not implemented");
-				}
-			};
-		}
-	}
+//	private class ObjectQueueFactory implements UpdateQueueFactory {
+//		@Override
+//		@SuppressWarnings("serial")
+//		public Queue<PactRecord> createQueue(JobID id, int subTaskId, int initialSize, final AbstractTask task) {
+//			return new ArrayDeque<PactRecord>(initialSize) {
+//				@Override
+//				public boolean add(PactRecord rec) {
+//					PactRecord copy = new PactRecord(rec.getNumFields());
+//					rec.copyTo(copy);
+//					
+//					return super.add(copy);
+//				}
+//				
+//				@Override
+//				public boolean addAll(Collection<? extends PactRecord> c) {
+//					throw new UnsupportedOperationException("Not implemented");
+//				}
+//			};
+//		}
+//	}
 	
-	private class SerializingQueueFactory implements UpdateQueueFactory {		
+	private class SerializingBufferFactory implements UpdateBufferFactory {		
 		@Override
-		public Queue<PactRecord> createQueue(final JobID jobID, final int subTaskId,
-				int initialSize, final AbstractTask task) {
-			return new SerializingQueue(task);
+		public SerializedUpdateBuffer createBuffer(final JobID jobID, final int subTaskId,
+				List<MemorySegment> memorySegments, int segmentSize) {
+			return new SerializedUpdateBuffer(memorySegments, segmentSize);
 		}
 		
 	}

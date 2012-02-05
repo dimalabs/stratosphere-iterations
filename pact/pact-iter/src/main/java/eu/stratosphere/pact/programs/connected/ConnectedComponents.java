@@ -20,6 +20,7 @@ import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.base.PactLong;
+import eu.stratosphere.pact.iterative.nephele.tasks.TempTaskV2;
 import eu.stratosphere.pact.iterative.nephele.tasks.UpdateableMatching;
 import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.RankOutput;
 import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.RankReduce;
@@ -62,7 +63,7 @@ public class ConnectedComponents {
 		initialUpdateAssigner.setVertexToShareInstancesWith(sourceVertex);
 		
 		JobTaskVertex tmpTask = new JobTaskVertex("TempTask", graph);
-		tmpTask.setTaskClass(TempTask.class);
+		tmpTask.setTaskClass(TempTaskV2.class);
 		tmpTask.setNumberOfSubtasks(dop);
 		tmpTask.setNumberOfSubtasksPerInstance(spi);
 		tmpTask.setVertexToShareInstancesWith(sourceVertex);

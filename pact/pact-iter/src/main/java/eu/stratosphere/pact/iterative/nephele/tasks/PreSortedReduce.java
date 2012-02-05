@@ -1,11 +1,17 @@
 package eu.stratosphere.pact.iterative.nephele.tasks;
 
+import java.util.Iterator;
+
+import eu.stratosphere.pact.common.stubs.Collector;
 import eu.stratosphere.pact.common.stubs.ReduceStub;
 import eu.stratosphere.pact.common.type.Key;
+import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.Value;
 import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
 import eu.stratosphere.pact.runtime.util.KeyGroupedIterator;
+import eu.stratosphere.pact.runtime.util.KeyGroupedMutableObjectIteratorV2;
 
-public class PreSortedReduce extends AbstractIterativeTask {
+public abstract class PreSortedReduce<T> extends AbstractIterativeTask {
 
 	private int[] keyPos;
 	private Class<? extends Key>[] keyClasses;
@@ -27,7 +33,8 @@ public class PreSortedReduce extends AbstractIterativeTask {
 	
 	@Override
 	public void invokeIter(IterationIterator iterationIter) throws Exception {
-		KeyGroupedIterator iter = new KeyGroupedIterator(iterationIter, keyPos, keyClasses);
+		KeyGroupedMutableObjectIteratorV2<? extends Value> iter = 
+				new KeyGroupedMutableObjectIteratorV2(iterationIter, accessor);
 		
 		// run stub implementation
 		while (iter.nextKey())
@@ -35,6 +42,8 @@ public class PreSortedReduce extends AbstractIterativeTask {
 			stub.reduce(iter.getValues(), output);
 		}
 	}
+	
+	public abstract void reduce(Iterator<PactRecord> records, Collector out) throws Exception;
 
 	@Override
 	public int getNumberOfInputs() {

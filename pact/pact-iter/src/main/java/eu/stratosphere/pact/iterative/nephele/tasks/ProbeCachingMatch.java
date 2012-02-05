@@ -2,13 +2,17 @@ package eu.stratosphere.pact.iterative.nephele.tasks;
 
 import eu.stratosphere.pact.common.stubs.MatchStub;
 import eu.stratosphere.pact.common.type.Key;
+import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.Value;
 import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
 import eu.stratosphere.pact.runtime.hash.BuildFirstHashMatchIterator;
+import eu.stratosphere.pact.runtime.plugable.PactRecordAccessorsV2;
 import eu.stratosphere.pact.runtime.resettable.SpillingResettableMutableObjectIterator;
+import eu.stratosphere.pact.runtime.resettable.SpillingResettableMutableObjectIteratorV2;
 
 public class ProbeCachingMatch extends AbstractIterativeTask {
 	
-	private SpillingResettableMutableObjectIterator probeIter;
+	private SpillingResettableMutableObjectIteratorV2<? extends Value> probeIter;
 	private int[] buildKeyPos;
 	private int[] probeKeyPos;
 	private Class<? extends Key>[] keyClasses;
@@ -27,8 +31,8 @@ public class ProbeCachingMatch extends AbstractIterativeTask {
 	@Override
 	public void invokeStart() throws Exception {
 		initEnvManagers();
-		probeIter = new SpillingResettableMutableObjectIterator(
-				memoryManager, ioManager, inputs[1],
+		probeIter = new SpillingResettableMutableObjectIteratorV2(
+				memoryManager, ioManager, inputs[1], accessor,
 				memorySize, this);
 		probeIter.open();
 	}
