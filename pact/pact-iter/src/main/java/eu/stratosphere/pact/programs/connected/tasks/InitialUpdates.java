@@ -2,12 +2,14 @@ package eu.stratosphere.pact.programs.connected.tasks;
 
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 import eu.stratosphere.pact.programs.connected.types.ComponentUpdate;
+import eu.stratosphere.pact.programs.connected.types.ComponentUpdateAccessor;
 import eu.stratosphere.pact.programs.connected.types.TransitiveClosureEntry;
 
 public class InitialUpdates extends AbstractMinimalTask {
 
 	@Override
 	protected void initTask() {
+		outputAccessors[0] = new ComponentUpdateAccessor();
 	}
 
 	@Override

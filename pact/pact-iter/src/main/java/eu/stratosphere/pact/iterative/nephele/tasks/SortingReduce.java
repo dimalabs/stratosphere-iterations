@@ -4,7 +4,9 @@ import java.util.Comparator;
 
 import eu.stratosphere.pact.common.stubs.ReduceStub;
 import eu.stratosphere.pact.common.type.Key;
+import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
+import eu.stratosphere.pact.iterative.nephele.util.PactRecordCollector;
 import eu.stratosphere.pact.runtime.sort.UnilateralSortMerger;
 import eu.stratosphere.pact.runtime.util.KeyComparator;
 import eu.stratosphere.pact.runtime.util.KeyGroupedIterator;
@@ -35,25 +37,22 @@ public class SortingReduce extends AbstractIterativeTask {
 	}
 	
 	@Override
-	public void invokeStart() throws Exception {
-		initEnvironmentManagers();
-	}
-	
-	@Override
 	public void runIteration(IterationIterator iterationIter) throws Exception {
+		MutableObjectIterator typeHidingIter = iterationIter;
 		try {
 			sorter = new UnilateralSortMerger(memoryManager, ioManager, memorySize, 64, comparators, 
-					keyPos, keyClasses, iterationIter, this, 0.8f);
+					keyPos, keyClasses, typeHidingIter, this, 0.8f);
 		} catch (Exception ex) {
 			throw new RuntimeException("Error creating sorter", ex);
 		}
 		
 		KeyGroupedIterator iter = new KeyGroupedIterator(sorter.getIterator(), keyPos, keyClasses);
 		
+		PactRecordCollector collector = new PactRecordCollector(output);
 		// run stub implementation
 		while (iter.nextKey())
 		{
-			stub.reduce(iter.getValues(), output);
+			stub.reduce(iter.getValues(), collector);
 		}
 		
 		sorter.close();

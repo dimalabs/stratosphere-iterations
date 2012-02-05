@@ -12,10 +12,11 @@ import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.util.OutputCollectorV2;
 import eu.stratosphere.pact.programs.connected.types.ComponentUpdate;
 import eu.stratosphere.pact.programs.connected.types.ComponentUpdateAccessor;
+import eu.stratosphere.pact.programs.connected.types.LazyTransitiveClosureEntry;
 import eu.stratosphere.pact.programs.connected.types.TransitiveClosureEntry;
 import eu.stratosphere.pact.programs.connected.types.TransitiveClosureEntryAccessors;
 import eu.stratosphere.pact.runtime.iterative.MutableHashTable;
-import eu.stratosphere.pact.runtime.iterative.MutableHashTable.HashBucketIterator;
+import eu.stratosphere.pact.runtime.iterative.MutableHashTable.LazyHashBucketIterator;
 import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
 import eu.stratosphere.pact.runtime.plugable.TypeComparator;
 import eu.stratosphere.pact.runtime.util.EmptyMutableObjectIterator;
@@ -57,21 +58,21 @@ public class UpdateableMatching extends IterationHead {
 	@Override
 	public void processUpdates(MutableObjectIterator<Value> iter,
 			OutputCollectorV2 output) throws Exception {
-		TransitiveClosureEntry state = new TransitiveClosureEntry();
+		LazyTransitiveClosureEntry state = new LazyTransitiveClosureEntry();
 		ComponentUpdate probe = new ComponentUpdate();
 		
 		int countUpdated = 0;
 		int countUnchanged = 0;
 		
 		while(iter.next(probe)) {
-			HashBucketIterator<Value, ComponentUpdate> tableIter = table.getMatchesFor(probe);
+			LazyHashBucketIterator<Value, ComponentUpdate> tableIter = table.getLazyMatchesFor(probe);
 			if(tableIter.next(state)) {
 				long oldCid = state.getCid();
 				long updateCid = probe.getCid();
 				
 				if(updateCid < oldCid) {
 					state.setCid(updateCid);
-					tableIter.writeBack(state);
+					//tableIter.writeBack(state);
 					output.collect(state);
 					countUpdated++;
 				} else {
