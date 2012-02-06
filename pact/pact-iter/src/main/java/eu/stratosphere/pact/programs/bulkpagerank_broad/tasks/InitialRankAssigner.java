@@ -15,7 +15,7 @@ public class InitialRankAssigner extends AbstractMinimalTask {
 	}
 
 	@Override
-	public void invoke() throws Exception {
+	public void run() throws Exception {
 		PactRecord rec = new PactRecord();
 		PactDouble initialRank = new PactDouble(1d / 14052);
 		

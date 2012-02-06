@@ -6,10 +6,6 @@ import eu.stratosphere.pact.iterative.nephele.util.IterationIterator;
 
 public class Forward extends AbstractIterativeTask {
 	PactRecord rec = new PactRecord();
-	
-	@Override
-	public void invokeStart() throws Exception {
-	}
 
 	@Override
 	public void cleanup() throws Exception {

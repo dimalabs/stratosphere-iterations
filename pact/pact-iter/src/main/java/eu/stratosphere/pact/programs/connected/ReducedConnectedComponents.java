@@ -20,6 +20,7 @@ import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.common.type.base.PactLong;
 import eu.stratosphere.pact.iterative.nephele.tasks.SortingReduce;
+import eu.stratosphere.pact.iterative.nephele.util.NepheleUtil;
 import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.RankOutput;
 import eu.stratosphere.pact.programs.connected.tasks.ConvertRecordToUpdate;
 import eu.stratosphere.pact.programs.connected.tasks.ConvertToTransitiveClosureTypes;
@@ -65,12 +66,12 @@ public class ReducedConnectedComponents {
 		
 		JobTaskVertex tmpTask = createTask(UpdateTempTask.class, graph, dop);
 		tmpTask.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(tmpTask, baseMemory / 8);
+		setMemorySize(tmpTask, baseMemory*1 / 8);
 		
 		//Inner iteration loop tasks -- START		
 		JobTaskVertex updatesMatch = createTask(UpdateableMatching.class, graph, dop, spi);
 		updatesMatch.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(updatesMatch, baseMemory/3);
+		setMemorySize(updatesMatch, baseMemory*3/8);
 		
 		JobTaskVertex distributeUpdates = createTask(SendUpdates.class, graph, dop, spi);
 		distributeUpdates.setVertexToShareInstancesWith(sourceVertex);
@@ -80,15 +81,15 @@ public class ReducedConnectedComponents {
 		
 		JobTaskVertex reduceUpdates = createTask(SortingReduce.class, graph, dop, spi);
 		reduceUpdates.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(reduceUpdates, baseMemory/3);
+		setMemorySize(reduceUpdates, baseMemory*4/8);
 		setReduceInformation(reduceUpdates, UpdateReduce.class, 
 				new int[] {0}, new Class[] {PactLong.class});
 		
 		JobTaskVertex convUp = createTask(ConvertRecordToUpdate.class, graph, dop, spi);
 		convUp.setVertexToShareInstancesWith(sourceVertex);
 		
-		JobTaskVertex countUpdates = createTask(CountUpdates.class, graph, dop, spi);
-		countUpdates.setVertexToShareInstancesWith(sourceVertex);
+//		JobTaskVertex countUpdates = createTask(CountUpdates.class, graph, dop, spi);
+//		countUpdates.setVertexToShareInstancesWith(sourceVertex);
 		//Inner iteration loop tasks -- END
 		
 		JobOutputVertex sinkVertex = createOutput(RankOutput.class, output, graph, dop, spi);
@@ -106,12 +107,15 @@ public class ReducedConnectedComponents {
 		connectJobVertices(ShipStrategy.FORWARD, reduceUpdates, convUp, null, null);
 		
 		
-		
-		connectFixedPointIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {distributeUpdates,
-				countUpdates}, 
-				convUp, countUpdates, updatesMatch, 
-				ShipStrategy.FORWARD, 
-				EmptyTerminationDecider.class, graph);
+
+		NepheleUtil.connectBoundedRoundsIterationLoop(tmpTask, sinkVertex, 
+				new JobTaskVertex[] {distributeUpdates}, 
+				convUp, updatesMatch, ShipStrategy.PARTITION_HASH, 14, graph);
+//		connectFixedPointIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {distributeUpdates,
+//				countUpdates}, 
+//				convUp, countUpdates, updatesMatch, 
+//				ShipStrategy.FORWARD, 
+//				EmptyTerminationDecider.class, graph);
 		
 		connectJobVertices(ShipStrategy.FORWARD, initialState, updatesMatch, null, null);
 		

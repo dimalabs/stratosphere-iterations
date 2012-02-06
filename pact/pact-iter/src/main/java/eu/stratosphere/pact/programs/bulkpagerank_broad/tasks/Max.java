@@ -10,10 +10,6 @@ public class Max extends AbstractIterativeTask {
 	PactDouble number = new PactDouble();
 	
 	@Override
-	public void invokeStart() throws Exception {
-	}
-
-	@Override
 	public void cleanup() throws Exception {
 	}
 

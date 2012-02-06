@@ -41,9 +41,7 @@ public class GroupNeighbours extends AbstractMinimalTask {
 	}
 
 	@Override
-	public void invoke() throws Exception {
-		initEnvironmentManagers();
-		
+	public void run() throws Exception {		
 		RecordWriter<PactRecord> nodeWriter = output.getWriters().get(0);
 		RecordWriter<PactRecord> neighbourWriter = output.getWriters().get(1);
 		
