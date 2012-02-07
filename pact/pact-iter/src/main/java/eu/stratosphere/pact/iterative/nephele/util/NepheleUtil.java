@@ -187,18 +187,22 @@ public class NepheleUtil {
 		//Create a connection between iteration head and iteration output
 		connectJobVertices(ShipStrategy.FORWARD, iterationHead, iterationOutput, null, null);
 		
-		//Create a connection between inner loop end and iteration tail
-		connectJobVertices(iterationInputShipStrategy, innerLoopEnd, iterationTail, null, null);
-		
 		//Create direct connection between head and tail for nephele placement
 		connectJobVertices(ShipStrategy.FORWARD, iterationHead, iterationTail, null, null);
 		//Connect synchronization task with head and tail
 		connectJobVertices(ShipStrategy.BROADCAST, iterationTail, iterationStateSynchronizer, null, null);
 		connectJobVertices(ShipStrategy.BROADCAST, iterationHead, iterationStateSynchronizer, null, null);
 		
-		//Create a connection between iteration head and inner loop starts
-		for (JobTaskVertex innerLoopStart : innerLoopStarts) {
-			connectJobVertices(ShipStrategy.FORWARD, iterationHead, innerLoopStart, null, null);
+		if(!(innerLoopStarts == null && innerLoopEnd == null)) {
+			//Create a connection between iteration head and inner loop starts
+			for (JobTaskVertex innerLoopStart : innerLoopStarts) {
+				connectJobVertices(ShipStrategy.FORWARD, iterationHead, innerLoopStart, null, null);
+			}	
+			//Create a connection between inner loop end and iteration tail
+			connectJobVertices(iterationInputShipStrategy, innerLoopEnd, iterationTail, null, null);
+		} else {
+			//Create a connection between inner loop end and iteration tail
+			connectJobVertices(iterationInputShipStrategy, iterationHead, iterationTail, null, null);
 		}
 		
 		//Connect synchronization task with dummy output
@@ -248,9 +252,6 @@ public class NepheleUtil {
 		//Create a connection between iteration head and iteration output
 		connectJobVertices(ShipStrategy.FORWARD, iterationHead, iterationOutput, null, null);
 		
-		//Create a connection between inner loop end and iteration tail
-		connectJobVertices(iterationInputShipStrategy, innerLoopEnd, iterationTail, null, null);
-		
 		//Create a connection between termination output and termination decider
 		connectJobVertices(ShipStrategy.BROADCAST, terminationDataVertex, terminationDeciderTask, null, null);
 		
@@ -266,6 +267,9 @@ public class NepheleUtil {
 		for (JobTaskVertex innerLoopStart : innerLoopStarts) {
 			connectJobVertices(ShipStrategy.FORWARD, iterationHead, innerLoopStart, null, null);
 		}
+		
+		//Create a connection between inner loop end and iteration tail
+				connectJobVertices(iterationInputShipStrategy, innerLoopEnd, iterationTail, null, null);
 		
 		//Connect synchronization task with dummy output
 		connectJobVertices(ShipStrategy.FORWARD, iterationStateSynchronizer, dummySinkA, null, null);

@@ -46,13 +46,10 @@ public class SerializedUpdateBuffer
 		this.emptyBuffers = new ArrayDeque<MemorySegment>();
 		this.internalFullBuffers = new ArrayDeque<MemorySegment>();
 		this.readBuffers = new ArrayDeque<MemorySegment>();
-			
-		emptyBufferSource = getNonBlockingSource(this.emptyBuffers);
 		
-		// load the memory
-		for (int i = memSegments.size() - 1; i >= 0; --i) {
-			this.emptyBuffers.add(memSegments.remove(i));
-		}
+		this.emptyBuffers.addAll(memSegments);
+		
+		emptyBufferSource = getNonBlockingSourceError(this.emptyBuffers);
 		
 		// views may only be instantiated after the memory has been loaded
 		this.writeEnd = new WriteEnd(this.internalFullBuffers, emptyBufferSource, segmentSize);
@@ -87,19 +84,34 @@ public class SerializedUpdateBuffer
 		final MemorySegmentSource readBufferSource;
 		final MemorySegmentSource emptyBufferSource;
 		
-		emptyBufferSource = getNonBlockingSource(this.emptyBuffers);
+		emptyBufferSource = getNonBlockingSourceError(this.emptyBuffers);
 		readBufferSource = getNonBlockingSource(this.readBuffers);
 		
 		this.readEnd = new ReadEnd(this.emptyBuffers, readBufferSource, segmentSize);
-		this.writeEnd = new WriteEnd(this.internalFullBuffers, emptyBufferSource, segmentSize);
+		//this.writeEnd = new WriteEnd(this.internalFullBuffers, emptyBufferSource, segmentSize);
 	}
 	
 	private MemorySegmentSource getNonBlockingSource(final Queue<MemorySegment> source)
 	{
 		return new MemorySegmentSource() {
 			@Override
-			public MemorySegment nextSegment() {
+			public MemorySegment nextSegment() {				
 				return source.poll();
+			}
+		};
+	}
+	
+	private MemorySegmentSource getNonBlockingSourceError(final Queue<MemorySegment> source)
+	{
+		return new MemorySegmentSource() {
+			@Override
+			public MemorySegment nextSegment() {
+				MemorySegment seg = source.poll();
+				if(seg == null) {
+					throw new RuntimeException("No more segments");
+				}
+				
+				return seg;
 			}
 		};
 	}

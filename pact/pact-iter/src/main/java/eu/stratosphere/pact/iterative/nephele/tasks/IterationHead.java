@@ -24,14 +24,14 @@ import eu.stratosphere.pact.iterative.nephele.util.SerializedUpdateBuffer;
 public abstract class IterationHead extends AbstractMinimalTask {
 	
 	protected static final Log LOG = LogFactory.getLog(IterationHead.class);
-	protected static final int MEMORY_SEGMENT_SIZE = 64*1024;
+	protected static final int MEMORY_SEGMENT_SIZE = 512*1024;
 	
 	public static final String FIXED_POINT_TERMINATOR = "pact.iter.fixedpoint";
 	public static final String NUMBER_OF_ITERATIONS = "pact.iter.numiterations";
 	
 	private ClosedListener channelStateListener;
 	private ClosedListener terminationStateListener;
-	private int numInternalOutputs;
+	protected int numInternalOutputs;
 	private int updateBufferSize = -1;
 	
 	private volatile boolean finished = false;
