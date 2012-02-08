@@ -29,12 +29,12 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	public static final String FIXED_POINT_TERMINATOR = "pact.iter.fixedpoint";
 	public static final String NUMBER_OF_ITERATIONS = "pact.iter.numiterations";
 	
-	private ClosedListener channelStateListener;
-	private ClosedListener terminationStateListener;
+	protected ClosedListener channelStateListener;
+	protected ClosedListener terminationStateListener;
 	protected int numInternalOutputs;
-	private int updateBufferSize = -1;
+	protected int updateBufferSize = -1;
 	
-	private volatile boolean finished = false;
+	protected volatile boolean finished = false;
 	
 	@Override
 	protected void initTask() {
@@ -202,7 +202,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		return bld.toString();
 	}
 	
-	private RecordWriter<Value>[] getIterationRecordWriters() {
+	protected RecordWriter<Value>[] getIterationRecordWriters() {
 		int numIterOutputs = this.config.getNumOutputs() - numInternalOutputs;
 		
 		@SuppressWarnings("unchecked")
@@ -214,7 +214,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		return writers;
 	}
 	
-	private OutputGate<? extends Record>[] getIterationOutputGates() {
+	protected OutputGate<? extends Record>[] getIterationOutputGates() {
 		int numIterOutputs = this.config.getNumOutputs() - numInternalOutputs;
 		
 		@SuppressWarnings("unchecked")
@@ -226,7 +226,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		return gates;
 	}
 	
-	private class ClosedListener implements EventListener {
+	protected class ClosedListener implements EventListener {
 		volatile Object object = new Object();
 		volatile ChannelState state;
 		volatile boolean updated = false;
@@ -267,7 +267,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		}
 	}
 	
-	private class FixedRoundListener extends ClosedListener {
+	protected class FixedRoundListener extends ClosedListener {
 		int numRounds;
 		int currentRound;
 		

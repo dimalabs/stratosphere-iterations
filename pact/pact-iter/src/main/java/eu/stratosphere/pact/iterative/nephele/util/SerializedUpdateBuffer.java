@@ -36,6 +36,12 @@ public class SerializedUpdateBuffer
 	private volatile boolean closed;
 	
 	
+	public SerializedUpdateBuffer() {
+		emptyBuffers = null;
+		internalFullBuffers = null;
+		readBuffers = null;
+		segmentSize = -1;
+	}
 	
 	public SerializedUpdateBuffer(List<MemorySegment> memSegments, int segmentSize)
 	{
@@ -88,7 +94,7 @@ public class SerializedUpdateBuffer
 		readBufferSource = getNonBlockingSource(this.readBuffers);
 		
 		this.readEnd = new ReadEnd(this.emptyBuffers, readBufferSource, segmentSize);
-		//this.writeEnd = new WriteEnd(this.internalFullBuffers, emptyBufferSource, segmentSize);
+		this.writeEnd = new WriteEnd(this.internalFullBuffers, emptyBufferSource, segmentSize);
 	}
 	
 	private MemorySegmentSource getNonBlockingSource(final Queue<MemorySegment> source)
@@ -118,7 +124,7 @@ public class SerializedUpdateBuffer
 	
 	// ============================================================================================
 	
-	private static final class WriteEnd extends AbstractPagedOutputViewV2
+	protected static final class WriteEnd extends AbstractPagedOutputViewV2
 	{	
 		private final Queue<MemorySegment> fullBufferTarget;
 		
@@ -149,7 +155,7 @@ public class SerializedUpdateBuffer
 		}
 	}
 	
-	private static final class ReadEnd extends AbstractPagedInputViewV2
+	protected static final class ReadEnd extends AbstractPagedInputViewV2
 	{
 		private final Queue<MemorySegment> emptyBufferTarget;
 		

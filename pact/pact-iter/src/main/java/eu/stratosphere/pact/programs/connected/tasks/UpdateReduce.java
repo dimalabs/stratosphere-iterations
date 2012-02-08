@@ -29,5 +29,12 @@ public class UpdateReduce extends ReduceStub {
 		rec.setField(1, cid);
 		out.collect(rec);
 	}
+	
+	@Override
+	public void combine(Iterator<PactRecord> records, Collector out)
+			throws Exception {
+		reduce(records, out);
+		return;
+	}
 
 }

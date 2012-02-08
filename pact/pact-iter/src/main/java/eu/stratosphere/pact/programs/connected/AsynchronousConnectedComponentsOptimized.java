@@ -18,15 +18,17 @@ import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.iterative.nephele.util.NepheleUtil;
 import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.RankOutput;
+import eu.stratosphere.pact.programs.connected.tasks.AsynchronousUpdateableMatchingOptimized;
 import eu.stratosphere.pact.programs.connected.tasks.ConvertToTransitiveClosureTypes;
 import eu.stratosphere.pact.programs.connected.tasks.FastTempTask;
 import eu.stratosphere.pact.programs.connected.tasks.InitialStateComponents;
 import eu.stratosphere.pact.programs.connected.tasks.InitialUpdates;
+import eu.stratosphere.pact.programs.connected.tasks.UpdateTempTask;
 import eu.stratosphere.pact.programs.connected.tasks.UpdateableMatchingOptimized;
 import eu.stratosphere.pact.programs.inputs.AdjListInput;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
-public class ConnectedComponentsOptimized {	
+public class AsynchronousConnectedComponentsOptimized {	
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
 		if(args.length != 5) {
@@ -59,7 +61,7 @@ public class ConnectedComponentsOptimized {
 		setMemorySize(tmpTask, baseMemory / 8);
 		
 		//Inner iteration loop tasks -- START		
-		JobTaskVertex updatesMatch = createTask(UpdateableMatchingOptimized.class, graph, dop, spi);
+		JobTaskVertex updatesMatch = createTask(AsynchronousUpdateableMatchingOptimized.class, graph, dop, spi);
 		updatesMatch.setVertexToShareInstancesWith(sourceVertex);
 		setMemorySize(updatesMatch, baseMemory*7/8);
 		
@@ -78,7 +80,7 @@ public class ConnectedComponentsOptimized {
 		connectJobVertices(ShipStrategy.FORWARD, initialUpdateAssigner, tmpTask, null, null);
 		
 		
-		NepheleUtil.connectBoundedRoundsIterationLoop(tmpTask, sinkVertex, null, 
+		NepheleUtil.connectAsyncBoundedRoundsIterationLoop(tmpTask, sinkVertex, null, 
 				null, updatesMatch, ShipStrategy.PARTITION_HASH, 14, graph);
 //		connectFixedPointIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {distributeUpdates,
 //				countUpdates}, 

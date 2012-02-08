@@ -28,6 +28,7 @@ import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.iterative.nephele.bulk.BulkIterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
+import eu.stratosphere.pact.iterative.nephele.tasks.AsynchronousIterationTail;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationStateSynchronizer;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
@@ -171,6 +172,56 @@ public class NepheleUtil {
 		
 		//Create iteration tail
 		JobTaskVertex iterationTail = createTask(IterationTail.class, graph, dop, spi);
+		iterationTail.setVertexToShareInstancesWith(iterationInput);
+		
+		//Create synchronization task
+		JobTaskVertex iterationStateSynchronizer = createTask(IterationStateSynchronizer.class, graph, 1);
+		iterationStateSynchronizer.setVertexToShareInstancesWith(iterationInput);
+		
+		//Create dummy sink for synchronization point so that nephele does not complain
+		JobOutputVertex dummySinkA = createDummyOutput(graph, 1);
+		dummySinkA.setVertexToShareInstancesWith(iterationInput);
+
+		//Create a connection between iteration input and iteration head
+		connectJobVertices(iterationInputShipStrategy, iterationInput, iterationHead, null, null);
+		
+		//Create a connection between iteration head and iteration output
+		connectJobVertices(ShipStrategy.FORWARD, iterationHead, iterationOutput, null, null);
+		
+		//Create direct connection between head and tail for nephele placement
+		connectJobVertices(ShipStrategy.FORWARD, iterationHead, iterationTail, null, null);
+		//Connect synchronization task with head and tail
+		connectJobVertices(ShipStrategy.BROADCAST, iterationTail, iterationStateSynchronizer, null, null);
+		connectJobVertices(ShipStrategy.BROADCAST, iterationHead, iterationStateSynchronizer, null, null);
+		
+		if(!(innerLoopStarts == null && innerLoopEnd == null)) {
+			//Create a connection between iteration head and inner loop starts
+			for (JobTaskVertex innerLoopStart : innerLoopStarts) {
+				connectJobVertices(ShipStrategy.FORWARD, iterationHead, innerLoopStart, null, null);
+			}	
+			//Create a connection between inner loop end and iteration tail
+			connectJobVertices(iterationInputShipStrategy, innerLoopEnd, iterationTail, null, null);
+		} else {
+			//Create a connection between inner loop end and iteration tail
+			connectJobVertices(iterationInputShipStrategy, iterationHead, iterationTail, null, null);
+		}
+		
+		//Connect synchronization task with dummy output
+		connectJobVertices(ShipStrategy.FORWARD, iterationStateSynchronizer, dummySinkA, null, null);
+	}
+	
+	public static void connectAsyncBoundedRoundsIterationLoop(AbstractJobVertex iterationInput, AbstractJobVertex iterationOutput,
+			JobTaskVertex[] innerLoopStarts, JobTaskVertex innerLoopEnd, JobTaskVertex iterationHead, 
+			ShipStrategy iterationInputShipStrategy, int numRounds, JobGraph graph) throws JobGraphDefinitionException {
+		int dop = iterationInput.getNumberOfSubtasks();
+		int spi = iterationInput.getNumberOfSubtasksPerInstance();
+		
+
+		iterationHead.getConfiguration().setBoolean(IterationHead.FIXED_POINT_TERMINATOR, false);
+		iterationHead.getConfiguration().setInteger(IterationHead.NUMBER_OF_ITERATIONS, numRounds);
+		
+		//Create iteration tail
+		JobTaskVertex iterationTail = createTask(AsynchronousIterationTail.class, graph, dop, spi);
 		iterationTail.setVertexToShareInstancesWith(iterationInput);
 		
 		//Create synchronization task
