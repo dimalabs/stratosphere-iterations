@@ -47,7 +47,7 @@ public class UpdateableMatchingOptimized extends IterationHead {
 	public void processInput(MutableObjectIterator<Value> iter,
 			OutputCollectorV2 output) throws Exception {		
 		// Load build side into table		
-		int chunckSize = 64*1024;
+		int chunckSize = UpdateableMatching.MATCH_CHUNCK_SIZE;
 		List<MemorySegment> joinMem = memoryManager.allocateStrict(this, (int) (memorySize/chunckSize), chunckSize);
 		
 		TypeAccessorsV2 buildAccess = new TransitiveClosureEntryAccessors();

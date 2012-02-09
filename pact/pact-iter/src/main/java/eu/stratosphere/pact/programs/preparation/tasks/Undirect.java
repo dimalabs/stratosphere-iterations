@@ -1,6 +1,7 @@
 package eu.stratosphere.pact.programs.preparation.tasks;
 
 import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.Value;
 import eu.stratosphere.pact.common.type.base.PactLong;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
@@ -20,8 +21,8 @@ public class Undirect extends AbstractMinimalTask {
 	}
 
 	@Override
-	public void invoke() throws Exception {
-		MutableObjectIterator<PactRecord> input = inputs[0];
+	public void run() throws Exception {
+		MutableObjectIterator<Value> input = inputs[0];
 		PactLong pid = new PactLong();
 		PactLong nid = new PactLong();
 		

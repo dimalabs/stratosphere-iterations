@@ -5,6 +5,8 @@ import java.util.Comparator;
 import eu.stratosphere.nephele.io.RecordWriter;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.Value;
+import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 import eu.stratosphere.pact.runtime.sort.UnilateralSortMerger;
 import eu.stratosphere.pact.runtime.util.KeyComparator;
@@ -39,14 +41,13 @@ public class UniqueReduce extends AbstractMinimalTask {
 	}
 
 	@Override
-	public void invoke() throws Exception {
-		initEnvironmentManagers();
-		
-		RecordWriter<PactRecord> listWriter = output.getWriters().get(0);
+	public void run() throws Exception {
+		RecordWriter<Value> listWriter = output.getWriters().get(0);
+		MutableObjectIterator typelessIter = inputs[0];
 		
 		try {
-			sorter = new UnilateralSortMerger(memoryManager, ioManager, memorySize, 64, comparators, 
-					keyPos, keyClasses, inputs[0], this, 0.8f);
+			sorter = new UnilateralSortMerger(memoryManager, ioManager, memorySize, 128, comparators, 
+					keyPos, keyClasses, typelessIter, this, 0.8f);
 		} catch (Exception ex) {
 			System.out.println(ex);
 			System.out.flush();

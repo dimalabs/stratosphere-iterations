@@ -58,12 +58,12 @@ public class AsynchronousConnectedComponentsOptimized {
 		
 		JobTaskVertex tmpTask = createTask(UpdateTempTask.class, graph, dop);
 		tmpTask.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(tmpTask, baseMemory / 8);
+		setMemorySize(tmpTask, baseMemory*1 / 9);
 		
 		//Inner iteration loop tasks -- START		
 		JobTaskVertex updatesMatch = createTask(AsynchronousUpdateableMatchingOptimized.class, graph, dop, spi);
 		updatesMatch.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(updatesMatch, baseMemory*7/8);
+		setMemorySize(updatesMatch, baseMemory*8 /9);
 		
 //		JobTaskVertex countUpdates = createTask(CountUpdates.class, graph, dop, spi);
 //		countUpdates.setVertexToShareInstancesWith(sourceVertex);

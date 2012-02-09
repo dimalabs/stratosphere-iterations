@@ -43,7 +43,8 @@ public class UpdateableMatchingOptimizedCombined extends IterationHead {
 	
 	private ReduceStub stub = new UpdateReduceStub();
 	
-	private long sortMem  = 0;
+	private int sortMem  = 0;
+	private int matchMem  = 0;
 
 	private InputDataCollector inputCollector;
 
@@ -75,11 +76,11 @@ public class UpdateableMatchingOptimizedCombined extends IterationHead {
 	@Override
 	public void processInput(MutableObjectIterator<Value> iter,
 			OutputCollectorV2 output) throws Exception {
-		sortMem = memorySize*2 / 3;
-		memorySize = memorySize - sortMem;
+		sortMem = (int) (memorySize*2 / 5);
+		matchMem = (int) (memorySize*3 / 5);
 		// Load build side into table		
-		int chunckSize = 64*1024;
-		List<MemorySegment> joinMem = memoryManager.allocateStrict(this, (int) (memorySize/chunckSize), chunckSize);
+		int chunckSize = UpdateableMatching.MATCH_CHUNCK_SIZE;
+		List<MemorySegment> joinMem = memoryManager.allocateStrict(this, (int) (matchMem/chunckSize), chunckSize);
 		
 		TypeAccessorsV2 buildAccess = new TransitiveClosureEntryAccessors();
 		TypeAccessorsV2 probeAccess = new ComponentUpdateAccessor();

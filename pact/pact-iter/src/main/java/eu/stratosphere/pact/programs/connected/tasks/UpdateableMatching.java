@@ -25,6 +25,7 @@ public class UpdateableMatching extends IterationHead {
 	
 	protected static final Log LOG = LogFactory.getLog(UpdateableMatching.class);
 	
+	public static final int MATCH_CHUNCK_SIZE = 1024 * 1024;
 	private MutableHashTable<Value, ComponentUpdate> table;
 	
 	@Override
@@ -40,7 +41,7 @@ public class UpdateableMatching extends IterationHead {
 	public void processInput(MutableObjectIterator<Value> iter,
 			OutputCollectorV2 output) throws Exception {		
 		// Load build side into table		
-		int chunckSize = 32*1024;
+		int chunckSize = MATCH_CHUNCK_SIZE;
 		List<MemorySegment> joinMem = memoryManager.allocateStrict(this, (int) (memorySize/chunckSize), chunckSize);
 		
 		TypeAccessorsV2 buildAccess = new TransitiveClosureEntryAccessors();

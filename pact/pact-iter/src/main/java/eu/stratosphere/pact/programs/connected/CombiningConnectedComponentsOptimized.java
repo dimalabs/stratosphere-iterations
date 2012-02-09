@@ -56,12 +56,12 @@ public class CombiningConnectedComponentsOptimized {
 		
 		JobTaskVertex tmpTask = createTask(UpdateTempTask.class, graph, dop);
 		tmpTask.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(tmpTask, baseMemory*1 / 8);
+		setMemorySize(tmpTask, baseMemory*1 / 9);
 		
 		//Inner iteration loop tasks -- END
 		JobTaskVertex updatesMatch = createTask(UpdateableMatchingOptimizedCombined.class, graph, dop, spi);
 		updatesMatch.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(updatesMatch, baseMemory*7/8);
+		setMemorySize(updatesMatch, baseMemory*8 /9);
 		//Inner iteration loop tasks -- END
 		
 		JobOutputVertex sinkVertex = createOutput(RankOutput.class, output, graph, dop, spi);

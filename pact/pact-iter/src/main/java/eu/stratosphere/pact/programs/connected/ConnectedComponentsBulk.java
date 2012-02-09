@@ -19,12 +19,11 @@ import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.iterative.nephele.util.NepheleUtil;
 import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.RankOutput;
 import eu.stratosphere.pact.programs.connected.tasks.ConvertToTransitiveClosureTypes;
-import eu.stratosphere.pact.programs.connected.tasks.UpdateTempTask;
 import eu.stratosphere.pact.programs.connected.tasks.InitialStateComponents;
 import eu.stratosphere.pact.programs.connected.tasks.InitialUpdates;
 import eu.stratosphere.pact.programs.connected.tasks.UpdateReduceTask;
+import eu.stratosphere.pact.programs.connected.tasks.UpdateTempTask;
 import eu.stratosphere.pact.programs.connected.tasks.UpdateableMatchingOptimizedBulk;
-import eu.stratosphere.pact.programs.connected.tasks.UpdateableMatchingOptimizedCombined;
 import eu.stratosphere.pact.programs.inputs.AdjListInput;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
@@ -58,16 +57,16 @@ public class ConnectedComponentsBulk {
 		
 		JobTaskVertex tmpTask = createTask(UpdateTempTask.class, graph, dop);
 		tmpTask.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(tmpTask, baseMemory*1 / 8);
+		setMemorySize(tmpTask, baseMemory*1 / 9);
 		
 		//Inner iteration loop tasks -- START		
 		JobTaskVertex updatesMatch = createTask(UpdateableMatchingOptimizedBulk.class, graph, dop, spi);
 		updatesMatch.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(updatesMatch, baseMemory*5/8);
+		setMemorySize(updatesMatch, baseMemory*5/9);
 		
 		JobTaskVertex reduceUpdates = createTask(UpdateReduceTask.class, graph, dop, spi);
 		reduceUpdates.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(reduceUpdates, baseMemory*2/8);
+		setMemorySize(reduceUpdates, baseMemory*3/9);
 		//Inner iteration loop tasks -- END
 		
 		JobOutputVertex sinkVertex = createOutput(RankOutput.class, output, graph, dop, spi);
