@@ -88,13 +88,13 @@ public class SerializedUpdateBuffer
 		internalFullBuffers.clear();
 		
 		final MemorySegmentSource readBufferSource;
-		final MemorySegmentSource emptyBufferSource;
+		//final MemorySegmentSource emptyBufferSource;
 		
-		emptyBufferSource = getNonBlockingSourceError(this.emptyBuffers);
+		//emptyBufferSource = getNonBlockingSourceError(this.emptyBuffers);
 		readBufferSource = getNonBlockingSource(this.readBuffers);
 		
 		this.readEnd = new ReadEnd(this.emptyBuffers, readBufferSource, segmentSize);
-		this.writeEnd = new WriteEnd(this.internalFullBuffers, emptyBufferSource, segmentSize);
+		//this.writeEnd = new WriteEnd(this.internalFullBuffers, emptyBufferSource, segmentSize);
 	}
 	
 	private MemorySegmentSource getNonBlockingSource(final Queue<MemorySegment> source)

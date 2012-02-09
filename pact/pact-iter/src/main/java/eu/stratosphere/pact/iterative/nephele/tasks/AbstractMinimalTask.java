@@ -2,6 +2,9 @@ package eu.stratosphere.pact.iterative.nephele.tasks;
 
 import java.io.IOException;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import eu.stratosphere.nephele.execution.Environment;
 import eu.stratosphere.nephele.execution.librarycache.LibraryCacheManager;
 import eu.stratosphere.nephele.io.BipartiteDistributionPattern;
@@ -29,6 +32,7 @@ import eu.stratosphere.pact.runtime.task.util.TaskConfig;
 public abstract class AbstractMinimalTask extends AbstractTask {
 	
 	public static final String TYPE = "minimal.task.type.accessor";
+	protected static final Log LOG = LogFactory.getLog(AbstractMinimalTask.class);
 
 	protected MutableObjectIterator<Value>[] inputs;
 	protected TypeAccessorsV2<? extends Value>[] accessors;
@@ -143,6 +147,7 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 			
 			run();
 		} catch (Exception ex) {
+			LOG.info(ex);
 			throw new Exception("Error during execution of task ", ex);
 		} finally {
 			cleanup();

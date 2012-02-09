@@ -22,11 +22,12 @@ import eu.stratosphere.pact.programs.connected.tasks.ConvertToTransitiveClosureT
 import eu.stratosphere.pact.programs.connected.tasks.UpdateTempTask;
 import eu.stratosphere.pact.programs.connected.tasks.InitialStateComponents;
 import eu.stratosphere.pact.programs.connected.tasks.InitialUpdates;
-import eu.stratosphere.pact.programs.connected.tasks.UpdateableMatchingOptimized;
+import eu.stratosphere.pact.programs.connected.tasks.UpdateReduceTask;
+import eu.stratosphere.pact.programs.connected.tasks.UpdateableMatchingOptimizedCombined;
 import eu.stratosphere.pact.programs.inputs.AdjListInput;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
-public class ConnectedComponentsOptimized {	
+public class CombiningReducingConnectedComponentsOptimized {	
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
 		if(args.length != 5) {
@@ -56,15 +57,16 @@ public class ConnectedComponentsOptimized {
 		
 		JobTaskVertex tmpTask = createTask(UpdateTempTask.class, graph, dop);
 		tmpTask.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(tmpTask, baseMemory / 8);
+		setMemorySize(tmpTask, baseMemory*1 / 8);
 		
 		//Inner iteration loop tasks -- START		
-		JobTaskVertex updatesMatch = createTask(UpdateableMatchingOptimized.class, graph, dop, spi);
+		JobTaskVertex updatesMatch = createTask(UpdateableMatchingOptimizedCombined.class, graph, dop, spi);
 		updatesMatch.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(updatesMatch, baseMemory*7/8);
+		setMemorySize(updatesMatch, baseMemory*5/8);
 		
-//		JobTaskVertex countUpdates = createTask(CountUpdates.class, graph, dop, spi);
-//		countUpdates.setVertexToShareInstancesWith(sourceVertex);
+		JobTaskVertex reduceUpdates = createTask(UpdateReduceTask.class, graph, dop, spi);
+		reduceUpdates.setVertexToShareInstancesWith(sourceVertex);
+		setMemorySize(reduceUpdates, baseMemory*2/8);
 		//Inner iteration loop tasks -- END
 		
 		JobOutputVertex sinkVertex = createOutput(RankOutput.class, output, graph, dop, spi);
@@ -75,16 +77,11 @@ public class ConnectedComponentsOptimized {
 		connectJobVertices(ShipStrategy.PARTITION_HASH, convert, initialState, null, null);
 		
 		connectJobVertices(ShipStrategy.FORWARD, initialState, initialUpdateAssigner, null, null);
-		connectJobVertices(ShipStrategy.FORWARD, initialUpdateAssigner, tmpTask, null, null);
-		
-		
-		NepheleUtil.connectBoundedRoundsIterationLoop(tmpTask, sinkVertex, null, 
-				null, updatesMatch, ShipStrategy.PARTITION_HASH, 14, graph);
-//		connectFixedPointIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {distributeUpdates,
-//				countUpdates}, 
-//				distributeUpdates, countUpdates, updatesMatch, 
-//				ShipStrategy.PARTITION_HASH, 
-//				EmptyTerminationDecider.class, graph);
+		connectJobVertices(ShipStrategy.PARTITION_HASH, initialUpdateAssigner, tmpTask, null, null);
+
+		NepheleUtil.connectBoundedRoundsIterationLoop(tmpTask, sinkVertex, 
+				new JobTaskVertex[] {reduceUpdates}, new ShipStrategy[] {ShipStrategy.PARTITION_HASH},
+				reduceUpdates, updatesMatch, ShipStrategy.FORWARD, 14, graph, false);
 		
 		connectJobVertices(ShipStrategy.FORWARD, initialState, updatesMatch, null, null);
 		

@@ -7,7 +7,7 @@ import eu.stratosphere.pact.common.stubs.ReduceStub;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactLong;
 
-public class UpdateReduce extends ReduceStub {
+public class UpdateReduceStub extends ReduceStub {
 
 	@Override
 	public void reduce(Iterator<PactRecord> records, Collector out)

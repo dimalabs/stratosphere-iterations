@@ -18,11 +18,10 @@ import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.util.OutputCollectorV2;
 import eu.stratosphere.pact.programs.connected.types.ComponentUpdate;
 import eu.stratosphere.pact.programs.connected.types.ComponentUpdateAccessor;
-import eu.stratosphere.pact.programs.connected.types.LazyTransitiveClosureEntry;
 import eu.stratosphere.pact.programs.connected.types.TransitiveClosureEntry;
 import eu.stratosphere.pact.programs.connected.types.TransitiveClosureEntryAccessors;
 import eu.stratosphere.pact.runtime.iterative.MutableHashTable;
-import eu.stratosphere.pact.runtime.iterative.MutableHashTable.LazyHashBucketIterator;
+import eu.stratosphere.pact.runtime.iterative.MutableHashTable.HashBucketIterator;
 import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
 import eu.stratosphere.pact.runtime.plugable.TypeComparator;
 import eu.stratosphere.pact.runtime.sort.AsynchronousPartialSorterCollector;
@@ -31,9 +30,9 @@ import eu.stratosphere.pact.runtime.util.EmptyMutableObjectIterator;
 import eu.stratosphere.pact.runtime.util.KeyComparator;
 import eu.stratosphere.pact.runtime.util.KeyGroupedIterator;
 
-public class UpdateableMatchingOptimizedCombined extends IterationHead {
+public class UpdateableMatchingOptimizedBulk extends IterationHead {
 	
-	protected static final Log LOG = LogFactory.getLog(UpdateableMatchingOptimizedCombined.class);
+	protected static final Log LOG = LogFactory.getLog(UpdateableMatchingOptimizedBulk.class);
 	
 	private MutableHashTable<Value, ComponentUpdate> table;
 	
@@ -47,7 +46,7 @@ public class UpdateableMatchingOptimizedCombined extends IterationHead {
 
 	private InputDataCollector inputCollector;
 
-	private eu.stratosphere.pact.programs.connected.tasks.UpdateableMatchingOptimizedCombined.CombinerThread combinerThread;
+	private CombinerThread combinerThread;
 	
 	@SuppressWarnings("unchecked")
 	@Override
@@ -96,7 +95,7 @@ public class UpdateableMatchingOptimizedCombined extends IterationHead {
 	@Override
 	public void processUpdates(MutableObjectIterator<Value> iter,
 			OutputCollectorV2 output) throws Exception {
-		LazyTransitiveClosureEntry state = new LazyTransitiveClosureEntry();
+		TransitiveClosureEntry state = new TransitiveClosureEntry();
 		
 		ComponentUpdate probe = new ComponentUpdate();
 		PactRecord update = new PactRecord();
@@ -111,33 +110,31 @@ public class UpdateableMatchingOptimizedCombined extends IterationHead {
 		this.combinerThread = new CombinerThread(sorter, keyPos, keyClasses, this.stub, new PactRecordToUpdateCollector(output));
 		this.combinerThread.start();
 		
-		
-		int countUpdated = 0;
-		int countUnchanged = 0;
+		int count = 0;
 		
 		while(iter.next(probe)) {
-			LazyHashBucketIterator<Value, ComponentUpdate> tableIter = table.getLazyMatchesFor(probe);
+			HashBucketIterator<Value, ComponentUpdate> tableIter = table.getMatchesFor(probe);
 			if(tableIter.next(state)) {
-				long oldCid = state.getCid();
 				long updateCid = probe.getCid();
 				
-				if(updateCid < oldCid) {
-					state.setCid(updateCid);
-					
-					int numNeighbours = state.getNumNeighbors();
-					long[] neighbourIds = state.getNeighbors();
-					
-					cid.setValue(updateCid);
-					update.setField(1, cid);
-					for (int i = 0; i < numNeighbours; i++) {
-						vid.setValue(neighbourIds[i]);
-						update.setField(0, vid);
-						inputCollector.collect(update);
-					}
-					countUpdated++;
-				} else {
-					countUnchanged++;
+				int numNeighbours = state.getNumNeighbors();
+				long[] neighbourIds = state.getNeighbors();
+				
+				cid.setValue(updateCid);
+				update.setField(1, cid);
+				
+				//Generate self update
+				vid.setValue(probe.getVid());
+				update.setField(0, vid);
+				inputCollector.collect(update);
+				
+				//Generate neighbour update
+				for (int i = 0; i < numNeighbours; i++) {
+					vid.setValue(neighbourIds[i]);
+					update.setField(0, vid);
+					inputCollector.collect(update);
 				}
+				count++;
 			}
 			if(tableIter.next(state)) {
 				throw new RuntimeException("there should only be one");
@@ -152,9 +149,8 @@ public class UpdateableMatchingOptimizedCombined extends IterationHead {
 			catch (InterruptedException iex) {}
 		}
 		
+		LOG.info("Processing stats - Matched: " + count);
 		sorter.close();
-		
-		LOG.info("Processing stats - Updated: " + countUpdated + " - Unchanged:" + countUnchanged);
 	}
 	
 	@Override

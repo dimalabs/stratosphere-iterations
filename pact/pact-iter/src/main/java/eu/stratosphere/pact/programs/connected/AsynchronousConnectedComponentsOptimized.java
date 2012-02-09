@@ -20,7 +20,7 @@ import eu.stratosphere.pact.iterative.nephele.util.NepheleUtil;
 import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.RankOutput;
 import eu.stratosphere.pact.programs.connected.tasks.AsynchronousUpdateableMatchingOptimized;
 import eu.stratosphere.pact.programs.connected.tasks.ConvertToTransitiveClosureTypes;
-import eu.stratosphere.pact.programs.connected.tasks.FastTempTask;
+import eu.stratosphere.pact.programs.connected.tasks.UpdateTempTask;
 import eu.stratosphere.pact.programs.connected.tasks.InitialStateComponents;
 import eu.stratosphere.pact.programs.connected.tasks.InitialUpdates;
 import eu.stratosphere.pact.programs.connected.tasks.UpdateTempTask;
@@ -56,7 +56,7 @@ public class AsynchronousConnectedComponentsOptimized {
 		JobTaskVertex initialUpdateAssigner = createTask(InitialUpdates.class, graph, dop, spi);
 		initialUpdateAssigner.setVertexToShareInstancesWith(sourceVertex);
 		
-		JobTaskVertex tmpTask = createTask(FastTempTask.class, graph, dop);
+		JobTaskVertex tmpTask = createTask(UpdateTempTask.class, graph, dop);
 		tmpTask.setVertexToShareInstancesWith(sourceVertex);
 		setMemorySize(tmpTask, baseMemory / 8);
 		
