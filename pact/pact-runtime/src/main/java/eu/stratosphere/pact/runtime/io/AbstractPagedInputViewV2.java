@@ -304,13 +304,13 @@ public abstract class AbstractPagedInputViewV2 implements DataInputViewV2
 		}
 		else {
 			long l = 0L;
-			l |= (long) (readUnsignedByte() << 56);
-			l |= (long) (readUnsignedByte() << 48);
-			l |= (long) (readUnsignedByte() << 40);
-			l |= (long) (readUnsignedByte() << 32);
-			l |= (long) (readUnsignedByte() << 24);
-			l |= (long) (readUnsignedByte() << 16);
-			l |= (long) (readUnsignedByte() <<  8);
+			l |= ((long) readUnsignedByte()) << 56;
+			l |= ((long) readUnsignedByte()) << 48;
+			l |= ((long) readUnsignedByte()) << 40;
+			l |= ((long) readUnsignedByte()) << 32;
+			l |= ((long) readUnsignedByte()) << 24;
+			l |= ((long) readUnsignedByte()) << 16;
+			l |= ((long) readUnsignedByte()) <<  8;
 			l |= (long) readUnsignedByte();
 			return l;
 		}

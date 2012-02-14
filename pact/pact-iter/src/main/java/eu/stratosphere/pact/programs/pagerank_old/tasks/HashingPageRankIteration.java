@@ -1,11 +1,7 @@
-package eu.stratosphere.pact.programs.pagerank.tasks;
+package eu.stratosphere.pact.programs.pagerank_old.tasks;
 
 import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map.Entry;
 import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
 
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactDouble;
@@ -13,21 +9,19 @@ import eu.stratosphere.pact.common.type.base.PactString;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 
-public class SortingPageRankIteration extends IterationHead {
+public class HashingPageRankIteration extends IterationHead {
 
 	private static final int NUM_VERTICES = 14052;
 	
-	private String[] pages;
-	private Double[] ranks;
-	private String[][] adjList;
+	private HashMap<String, String[]> adjList;
+	private HashMap<String, Double> ranks;
 	
-	//private int numVertices = NUM_VERTICES;
 	private int numLocalVertices = -1;
 	
 	@Override
 	public void processInput(MutableObjectIterator<PactRecord> iter)
 			throws Exception {
-		SortedMap<String, String[]> sortingNeighbourMap = new TreeMap<String, String[]>();
+		adjList = new HashMap<String, String[]>(NUM_VERTICES/getEnvironment().getCurrentNumberOfSubtasks());
 		
 		PactRecord rec = new PactRecord();
 		while(iter.next(rec)) {
@@ -41,31 +35,23 @@ public class SortingPageRankIteration extends IterationHead {
 				outgoing[i++] = neighbour;
 			}
 			
-			sortingNeighbourMap.put(page, outgoing);
+			adjList.put(page, outgoing);
 		}
 		
-		numLocalVertices = sortingNeighbourMap.size();
+		numLocalVertices = adjList.size();
+		ranks = new HashMap<String, Double>(numLocalVertices);
+		double initialRank = 1.0 / NUM_VERTICES;
 		
-		pages = new String[numLocalVertices];
-		ranks = new Double[numLocalVertices];
-		adjList = new String[numLocalVertices][];
-		
-		Double initialRank = 1.0 / NUM_VERTICES;
-		
-		int i= 0;
-		for (Entry<String, String[]> entry : sortingNeighbourMap.entrySet()) {
-			pages[i] = entry.getKey();
-			ranks[i] = initialRank;
-			adjList[i] = entry.getValue();
+		for (String page : adjList.keySet()) {
+			ranks.put(page, initialRank);
 			
-			String[] outgoing = adjList[i];
-			PactDouble prank = new PactDouble(ranks[i] / outgoing.length);
+			String[] outgoing = adjList.get(page);
+			PactDouble prank = new PactDouble(ranks.get(page) / outgoing.length);
 			for (String neighbour : outgoing) {
 				rec.setField(0, new PactString(neighbour));
 				rec.setField(1, prank);
 				innerOutputWriter.emit(rec);
 			}
-			i++;
 		}
 		
 		PactRecord errRecord = new PactRecord();
@@ -90,51 +76,25 @@ public class SortingPageRankIteration extends IterationHead {
 			}
 		}
 		
-		TreeMap<String, Double> sortedUpdates = new TreeMap<String, Double>(sumMap);
-		sumMap = null; //Help garbage collection
-		
 		double maxDiff = Double.NEGATIVE_INFINITY;
 		
-		Iterator<Entry<String, Double>> sortedUpdatesIter = sortedUpdates.entrySet().iterator();
-		if(sortedUpdatesIter.hasNext()) {
-			Entry<String, Double> currentUpdate = sortedUpdatesIter.next();
-			String updatePage = currentUpdate.getKey();
+		for (String page : sumMap.keySet()) {
+			double normalizedRank = 0.15 / NUM_VERTICES + 0.85 * sumMap.get(page);
+			Double oldRank = ranks.get(page);
+			if(oldRank != null) {
+				double diff = Math.abs(normalizedRank - oldRank);
+				if(diff > maxDiff) {
+					maxDiff = diff;
+				}
+			}
 			
-			for (int i = 0; i < pages.length; i++) {
-				String page = pages[i];
-				int comp;
-				while((comp = page.compareTo(updatePage)) > 0) {
-					if(sortedUpdatesIter.hasNext()) {
-						currentUpdate = sortedUpdatesIter.next();
-						updatePage = currentUpdate.getKey();
-					} else {
-						break;
-					}
-				}
-				
-				if(comp == 0) {
-					double normalizedRank = 0.15 / NUM_VERTICES + 0.85 * currentUpdate.getValue();
-					double diff = Math.abs(normalizedRank - ranks[i]);
-					if(diff > maxDiff) {
-						maxDiff = diff;
-					}
-					ranks[i] = normalizedRank;
-					
-					if(sortedUpdatesIter.hasNext()) {
-						currentUpdate = sortedUpdatesIter.next();
-						updatePage = currentUpdate.getKey();
-					} else {
-						break;
-					}
-				}
-			}	
+			ranks.put(page, normalizedRank);
 		}
+		sumMap = null; //Help garbage collection
 		
-		sortedUpdates = null; //Help garbage collection
-		
-		for (int i = 0; i < numLocalVertices; i++) {
-			double rank = ranks[i];
-			String[] outgoing = adjList[i];
+		for (String page : adjList.keySet()) {			
+			double rank = ranks.get(page);
+			String[] outgoing = adjList.get(page);
 			
 			PactDouble prank = new PactDouble(rank / outgoing.length);
 			for (String neighbour : outgoing) {
@@ -153,9 +113,8 @@ public class SortingPageRankIteration extends IterationHead {
 	public void finish() throws Exception {
 		PactRecord rec = new PactRecord();
 		
-		for (int i = 0; i < numLocalVertices; i++) {
-			String page = pages[i];
-			double rank = ranks[i];
+		for (String page : adjList.keySet()) {
+			double rank = ranks.get(page);
 			
 			rec.setField(0, new PactString(page));
 			rec.setField(1, new PactDouble(rank));

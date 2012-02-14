@@ -43,8 +43,8 @@ public class UpdateableMatchingOptimizedCombined extends IterationHead {
 	
 	private ReduceStub stub = new UpdateReduceStub();
 	
-	private int sortMem  = 0;
-	private int matchMem  = 0;
+	private long sortMem  = 0;
+	private long matchMem  = 0;
 
 	private InputDataCollector inputCollector;
 
@@ -76,8 +76,8 @@ public class UpdateableMatchingOptimizedCombined extends IterationHead {
 	@Override
 	public void processInput(MutableObjectIterator<Value> iter,
 			OutputCollectorV2 output) throws Exception {
-		sortMem = (int) (memorySize*2 / 5);
-		matchMem = (int) (memorySize*3 / 5);
+		sortMem = memorySize*2 / 6;
+		matchMem = memorySize*4 / 6;
 		// Load build side into table		
 		int chunckSize = UpdateableMatching.MATCH_CHUNCK_SIZE;
 		List<MemorySegment> joinMem = memoryManager.allocateStrict(this, (int) (matchMem/chunckSize), chunckSize);
@@ -155,7 +155,7 @@ public class UpdateableMatchingOptimizedCombined extends IterationHead {
 		
 		sorter.close();
 		
-		LOG.info("Processing stats - Updated: " + countUpdated + " - Unchanged:" + countUnchanged);
+		LOG.info("MATCH-STATS::" + countUpdated + "::" + countUnchanged);
 	}
 	
 	@Override

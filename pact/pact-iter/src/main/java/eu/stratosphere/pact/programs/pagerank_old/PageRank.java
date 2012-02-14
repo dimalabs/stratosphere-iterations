@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.programs.pagerank;
+package eu.stratosphere.pact.programs.pagerank_old;
 
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectBoundedRoundsIterationLoop;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.connectJobVertices;
@@ -21,10 +21,10 @@ import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
 import eu.stratosphere.pact.programs.inputs.DBPediaPageLinkInput;
-import eu.stratosphere.pact.programs.pagerank.tasks.GroupTask;
-import eu.stratosphere.pact.programs.pagerank.tasks.HashingPageRankIteration;
-import eu.stratosphere.pact.programs.pagerank.tasks.RankOutput;
-import eu.stratosphere.pact.programs.pagerank.tasks.SortingPageRankIteration;
+import eu.stratosphere.pact.programs.pagerank_old.tasks.GroupTask;
+import eu.stratosphere.pact.programs.pagerank_old.tasks.HashingPageRankIteration;
+import eu.stratosphere.pact.programs.pagerank_old.tasks.RankOutput;
+import eu.stratosphere.pact.programs.pagerank_old.tasks.SortingPageRankIteration;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
 public class PageRank {

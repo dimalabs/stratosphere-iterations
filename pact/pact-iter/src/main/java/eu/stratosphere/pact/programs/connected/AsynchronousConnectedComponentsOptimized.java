@@ -20,11 +20,9 @@ import eu.stratosphere.pact.iterative.nephele.util.NepheleUtil;
 import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.RankOutput;
 import eu.stratosphere.pact.programs.connected.tasks.AsynchronousUpdateableMatchingOptimized;
 import eu.stratosphere.pact.programs.connected.tasks.ConvertToTransitiveClosureTypes;
-import eu.stratosphere.pact.programs.connected.tasks.UpdateTempTask;
 import eu.stratosphere.pact.programs.connected.tasks.InitialStateComponents;
 import eu.stratosphere.pact.programs.connected.tasks.InitialUpdates;
 import eu.stratosphere.pact.programs.connected.tasks.UpdateTempTask;
-import eu.stratosphere.pact.programs.connected.tasks.UpdateableMatchingOptimized;
 import eu.stratosphere.pact.programs.inputs.AdjListInput;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 

@@ -1,5 +1,6 @@
 package eu.stratosphere.pact.iterative.nephele.tasks;
 
+import java.io.IOException;
 import java.util.List;
 
 import org.apache.commons.logging.Log;
@@ -24,7 +25,7 @@ import eu.stratosphere.pact.iterative.nephele.util.SerializedUpdateBuffer;
 public abstract class IterationHead extends AbstractMinimalTask {
 	
 	protected static final Log LOG = LogFactory.getLog(IterationHead.class);
-	protected static final int MEMORY_SEGMENT_SIZE = 512*1024;
+	protected static final int MEMORY_SEGMENT_SIZE = 1024*1024;
 	
 	public static final String FIXED_POINT_TERMINATOR = "pact.iter.fixedpoint";
 	public static final String NUMBER_OF_ITERATIONS = "pact.iter.numiterations";
@@ -32,7 +33,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 	protected ClosedListener channelStateListener;
 	protected ClosedListener terminationStateListener;
 	protected int numInternalOutputs;
-	protected int updateBufferSize = -1;
+	protected long updateBufferSize = -1;
 	
 	protected volatile boolean finished = false;
 	
@@ -55,8 +56,8 @@ public abstract class IterationHead extends AbstractMinimalTask {
 			numInternalOutputs = 3;
 		}
 		
-		updateBufferSize = (int) (memorySize / 3);
-		memorySize = memorySize*2/3;
+		updateBufferSize = memorySize*1 / 3;
+		memorySize = memorySize* 2/3;
 	}
 
 	@Override
@@ -82,8 +83,9 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		OutputGate<? extends Record>[] iterStateGates = getIterationOutputGates();
 		
 		//Allocate memory for update queue
+		LOG.info("Update memory: " + updateBufferSize + ", numSegments: " + (int) (updateBufferSize / MEMORY_SEGMENT_SIZE));
 		List<MemorySegment> updateMemory = memoryManager.allocateStrict(this,
-				updateBufferSize / MEMORY_SEGMENT_SIZE, MEMORY_SEGMENT_SIZE);
+				(int) (updateBufferSize / MEMORY_SEGMENT_SIZE), MEMORY_SEGMENT_SIZE);
 		SerializedUpdateBuffer buffer = new SerializedUpdateBuffer(updateMemory, MEMORY_SEGMENT_SIZE);
 		
 		//Create and initialize internal structures for the transport of the iteration
@@ -99,12 +101,20 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		//Start with a first iteration run using the input data
 		AbstractIterativeTask.publishState(ChannelState.OPEN, iterStateGates);
 
+		if (LOG.isInfoEnabled()) {
+			LOG.info(constructLogString("Starting Iteration: -1", getEnvironment().getTaskName(), this));
+		}
 		//Process all input records by passing them to the processInput method (supplied by the user)
 		MutableObjectIterator<Value> input = inputs[0];
-		processInput(input, innerOutput);
+		CountingIterator statsIter = new CountingIterator(input);
+		CountingOutput statsOutput = new CountingOutput(innerOutput);
+		processInput(statsIter, statsOutput);
 		
 		//Send iterative close event to indicate that this round is finished
 		AbstractIterativeTask.publishState(ChannelState.CLOSED, iterStateGates);
+		if (LOG.isInfoEnabled()) {
+			LOG.info(constructIterationStats(-1, statsIter, statsOutput));
+		}
 		//AbstractIterativeTask.publishState(ChannelState.CLOSED, terminationOutputGate);
 		
 		//Loop until iteration terminates
@@ -150,9 +160,14 @@ public abstract class IterationHead extends AbstractMinimalTask {
 					AbstractIterativeTask.publishState(ChannelState.OPEN, iterStateGates);
 					
 					//Call stub function to process updates
-					processUpdates(new DeserializingIterator(updatesBuffer.getReadEnd()), innerOutput);
+					statsIter = new CountingIterator(new DeserializingIterator(updatesBuffer.getReadEnd()));
+					statsOutput = new CountingOutput(innerOutput);
+					processUpdates(statsIter, statsOutput);
 					
 					AbstractIterativeTask.publishState(ChannelState.CLOSED, iterStateGates);
+					if (LOG.isInfoEnabled()) {
+						LOG.info(constructIterationStats(iterationCounter, statsIter, statsOutput));
+					}
 					
 					updatesBuffer = null;
 					iterationCounter++;
@@ -174,7 +189,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		
 		finished = true;
 	}
-	
+
 	@Override
 	public void cleanup() throws Exception {
 		BackTrafficQueueStore.getInstance().releaseStructures(
@@ -224,6 +239,14 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		}
 		
 		return gates;
+	}
+	
+	private Object constructIterationStats(int iteration, CountingIterator statsIter,
+			CountingOutput statsOutput) {
+		long duration = (System.nanoTime() - statsIter.getStartTime())/1000000;
+		String stats = "ITER-STATS::"+iteration+"::"+duration+"::"+statsIter.getCount()+"::"+statsOutput.getCounter();
+		
+		return constructLogString(stats, getEnvironment().getTaskName(), this);
 	}
 	
 	protected class ClosedListener implements EventListener {
@@ -294,6 +317,75 @@ public abstract class IterationHead extends AbstractMinimalTask {
 			} else {
 				return ChannelState.OPEN;
 			}
+		}
+	}
+	
+	protected static class CountingIterator implements MutableObjectIterator<Value> {
+		
+		private MutableObjectIterator<Value> iter;
+		private boolean first = true;
+		private long start;
+		private long count;
+
+		public CountingIterator(MutableObjectIterator<Value> iter) {
+			this.iter = iter;
+		}
+
+		@Override
+		public boolean next(Value target) throws IOException {
+			boolean success = iter.next(target);
+			
+			if(success) {
+				if(first) {
+					start = System.nanoTime();
+					first = false;
+				}
+				count++;
+			}
+			
+			return success;
+		}
+		
+		public long getStartTime() {
+			return start;
+		}
+		
+		public long getCount() {
+			return count;
+		}
+	}
+	
+	protected static class CountingOutput extends OutputCollectorV2 {
+		private OutputCollectorV2 collector;
+		private long counter;
+		
+		public CountingOutput(OutputCollectorV2 output) {
+			this.collector = output;
+		}
+
+		@Override
+		public void collect(Value record) {
+			counter++;
+			collector.collect(record);
+		}
+		
+		@Override
+		public void close() {
+			collector.close();
+		}
+		
+		@Override
+		public void addWriter(RecordWriter<Value> writer) {
+			throw new UnsupportedOperationException();
+		}
+		
+		@Override
+		public List<RecordWriter<Value>> getWriters() {
+			throw new UnsupportedOperationException();
+		}
+		
+		public long getCounter() {
+			return counter;
 		}
 	}
 }

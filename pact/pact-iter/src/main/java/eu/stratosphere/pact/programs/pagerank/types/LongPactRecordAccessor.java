@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.programs.connected.types;
+package eu.stratosphere.pact.programs.pagerank.types;
 
 import java.io.IOException;
 import java.util.Comparator;

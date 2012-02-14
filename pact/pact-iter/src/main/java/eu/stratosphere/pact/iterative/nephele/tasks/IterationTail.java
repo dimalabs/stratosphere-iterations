@@ -72,13 +72,14 @@ public class IterationTail extends AbstractMinimalTask {
 						//Signal synchronization task that we are finished 
 						publishState(ChannelState.CLOSED, getEnvironment().getOutputGate(0));
 					}
-					
-					if(stateListeners[DATA_INPUT].getState() == ChannelState.OPEN && buffer == null) {
+					else if(stateListeners[DATA_INPUT].getState() == ChannelState.OPEN && buffer == null) {
 						//Get new queue to put items into
 						buffer = BackTrafficQueueStore.getInstance().receiveUpdateBuffer(
 								getEnvironment().getJobID(),
 								getEnvironment().getIndexInSubtaskGroup());
 						writeOutput = buffer.getWriteEnd();
+					} else {
+						throw new RuntimeException("Illegal state");
 					}
 				}
 			}

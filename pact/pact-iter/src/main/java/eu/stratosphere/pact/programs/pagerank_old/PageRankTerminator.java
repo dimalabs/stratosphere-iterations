@@ -1,4 +1,4 @@
-package eu.stratosphere.pact.programs.pagerank;
+package eu.stratosphere.pact.programs.pagerank_old;
 
 import java.util.Iterator;
 

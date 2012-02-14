@@ -147,10 +147,10 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 			
 			run();
 		} catch (Exception ex) {
-			LOG.info(ex);
+			LOG.error(ex, ex);
 			throw new Exception("Error during execution of task ", ex);
 		} finally {
-			cleanup();
+			//cleanup();
 			output.close();
 		}
 	}

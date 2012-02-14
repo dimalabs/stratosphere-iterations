@@ -9,8 +9,8 @@ public class TwitterLinkInput extends DelimitedInputFormat {
 	@Override
 	public boolean readRecord(PactRecord target, byte[] bytes, int numBytes) {
 		String[] triple = new String(bytes).split("\t");
-		target.setField(0, new PactLong(Long.parseLong(triple[0])));
-		target.setField(1, new PactLong(Long.parseLong(triple[1])));
+		target.setField(1, new PactLong(Long.parseLong(triple[0])));
+		target.setField(0, new PactLong(Long.parseLong(triple[1])));
 		return true;
 	}
 
