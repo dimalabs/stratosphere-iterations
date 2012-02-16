@@ -77,7 +77,9 @@ public class ChannelStateTracker implements EventListener {
 			}
 		}
 		
-		throw new StateChangeException(state);
+		if(isChanged()) {
+			throw new StateChangeException(state);
+		}
 	}
 
 	public ChannelState getState() {
