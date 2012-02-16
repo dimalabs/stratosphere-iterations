@@ -5,8 +5,8 @@ import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createInpu
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createOutput;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.createTask;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.getConfiguration;
-import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.setMemorySize;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.setReduceInformation;
+import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.setMemorySize;
 import static eu.stratosphere.pact.iterative.nephele.util.NepheleUtil.submit;
 
 import java.io.IOException;
@@ -19,13 +19,14 @@ import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.base.PactLong;
-import eu.stratosphere.pact.programs.inputs.DBPediaPageLinkInput;
+import eu.stratosphere.pact.programs.inputs.TSVInput;
 import eu.stratosphere.pact.programs.preparation.tasks.AdjListOutput;
 import eu.stratosphere.pact.programs.preparation.tasks.CreateAdjList;
-import eu.stratosphere.pact.programs.preparation.tasks.Longify;
+import eu.stratosphere.pact.programs.preparation.tasks.UndirectedAdjList;
+import eu.stratosphere.pact.programs.preparation.tasks.UniqueReduce;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
-public class PrepareDirectedDBPedia {	
+public class PrepareUndirectedTSV {	
 	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
@@ -44,24 +45,31 @@ public class PrepareDirectedDBPedia {
 		JobGraph graph = new JobGraph("Bulk PageRank Broadcast -- Optimized Twitter");
 		
 		//Create tasks
-		JobInputVertex sourceVertex = createInput(DBPediaPageLinkInput.class, input, graph, dop, spi);
+		JobInputVertex sourceVertex = createInput(TSVInput.class, input, graph, dop, spi);
 		
-		JobTaskVertex longify = createTask(Longify.class, graph, dop, spi);
-		longify.setVertexToShareInstancesWith(sourceVertex);
+		JobTaskVertex undirect = createTask(UndirectedAdjList.class, graph, dop, spi);
+		undirect.setVertexToShareInstancesWith(sourceVertex);
+		
+		JobTaskVertex uniqueify = createTask(UniqueReduce.class, graph, dop, spi);
+		uniqueify.setVertexToShareInstancesWith(sourceVertex);
+		setMemorySize(uniqueify, baseMemory/2);
+		setReduceInformation(uniqueify, new int[] {0,1}, new Class[] {keyType, keyType});
 		
 		JobTaskVertex adjList = createTask(CreateAdjList.class, graph, dop, spi);
 		adjList.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(adjList, baseMemory/3);
+		setMemorySize(adjList, baseMemory/2);
 		setReduceInformation(adjList, new int[] {0}, new Class[] {keyType});
 		
 		JobOutputVertex sinkVertex = createOutput(AdjListOutput.class, output, graph, dop, spi);
 		sinkVertex.setVertexToShareInstancesWith(sourceVertex);
 		
 		//Connect tasks
-		connectJobVertices(ShipStrategy.FORWARD, sourceVertex, longify, null, null);
+		connectJobVertices(ShipStrategy.FORWARD, sourceVertex, undirect, null, null);
 		
-		connectJobVertices(ShipStrategy.PARTITION_HASH, longify, adjList, 
+		connectJobVertices(ShipStrategy.PARTITION_HASH, undirect, uniqueify, 
 				new int[] {0}, new Class[] {keyType});
+		
+		connectJobVertices(ShipStrategy.FORWARD, uniqueify, adjList, null, null);
 		
 		connectJobVertices(ShipStrategy.FORWARD, adjList, sinkVertex, null, null);
 		

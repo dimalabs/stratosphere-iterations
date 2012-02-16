@@ -17,7 +17,6 @@ import eu.stratosphere.nephele.jobgraph.JobInputVertex;
 import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.iterative.nephele.util.NepheleUtil;
-import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.RankOutput;
 import eu.stratosphere.pact.programs.connected.tasks.ConvertToTransitiveClosureTypes;
 import eu.stratosphere.pact.programs.connected.tasks.UpdateTempTask;
 import eu.stratosphere.pact.programs.connected.tasks.InitialStateComponents;
@@ -25,6 +24,7 @@ import eu.stratosphere.pact.programs.connected.tasks.InitialUpdates;
 import eu.stratosphere.pact.programs.connected.tasks.SendUpdates;
 import eu.stratosphere.pact.programs.connected.tasks.UpdateableMatching;
 import eu.stratosphere.pact.programs.inputs.AdjListInput;
+import eu.stratosphere.pact.programs.inputs.NullOutput;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
 public class ConnectedComponents {	
@@ -71,7 +71,7 @@ public class ConnectedComponents {
 //		countUpdates.setVertexToShareInstancesWith(sourceVertex);
 		//Inner iteration loop tasks -- END
 		
-		JobOutputVertex sinkVertex = createOutput(RankOutput.class, output, graph, dop, spi);
+		JobOutputVertex sinkVertex = createOutput(NullOutput.class, output, graph, dop, spi);
 		sinkVertex.setVertexToShareInstancesWith(sourceVertex);
 		
 		//Connect tasks

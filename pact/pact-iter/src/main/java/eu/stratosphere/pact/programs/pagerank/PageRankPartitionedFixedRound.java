@@ -17,20 +17,16 @@ import eu.stratosphere.nephele.jobgraph.JobGraphDefinitionException;
 import eu.stratosphere.nephele.jobgraph.JobInputVertex;
 import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
-import eu.stratosphere.pact.common.type.Key;
-import eu.stratosphere.pact.common.type.base.PactLong;
 import eu.stratosphere.pact.programs.inputs.AdjListInput;
 import eu.stratosphere.pact.programs.pagerank.tasks.InitialRankAssigner;
 import eu.stratosphere.pact.programs.pagerank.tasks.RankOutput;
-import eu.stratosphere.pact.programs.pagerank.tasks.RankReducePresorted;
-import eu.stratosphere.pact.programs.pagerank.tasks.SortPairByNeighbour;
-import eu.stratosphere.pact.programs.pagerank.tasks.VertexNeighbourContribCreator;
-import eu.stratosphere.pact.programs.pagerank.tasks.VertexRankMatchingProbeCaching;
+import eu.stratosphere.pact.programs.pagerank.tasks.RankReduceTask;
+import eu.stratosphere.pact.programs.pagerank.tasks.VertexNeighbourContribCreatorNativeType;
+import eu.stratosphere.pact.programs.pagerank.tasks.VertexRankMatchingBuildCaching;
 import eu.stratosphere.pact.programs.pagerank.tasks.VertexRankTempTask;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
-public class PageRankPartitionedFixedRound {	
-	@SuppressWarnings("unchecked")
+public class PageRankPartitionedFixedRound {
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
 		if(args.length != 5) {
@@ -43,14 +39,13 @@ public class PageRankPartitionedFixedRound {
 		final String output = args[2];
 		final int spi = Integer.valueOf(args[3]);
 		final int baseMemory = Integer.valueOf(args[4]);
-		final Class<? extends Key> keyType = PactLong.class;
 		
 		JobGraph graph = new JobGraph("Bulk PageRank Broadcast -- Optimized Twitter");
 		
 		//Create tasks
 		JobInputVertex sourceVertex = createInput(AdjListInput.class, input, graph, dop, spi);
 		
-		JobTaskVertex vertexRankContrib = createTask(VertexNeighbourContribCreator.class, graph, dop, spi);
+		JobTaskVertex vertexRankContrib = createTask(VertexNeighbourContribCreatorNativeType.class, graph, dop, spi);
 		vertexRankContrib.setVertexToShareInstancesWith(sourceVertex);
 		
 		JobTaskVertex initialRankAssigner = createTask(InitialRankAssigner.class, graph, dop, spi);
@@ -60,17 +55,14 @@ public class PageRankPartitionedFixedRound {
 		tmpTask.setVertexToShareInstancesWith(sourceVertex);
 		setMemorySize(tmpTask, baseMemory*1 / 9);
 		
-		JobTaskVertex sortedNeighbours = createTask(SortPairByNeighbour.class, graph, dop, spi);
-		sortedNeighbours.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(sortedNeighbours, baseMemory*3 /9);
-		
-		JobTaskVertex contribMatch = createTask(VertexRankMatchingProbeCaching.class, graph, dop, spi);
+		JobTaskVertex contribMatch = createTask(VertexRankMatchingBuildCaching.class, graph, dop, spi);
 		contribMatch.setVertexToShareInstancesWith(sourceVertex);
 		setMemorySize(contribMatch, baseMemory*4 /9);
 		
 		//Inner iteration loop tasks -- START		
-		JobTaskVertex rankReduce = createTask(RankReducePresorted.class, graph, dop, spi);
+		JobTaskVertex rankReduce = createTask(RankReduceTask.class, graph, dop, spi);
 		rankReduce.setVertexToShareInstancesWith(sourceVertex);
+		setMemorySize(contribMatch, baseMemory*3 /9);
 		//Inner iteration loop tasks -- END
 		
 		JobOutputVertex sinkVertex = createOutput(RankOutput.class, output, graph, dop, spi);
@@ -79,18 +71,15 @@ public class PageRankPartitionedFixedRound {
 		//Connect tasks
 		connectJobVertices(ShipStrategy.FORWARD, sourceVertex, initialRankAssigner, null, null);
 		
-		connectJobVertices(ShipStrategy.FORWARD, initialRankAssigner, tmpTask, null, null);
+		connectJobVertices(ShipStrategy.PARTITION_HASH, initialRankAssigner, tmpTask, null, null);
 		
 		connectJobVertices(ShipStrategy.FORWARD, sourceVertex, vertexRankContrib, null, null);
 		
-		connectJobVertices(ShipStrategy.PARTITION_HASH, vertexRankContrib, sortedNeighbours, 
-				new int[] {1}, new Class[] {keyType});
-		
 		connectBoundedRoundsIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {rankReduce}, 
-				new ShipStrategy[] {ShipStrategy.FORWARD}, rankReduce, contribMatch, 
-				ShipStrategy.BROADCAST, 13, graph, false);
+				new ShipStrategy[] {ShipStrategy.PARTITION_HASH}, rankReduce, contribMatch, 
+				ShipStrategy.FORWARD, 13, graph, false);
 		
-		connectJobVertices(ShipStrategy.FORWARD, sortedNeighbours, contribMatch, null, null);
+		connectJobVertices(ShipStrategy.PARTITION_HASH, vertexRankContrib, contribMatch, null, null);
 	
 		//Submit job
 		submit(graph, getConfiguration());

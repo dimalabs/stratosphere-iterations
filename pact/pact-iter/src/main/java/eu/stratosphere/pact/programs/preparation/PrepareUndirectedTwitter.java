@@ -19,7 +19,6 @@ import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.base.PactLong;
-import eu.stratosphere.pact.programs.bulkpagerank_broad.tasks.RankReduce;
 import eu.stratosphere.pact.programs.inputs.TwitterLinkInput;
 import eu.stratosphere.pact.programs.preparation.tasks.AdjListOutput;
 import eu.stratosphere.pact.programs.preparation.tasks.CreateAdjList;
@@ -54,14 +53,12 @@ public class PrepareUndirectedTwitter {
 		JobTaskVertex uniqueify = createTask(UniqueReduce.class, graph, dop, spi);
 		uniqueify.setVertexToShareInstancesWith(sourceVertex);
 		setMemorySize(uniqueify, baseMemory/2);
-		setReduceInformation(uniqueify, RankReduce.class, 
-				new int[] {0,1}, new Class[] {keyType, keyType});
+		setReduceInformation(uniqueify, new int[] {0,1}, new Class[] {keyType, keyType});
 		
 		JobTaskVertex adjList = createTask(CreateAdjList.class, graph, dop, spi);
 		adjList.setVertexToShareInstancesWith(sourceVertex);
 		setMemorySize(adjList, baseMemory/2);
-		setReduceInformation(adjList, RankReduce.class, 
-				new int[] {0}, new Class[] {keyType});
+		setReduceInformation(adjList, new int[] {0}, new Class[] {keyType});
 		
 		JobOutputVertex sinkVertex = createOutput(AdjListOutput.class, output, graph, dop, spi);
 		sinkVertex.setVertexToShareInstancesWith(sourceVertex);

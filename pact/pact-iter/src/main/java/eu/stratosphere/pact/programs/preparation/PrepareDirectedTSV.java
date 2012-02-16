@@ -17,7 +17,7 @@ import eu.stratosphere.pact.programs.inputs.TSVInput;
 import eu.stratosphere.pact.programs.preparation.tasks.AdjListOutput;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
-public class PrepareTSV {
+public class PrepareDirectedTSV {
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
 		if(args.length != 5) {

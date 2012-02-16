@@ -97,12 +97,6 @@ public class SimpleIterTaskTest {
 	
 	public static class DummyIterativeForward extends AbstractIterativeTask {
 		private PactRecord rec = new PactRecord();
-		
-		@Override
-		public void invokeStart() throws Exception {
-			// TODO Auto-generated method stub
-			
-		}
 
 		@Override
 		public void cleanup() throws Exception {

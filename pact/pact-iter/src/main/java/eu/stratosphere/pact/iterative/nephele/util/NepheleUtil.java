@@ -24,7 +24,6 @@ import eu.stratosphere.pact.common.io.FileOutputFormat;
 import eu.stratosphere.pact.common.io.InputFormat;
 import eu.stratosphere.pact.common.io.OutputFormat;
 import eu.stratosphere.pact.common.stubs.MatchStub;
-import eu.stratosphere.pact.common.stubs.ReduceStub;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.iterative.nephele.bulk.BulkIterationHead;
@@ -378,10 +377,9 @@ public class NepheleUtil {
 		config.setLocalStrategyKeyTypes(keyClasses);
 	}
 	
-	public static void setReduceInformation(JobTaskVertex reduce, Class<? extends ReduceStub> stubClass,
+	public static void setReduceInformation(JobTaskVertex reduce,
 			int[] keyPos, Class<? extends Key>[] keyClasses) {
 		TaskConfig config = new TaskConfig(reduce.getConfiguration());
-		config.setStubClass(stubClass);
 		config.setLocalStrategyKeyTypes(0, keyPos);
 		config.setLocalStrategyKeyTypes(keyClasses);
 	}

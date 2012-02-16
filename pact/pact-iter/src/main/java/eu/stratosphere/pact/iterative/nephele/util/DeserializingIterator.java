@@ -18,14 +18,12 @@ public class DeserializingIterator implements MutableObjectIterator<Value> {
 	
 	public DeserializingIterator(DataInputViewV2 input) {
 		this.input = input;
-		LOG.info("Init: Deserializer");
 	}
 	@Override
 	public boolean next(Value target) throws IOException {
 		try {
 			target.read(input);
 		} catch (EOFException ex) {
-			LOG.info("Finished: Deserializer");
 			return false;
 		}
 		return true;

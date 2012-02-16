@@ -18,31 +18,28 @@ import eu.stratosphere.pact.runtime.iterative.MutableHashTable;
 import eu.stratosphere.pact.runtime.iterative.MutableHashTable.HashBucketIterator;
 import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
 import eu.stratosphere.pact.runtime.plugable.TypeComparator;
-import eu.stratosphere.pact.runtime.resettable.SpillingResettableMutableObjectIteratorV2;
 import eu.stratosphere.pact.runtime.util.EmptyMutableObjectIterator;
 
-public class VertexRankMatchingProbeCaching extends IterationHead {
+public class VertexRankMatchingBuildCaching extends IterationHead {
 
-	protected static final Log LOG = LogFactory.getLog(VertexRankMatchingProbeCaching.class);
+	protected static final Log LOG = LogFactory.getLog(VertexRankMatchingBuildCaching.class);
 	
 	private static final int MATCH_CHUNCK_SIZE = 32*1024;
 
 	private VertexPageRank vRank = new VertexPageRank();
 
-	private long cacheMemory;
-	private long matchMemory;
-
-	private SpillingResettableMutableObjectIteratorV2 stateIterator;
+	private long matchMemory;	
 	private List<MemorySegment> joinMem;
+	private MutableHashTable<Value, VertexPageRank> table;
 	
 	@Override
 	protected void initTask() {
 		super.initTask();
 		
 		accessors[1] = new VertexNeighbourPartialAccessor();
+		outputAccessors[numInternalOutputs] = new VertexPageRankAccessor();
 		
-		cacheMemory = memorySize*2 /3;
-		matchMemory = memorySize*1 /3;
+		matchMemory = memorySize;
 	}
 
 	@Override
@@ -52,10 +49,13 @@ public class VertexRankMatchingProbeCaching extends IterationHead {
 		joinMem = 
 				memoryManager.allocateStrict(this, (int) (matchMemory/chunckSize), chunckSize);
 		
+		TypeAccessorsV2 buildAccess = new VertexNeighbourPartialAccessor();
+		TypeAccessorsV2 probeAccess = new VertexPageRankAccessor();
+		TypeComparator comp = new MatchComparator();
 		
-		stateIterator = new SpillingResettableMutableObjectIteratorV2<Value>(memoryManager, ioManager, 
-				inputs[1], (TypeAccessorsV2<Value>) accessors[1], cacheMemory, this);
-		stateIterator.open();
+		table = new MutableHashTable<Value, VertexPageRank>(buildAccess, probeAccess, comp, 
+				joinMem, ioManager);
+		table.open(inputs[1], EmptyMutableObjectIterator.<VertexPageRank>get());
 		
 		processUpdates(iter, output);
 	}
@@ -63,28 +63,19 @@ public class VertexRankMatchingProbeCaching extends IterationHead {
 	@Override
 	public void processUpdates(MutableObjectIterator<Value> iter,
 			OutputCollectorV2 output) throws Exception {
-		stateIterator.reset();
 		
 		VertexNeighbourPartial state = new VertexNeighbourPartial();
 		VertexPageRank pageRank = new VertexPageRank();
+		
 		VertexPageRank result = new VertexPageRank();
 		
-		TypeAccessorsV2 buildAccess = new VertexPageRankAccessor();
-		TypeAccessorsV2 probeAccess = new VertexNeighbourPartialAccessor();
-		TypeComparator comp = new MatchComparator();
-		
-		MutableHashTable<Value, VertexNeighbourPartial> table = 
-				new MutableHashTable<Value, VertexNeighbourPartial>(buildAccess, probeAccess, comp, 
-				joinMem, ioManager);
-		table.open(iter, EmptyMutableObjectIterator.<VertexNeighbourPartial>get());
-		
 		int countMatches = 0;
-		int countEntries = 0;
+		int countProbes = 0;
 		
-		while(stateIterator.next(state)) {
-			countEntries++;
-			HashBucketIterator<Value, VertexNeighbourPartial> tableIter = table.getMatchesFor(state);
-			while(tableIter.next(pageRank)) {
+		while(iter.next(pageRank)) {
+			countProbes++;
+			HashBucketIterator<Value, VertexPageRank> tableIter = table.getMatchesFor(pageRank);
+			while(tableIter.next(state)) {
 				double rank = pageRank.getRank();
 				double partial = state.getPartial();
 				
@@ -98,7 +89,7 @@ public class VertexRankMatchingProbeCaching extends IterationHead {
 				}
 			}
 		}
-		LOG.info("Count entries: " + countEntries);
+		LOG.info("Count entries: " + countProbes);
 		LOG.info("Match count: " + countMatches);
 		table.close();
 	}
@@ -121,19 +112,19 @@ public class VertexRankMatchingProbeCaching extends IterationHead {
 		}
 	}
 	
-	private static final class MatchComparator implements TypeComparator<VertexNeighbourPartial, 
-		VertexPageRank>
+	private static final class MatchComparator implements TypeComparator<VertexPageRank, 
+		VertexNeighbourPartial>
 	{
 		private long key;
 
 		@Override
-		public void setReference(VertexNeighbourPartial reference, 
-				TypeAccessorsV2<VertexNeighbourPartial> accessor) {
+		public void setReference(VertexPageRank reference, 
+				TypeAccessorsV2<VertexPageRank> accessor) {
 			this.key = reference.getVid();
 		}
 
 		@Override
-		public boolean equalToReference(VertexPageRank candidate, TypeAccessorsV2<VertexPageRank> accessor) {
+		public boolean equalToReference(VertexNeighbourPartial candidate, TypeAccessorsV2<VertexNeighbourPartial> accessor) {
 			return this.key == candidate.getVid();
 		}
 	}
