@@ -102,6 +102,7 @@ public abstract class AbstractPagedInputViewV2 implements DataInputViewV2
 	{
 		this.currentSegment = null;
 		this.positionInSegment = this.headerLength;
+		this.limitInSegment = headerLength;
 	}
 	
 	protected final void advance() throws IOException
