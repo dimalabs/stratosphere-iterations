@@ -18,6 +18,7 @@ package eu.stratosphere.pact.runtime.iterative;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -334,6 +335,50 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	{
 		this(buildSideAccessors, probeSideAccessors, comparator,
 			memorySegments, ioManager, DEFAULT_RECORD_LEN);
+	}
+	
+	private MutableHashTable(MutableHashTable<BT, PT> table, TypeComparator<PT, BT> comparator) {
+		this.buildSideAccessors = table.buildSideAccessors.duplicate();
+		this.probeSideAccessors = table.probeSideAccessors.duplicate();
+		this.recordComparator = comparator;
+		this.availableMemory = Collections.unmodifiableList(table.availableMemory);
+		this.writeBehindBuffers = table.writeBehindBuffers;
+		this.ioManager = table.ioManager;
+		this.segmentSize = table.segmentSize;
+		this.totalNumBuffers = table.totalNumBuffers;
+		this.numWriteBehindBuffers = table.numWriteBehindBuffers;
+		this.bucketsPerSegmentBits = table.bucketsPerSegmentBits;
+		this.bucketsPerSegmentMask = table.bucketsPerSegmentMask;
+		this.avgRecordLen = table.avgRecordLen;
+		this.partitionsBeingBuilt = new ArrayList<HashPartition<BT,PT>>();
+		this.partitionsPending = new ArrayList<HashPartition<BT,PT>>();
+		
+		//this.probeIterator
+		// the bucket iterator can remain constant over the time
+		this.bucketIterator = new HashBucketIterator<BT, PT>(this.buildSideAccessors.duplicate(), this.recordComparator);
+		this.lazyBucketIterator = new LazyHashBucketIterator<BT, PT>(this.buildSideAccessors.duplicate(), this.recordComparator);
+		
+		this.currentEnumerator = table.currentEnumerator;
+		this.buckets = table.buckets;
+		this.numBuckets = table.numBuckets;
+		this.writeBehindBuffersAvailable = table.writeBehindBuffersAvailable;
+		this.currentRecursionDepth = table.currentRecursionDepth;
+		this.closed = table.closed;
+		
+		try {
+			for (HashPartition<BT, PT> partition : table.partitionsBeingBuilt) {
+				this.partitionsBeingBuilt.add(partition.duplicate());
+			}
+			for (HashPartition<BT, PT> partition : table.partitionsPending) {
+				this.partitionsPending.add(partition.duplicate());
+			}
+		} catch(IOException ex) {
+			throw new RuntimeException("Error while duplication HashTable");
+		}
+	}
+
+	public MutableHashTable<BT, PT> duplicate(TypeComparator<PT, BT>comparator) {
+		return new MutableHashTable<BT, PT>(this, comparator);
 	}
 	
 	
