@@ -30,6 +30,7 @@ public class PrepareDirectedTSV {
 		final String output = args[2];
 		final int spi = Integer.valueOf(args[3]);
 		
+		System.out.println("DOP/SPI: " + dop + "//" + spi);
 		JobGraph graph = new JobGraph("Bulk PageRank Broadcast -- Optimized Twitter");
 		
 		//Create tasks

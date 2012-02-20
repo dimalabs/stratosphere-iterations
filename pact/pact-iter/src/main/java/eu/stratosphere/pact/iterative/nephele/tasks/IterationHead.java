@@ -56,8 +56,8 @@ public abstract class IterationHead extends AbstractMinimalTask {
 			numInternalOutputs = 3;
 		}
 		
-		updateBufferSize = memorySize*1 / 3;
-		memorySize = memorySize* 2/3;
+		updateBufferSize = memorySize*1 / 5;
+		memorySize = memorySize*4 /5;
 	}
 
 	@Override
@@ -86,7 +86,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		LOG.info("Update memory: " + updateBufferSize + ", numSegments: " + (int) (updateBufferSize / MEMORY_SEGMENT_SIZE));
 		List<MemorySegment> updateMemory = memoryManager.allocateStrict(this,
 				(int) (updateBufferSize / MEMORY_SEGMENT_SIZE), MEMORY_SEGMENT_SIZE);
-		SerializedUpdateBuffer buffer = new SerializedUpdateBuffer(updateMemory, MEMORY_SEGMENT_SIZE);
+		SerializedUpdateBuffer buffer = new SerializedUpdateBuffer(updateMemory, MEMORY_SEGMENT_SIZE, ioManager);
 		
 		//Create and initialize internal structures for the transport of the iteration
 		//updates from the tail to the head (this class)
@@ -127,7 +127,6 @@ public abstract class IterationHead extends AbstractMinimalTask {
 				updatesBuffer = BackTrafficQueueStore.getInstance().receiveIterationEnd(
 						getEnvironment().getJobID(), 
 						getEnvironment().getIndexInSubtaskGroup());
-				updatesBuffer.switchBuffers();
 			} catch (InterruptedException ex) {	
 				throw new RuntimeException("Internal Error");
 			}
@@ -150,6 +149,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 					if (LOG.isInfoEnabled()) {
 						LOG.info(constructLogString("Starting Iteration: " + iterationCounter, getEnvironment().getTaskName(), this));
 					}
+					statsIter = new CountingIterator(new DeserializingIterator(updatesBuffer.switchBuffers()));
 					
 					BackTrafficQueueStore.getInstance().publishUpdateBuffer(
 							getEnvironment().getJobID(), 
@@ -160,7 +160,6 @@ public abstract class IterationHead extends AbstractMinimalTask {
 					AbstractIterativeTask.publishState(ChannelState.OPEN, iterStateGates);
 					
 					//Call stub function to process updates
-					statsIter = new CountingIterator(new DeserializingIterator(updatesBuffer.getReadEnd()));
 					statsOutput = new CountingOutput(innerOutput);
 					processUpdates(statsIter, statsOutput);
 					
@@ -178,7 +177,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		}
 		
 		//Call stub so that it can finish its code
-		finish(new DeserializingIterator(updatesBuffer.getReadEnd()), taskOutput); 
+		finish(new DeserializingIterator(updatesBuffer.switchBuffers()), taskOutput); 
 		
 		//Release the structures for this iteration
 		if(updatesBuffer != null) {

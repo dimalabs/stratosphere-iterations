@@ -57,7 +57,7 @@ public class PageRankPartitionedFixedRound {
 		
 		JobTaskVertex contribMatch = createTask(VertexRankMatchingBuildCaching.class, graph, dop, spi);
 		contribMatch.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(contribMatch, baseMemory*5 /9);
+		setMemorySize(contribMatch, baseMemory*6 /9);
 		
 		//Inner iteration loop tasks -- START		
 		JobTaskVertex rankReduce = createTask(RankReduceTask.class, graph, dop, spi);

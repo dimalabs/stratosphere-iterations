@@ -62,16 +62,16 @@ public class BackTrafficQueueStore {
 		queue.add(buffer);
 	}
 	
-	public void publishUpdateBuffer(JobID jobID, int subTaskId, List<MemorySegment> memorySegments, int segmentSize, 
-			UpdateQueueStrategy strategy) {
-		BlockingQueue<SerializedUpdateBuffer> queue = 
-				 safeRetrieval(iterOpenMap, getIdentifier(jobID, subTaskId));
-		if(queue == null) {
-			throw new RuntimeException("Internal Error");
-		}
-		
-		queue.add(strategy.getUpdateBufferFactory().createBuffer(jobID, subTaskId, memorySegments, segmentSize));
-	}
+//	public void publishUpdateBuffer(JobID jobID, int subTaskId, List<MemorySegment> memorySegments, int segmentSize, 
+//			UpdateQueueStrategy strategy) {
+//		BlockingQueue<SerializedUpdateBuffer> queue = 
+//				 safeRetrieval(iterOpenMap, getIdentifier(jobID, subTaskId));
+//		if(queue == null) {
+//			throw new RuntimeException("Internal Error");
+//		}
+//		
+//		queue.add(strategy.getUpdateBufferFactory().createBuffer(jobID, subTaskId, memorySegments, segmentSize));
+//	}
 	
 	public synchronized SerializedUpdateBuffer receiveUpdateBuffer(JobID jobID, int subTaskId) throws InterruptedException {
 		BlockingQueue<SerializedUpdateBuffer> queue = null;
@@ -126,20 +126,20 @@ public class BackTrafficQueueStore {
 				List<MemorySegment> memorySegments, int segmentSize);
 	}
 	
-	public enum UpdateQueueStrategy {
-		//IN_MEMORY_OBJECTS(getInstance().new ObjectQueueFactory()),
-		IN_MEMORY_SERIALIZED(getInstance().new SerializingBufferFactory());
-		
-		UpdateBufferFactory factory;
-		
-		UpdateQueueStrategy(UpdateBufferFactory factory) {
-			this.factory = factory;
-		}
-		
-		protected UpdateBufferFactory getUpdateBufferFactory() {
-			return factory;
-		}
-	}
+//	public enum UpdateQueueStrategy {
+//		//IN_MEMORY_OBJECTS(getInstance().new ObjectQueueFactory()),
+//		IN_MEMORY_SERIALIZED(getInstance().new SerializingBufferFactory());
+//		
+//		UpdateBufferFactory factory;
+//		
+//		UpdateQueueStrategy(UpdateBufferFactory factory) {
+//			this.factory = factory;
+//		}
+//		
+//		protected UpdateBufferFactory getUpdateBufferFactory() {
+//			return factory;
+//		}
+//	}
 	
 //	private class ObjectQueueFactory implements UpdateQueueFactory {
 //		@Override
@@ -162,12 +162,12 @@ public class BackTrafficQueueStore {
 //		}
 //	}
 	
-	private class SerializingBufferFactory implements UpdateBufferFactory {		
-		@Override
-		public SerializedUpdateBuffer createBuffer(final JobID jobID, final int subTaskId,
-				List<MemorySegment> memorySegments, int segmentSize) {
-			return new SerializedUpdateBuffer(memorySegments, segmentSize);
-		}
-		
-	}
+//	private class SerializingBufferFactory implements UpdateBufferFactory {		
+//		@Override
+//		public SerializedUpdateBuffer createBuffer(final JobID jobID, final int subTaskId,
+//				List<MemorySegment> memorySegments, int segmentSize) {
+//			return new SerializedUpdateBuffer(memorySegments, segmentSize);
+//		}
+//		
+//	}
 }

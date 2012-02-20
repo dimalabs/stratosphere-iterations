@@ -24,7 +24,7 @@ public class VertexRankMatchingBuildCaching extends IterationHead {
 
 	protected static final Log LOG = LogFactory.getLog(VertexRankMatchingBuildCaching.class);
 	
-	private static final int MATCH_CHUNCK_SIZE = 512*1024;
+	private static final int MATCH_CHUNCK_SIZE = 1024*1024;
 
 	private VertexPageRank vRank = new VertexPageRank();
 

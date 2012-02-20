@@ -41,14 +41,14 @@ public class IterationTail extends AbstractMinimalTask {
 		//have the same partitioning as the iteration head.
 		MutableObjectIterator<Value> input = inputs[DATA_INPUT];
 		SerializedUpdateBuffer buffer = null;
-		DataOutputViewV2 writeOutput = null;
+		//DataOutputViewV2 writeOutput = null;
 		
 		ComponentUpdate rec = new ComponentUpdate();
 		while(true) {
 			try {
 				boolean success = input.next(rec);
 				if(success) {
-					rec.write(writeOutput);
+					rec.write(buffer);
 				}
 				
 				//Iterator is exhausted, when channel is closed = FINISHING
@@ -61,14 +61,13 @@ public class IterationTail extends AbstractMinimalTask {
 				if(stateListeners[DATA_INPUT].isChanged()) {
 					if(stateListeners[DATA_INPUT].getState() == ChannelState.CLOSED) {
 						buffer.flush();
-						buffer.close();
 						//Feed data into blocking queue, so it unblocks
 						BackTrafficQueueStore.getInstance().publishIterationEnd(
 								getEnvironment().getJobID(),
 								getEnvironment().getIndexInSubtaskGroup(),
 								buffer);
 						buffer = null;
-						writeOutput = null;
+						//writeOutput = null;
 						//Signal synchronization task that we are finished 
 						publishState(ChannelState.CLOSED, getEnvironment().getOutputGate(0));
 					}
@@ -77,12 +76,15 @@ public class IterationTail extends AbstractMinimalTask {
 						buffer = BackTrafficQueueStore.getInstance().receiveUpdateBuffer(
 								getEnvironment().getJobID(),
 								getEnvironment().getIndexInSubtaskGroup());
-						writeOutput = buffer.getWriteEnd();
+						//writeOutput = buffer.getWriteEnd();
 					} else {
 						throw new RuntimeException("Illegal state");
 					}
 				}
 			}
+		}
+		if(buffer != null) {
+			buffer.close();
 		}
 		
 		//Read input from second gate so that nephele does not complain about unread

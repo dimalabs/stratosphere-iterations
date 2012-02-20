@@ -27,18 +27,16 @@ public class UpdateTempTask extends AbstractMinimalTask {
 		
 		List<MemorySegment> memSegments = 
 				memoryManager.allocateStrict(this, (int) (memorySize / SEGMENT_SIZE), SEGMENT_SIZE);
-		SerializedUpdateBuffer buffer = new SerializedUpdateBuffer(memSegments, SEGMENT_SIZE);
-		DataOutputViewV2 writeView = buffer.getWriteEnd();
+		SerializedUpdateBuffer buffer = new SerializedUpdateBuffer(memSegments, SEGMENT_SIZE, ioManager);
 		
 		while(inputs[0].next(update)) {
-			update.write(writeView);
+			update.write(buffer);
 		}
 		
 		buffer.flush();
-		buffer.close();
-		buffer.switchBuffers();
+		//buffer.close();
 		
-		DataInputViewV2 readView = buffer.getReadEnd();
+		DataInputViewV2 readView = buffer.switchBuffers();
 		DeserializingIterator readIter = new DeserializingIterator(readView);
 		while(readIter.next(update)) {
 			output.collect(update);

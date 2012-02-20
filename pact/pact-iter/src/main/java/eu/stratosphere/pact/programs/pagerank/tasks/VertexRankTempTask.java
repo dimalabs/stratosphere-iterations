@@ -27,22 +27,21 @@ public class VertexRankTempTask extends AbstractMinimalTask {
 		
 		List<MemorySegment> memSegments = 
 				memoryManager.allocateStrict(this, (int) (memorySize / SEGMENT_SIZE), SEGMENT_SIZE);
-		SerializedUpdateBuffer buffer = new SerializedUpdateBuffer(memSegments, SEGMENT_SIZE);
-		DataOutputViewV2 writeView = buffer.getWriteEnd();
+		SerializedUpdateBuffer buffer = new SerializedUpdateBuffer(memSegments, SEGMENT_SIZE, ioManager);
 		
 		while(inputs[0].next(vRank)) {
-			vRank.write(writeView);
+			vRank.write(buffer);
 		}
 		
 		buffer.flush();
-		buffer.close();
-		buffer.switchBuffers();
 		
-		DataInputViewV2 readView = buffer.getReadEnd();
+		DataInputViewV2 readView = buffer.switchBuffers();;
 		DeserializingIterator readIter = new DeserializingIterator(readView);
 		while(readIter.next(vRank)) {
 			output.collect(vRank);
 		}
+		
+		buffer.close();
 	}
 
 	@Override
