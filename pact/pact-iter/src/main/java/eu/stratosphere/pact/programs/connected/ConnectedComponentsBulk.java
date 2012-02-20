@@ -62,11 +62,11 @@ public class ConnectedComponentsBulk {
 		//Inner iteration loop tasks -- START		
 		JobTaskVertex updatesMatch = createTask(UpdateableMatchingOptimizedBulk.class, graph, dop, spi);
 		updatesMatch.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(updatesMatch, baseMemory*5/9);
+		setMemorySize(updatesMatch, baseMemory*6/9);
 		
 		JobTaskVertex reduceUpdates = createTask(UpdateReduceTask.class, graph, dop, spi);
 		reduceUpdates.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(reduceUpdates, baseMemory*3/9);
+		setMemorySize(reduceUpdates, baseMemory*2/9);
 		//Inner iteration loop tasks -- END
 		
 		JobOutputVertex sinkVertex = createOutput(NullOutput.class, output, graph, dop, spi);

@@ -87,7 +87,7 @@ public class UpdateableMatchingOptimizedCombined extends IterationHead {
 		TypeComparator comp = new MatchComparator();
 		
 		table = new MutableHashTable<Value, ComponentUpdate>(buildAccess, probeAccess, comp, 
-				joinMem, ioManager);
+				joinMem, ioManager, 128);
 		table.open(inputs[1], EmptyMutableObjectIterator.<ComponentUpdate>get());
 		
 		// Process input as normally

@@ -75,7 +75,7 @@ public class VertexRankMatchingProbeCaching extends IterationHead {
 		
 		MutableHashTable<Value, VertexNeighbourPartial> table = 
 				new MutableHashTable<Value, VertexNeighbourPartial>(buildAccess, probeAccess, comp, 
-				joinMem, ioManager);
+				joinMem, ioManager, 128);
 		table.open(iter, EmptyMutableObjectIterator.<VertexNeighbourPartial>get());
 		
 		int countMatches = 0;

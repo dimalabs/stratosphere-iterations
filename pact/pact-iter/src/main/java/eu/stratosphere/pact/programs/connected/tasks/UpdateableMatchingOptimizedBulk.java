@@ -75,8 +75,8 @@ public class UpdateableMatchingOptimizedBulk extends IterationHead {
 	@Override
 	public void processInput(MutableObjectIterator<Value> iter,
 			OutputCollectorV2 output) throws Exception {
-		sortMem = memorySize*2 / 5;
-		matchMem = memorySize*3 / 5;
+		sortMem = memorySize*2 / 6;
+		matchMem = memorySize*4 / 6;
 		// Load build side into table		
 		int chunckSize = UpdateableMatching.MATCH_CHUNCK_SIZE;
 		List<MemorySegment> joinMem = memoryManager.allocateStrict(this, (int) (matchMem/chunckSize), chunckSize);
