@@ -24,7 +24,9 @@ public class VertexNeighbourPartialAccessor implements TypeAccessorsV2<VertexNei
 
 	@Override
 	public void copyTo(VertexNeighbourPartial from, VertexNeighbourPartial to) {
-		throw new UnsupportedOperationException();
+		to.setVid(from.getVid());
+		to.setNid(from.getNid());
+		to.setPartial(from.getPartial());
 	}
 
 	@Override
@@ -71,14 +73,18 @@ public class VertexNeighbourPartialAccessor implements TypeAccessorsV2<VertexNei
 		return ((int) (vid >>> 32)) ^ ((int) vid);
 	}
 
+	private long vid;
+	private long nid;
+	
 	@Override
 	public void setReferenceForEquality(VertexNeighbourPartial toCompare) {
-		throw new UnsupportedOperationException();
+		vid = toCompare.vid;
+		nid = toCompare.nid;
 	}
 
 	@Override
 	public boolean equalToReference(VertexNeighbourPartial candidate) {
-		throw new UnsupportedOperationException();
+		return vid == candidate.vid && nid == candidate.nid;
 	}
 
 	@Override
@@ -116,7 +122,7 @@ public class VertexNeighbourPartialAccessor implements TypeAccessorsV2<VertexNei
 
 	@Override
 	public TypeAccessorsV2<VertexNeighbourPartial> duplicate() {
-		throw new UnsupportedOperationException();
+		return new VertexNeighbourPartialAccessor();
 	}
 
 }

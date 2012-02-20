@@ -1,6 +1,10 @@
 package eu.stratosphere.pact.iterative.nephele.tasks;
 
 import static eu.stratosphere.pact.iterative.nephele.tasks.AbstractIterativeTask.initStateTracking;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import eu.stratosphere.nephele.io.InputGate;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.Value;
@@ -9,10 +13,14 @@ import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateTracker;
 import eu.stratosphere.pact.iterative.nephele.util.StateChangeException;
+import eu.stratosphere.pact.programs.pagerank.tasks.VertexRankMatchingBuildCaching;
 
 public class IterationStateSynchronizer extends AbstractMinimalTask {
 	
 	private ChannelStateTracker[] stateListeners;
+	protected static final Log LOG = LogFactory.getLog(IterationStateSynchronizer.class);
+	private int count = 0;
+	private long start = 0;
 	
 	@SuppressWarnings("unchecked")
 	@Override
@@ -36,6 +44,7 @@ public class IterationStateSynchronizer extends AbstractMinimalTask {
 		
 		while(true) {
 			try {
+				start = System.nanoTime();
 				boolean success = input.next(rec);				
 				if(success) {
 					throw new RuntimeException("Received record");
@@ -46,6 +55,8 @@ public class IterationStateSynchronizer extends AbstractMinimalTask {
 				}
 			} catch (StateChangeException ex) {
 				if(stateListener.isChanged() && stateListener.getState() == ChannelState.CLOSED) {
+					LOG.info("Finnished Step: " + count + " in " + (System.nanoTime()-start)/1000000 + "");
+					count++;
 					getEnvironment().getInputGate(1).publishEvent(new ChannelStateEvent(ChannelState.CLOSED));
 				} 
 			}

@@ -81,7 +81,7 @@ public class CombiningReducingConnectedComponentsOptimized {
 
 		NepheleUtil.connectBoundedRoundsIterationLoop(tmpTask, sinkVertex, 
 				new JobTaskVertex[] {reduceUpdates}, new ShipStrategy[] {ShipStrategy.PARTITION_HASH},
-				reduceUpdates, updatesMatch, ShipStrategy.FORWARD, 30, graph, false);
+				reduceUpdates, updatesMatch, ShipStrategy.FORWARD, 13, graph, false);
 		
 		connectJobVertices(ShipStrategy.FORWARD, initialState, updatesMatch, null, null);
 		

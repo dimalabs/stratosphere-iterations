@@ -39,6 +39,7 @@ public abstract class SortingReduce extends AbstractIterativeTask {
 		PactRecordIterator pactIter = getInputIterator(iterationIter);
 		
 		try {
+			System.out.println(memorySize);
 			sorter = new UnilateralSortMerger(memoryManager, ioManager, memorySize, 64, 
 					comparators, keyPos, keyClasses, pactIter, this, 0.8f);
 		} catch (Exception ex) {

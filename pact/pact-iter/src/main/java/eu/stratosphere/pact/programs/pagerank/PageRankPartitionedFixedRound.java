@@ -57,12 +57,12 @@ public class PageRankPartitionedFixedRound {
 		
 		JobTaskVertex contribMatch = createTask(VertexRankMatchingBuildCaching.class, graph, dop, spi);
 		contribMatch.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(contribMatch, baseMemory*4 /9);
+		setMemorySize(contribMatch, baseMemory*5 /9);
 		
 		//Inner iteration loop tasks -- START		
 		JobTaskVertex rankReduce = createTask(RankReduceTask.class, graph, dop, spi);
 		rankReduce.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(contribMatch, baseMemory*3 /9);
+		setMemorySize(rankReduce, baseMemory*2 /9);
 		//Inner iteration loop tasks -- END
 		
 		JobOutputVertex sinkVertex = createOutput(RankOutput.class, output, graph, dop, spi);
@@ -77,7 +77,7 @@ public class PageRankPartitionedFixedRound {
 		
 		connectBoundedRoundsIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {rankReduce}, 
 				new ShipStrategy[] {ShipStrategy.PARTITION_HASH}, rankReduce, contribMatch, 
-				ShipStrategy.FORWARD, 13, graph, false);
+				ShipStrategy.FORWARD, 21, graph, false);
 		
 		connectJobVertices(ShipStrategy.PARTITION_HASH, vertexRankContrib, contribMatch, null, null);
 	

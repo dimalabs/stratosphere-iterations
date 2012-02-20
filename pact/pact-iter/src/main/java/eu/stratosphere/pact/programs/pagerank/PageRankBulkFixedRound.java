@@ -88,7 +88,7 @@ public class PageRankBulkFixedRound {
 		
 		connectBoundedRoundsIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {rankReduce}, 
 				new ShipStrategy[] {ShipStrategy.FORWARD}, rankReduce, contribMatch, 
-				ShipStrategy.BROADCAST, 13, graph, false);
+				ShipStrategy.BROADCAST, 21, graph, false);
 		
 		connectJobVertices(ShipStrategy.FORWARD, sortedNeighbours, contribMatch, null, null);
 	

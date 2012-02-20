@@ -24,7 +24,7 @@ public class VertexRankMatchingBuildCaching extends IterationHead {
 
 	protected static final Log LOG = LogFactory.getLog(VertexRankMatchingBuildCaching.class);
 	
-	private static final int MATCH_CHUNCK_SIZE = 32*1024;
+	private static final int MATCH_CHUNCK_SIZE = 512*1024;
 
 	private VertexPageRank vRank = new VertexPageRank();
 
@@ -45,10 +45,13 @@ public class VertexRankMatchingBuildCaching extends IterationHead {
 	@Override
 	public void processInput(MutableObjectIterator<Value> iter,
 			OutputCollectorV2 output) throws Exception {
-		int chunckSize = MATCH_CHUNCK_SIZE;
+		long chunckSize = MATCH_CHUNCK_SIZE;
 		joinMem = 
-				memoryManager.allocateStrict(this, (int) (matchMemory/chunckSize), chunckSize);
+				memoryManager.allocateStrict(this, (int) (matchMemory/chunckSize), (int)chunckSize);
 		
+		System.out.println("Match");
+		System.out.println("Mem"+matchMemory);
+		System.out.println("XYZ"+joinMem.size());
 		TypeAccessorsV2 buildAccess = new VertexNeighbourPartialAccessor();
 		TypeAccessorsV2 probeAccess = new VertexPageRankAccessor();
 		TypeComparator comp = new MatchComparator();
@@ -91,7 +94,6 @@ public class VertexRankMatchingBuildCaching extends IterationHead {
 		}
 		LOG.info("Count entries: " + countProbes);
 		LOG.info("Match count: " + countMatches);
-		table.close();
 	}
 	
 	@Override
@@ -103,6 +105,7 @@ public class VertexRankMatchingBuildCaching extends IterationHead {
 	public void finish(MutableObjectIterator<Value> iter,
 			OutputCollectorV2 output) throws Exception {
 		//forwardRecords(iter, output);
+		//table.close();
 	}
 	
 	private final void forwardRecords(MutableObjectIterator<Value> iter,
