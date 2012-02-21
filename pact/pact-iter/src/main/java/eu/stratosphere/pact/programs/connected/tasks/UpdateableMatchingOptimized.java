@@ -99,7 +99,8 @@ public class UpdateableMatchingOptimized extends IterationHead {
 			}
 		}
 		
-		LOG.info("MATCH-STATS::" + countUpdated + "::" + countUnchanged);
+		sendCounter("iteration.match.updated", countUpdated);
+		sendCounter("iteration.match.unchanged", countUnchanged);
 	}
 	
 	@Override

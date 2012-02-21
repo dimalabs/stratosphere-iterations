@@ -13,7 +13,10 @@ import eu.stratosphere.nephele.io.RecordWriter;
 import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
 import eu.stratosphere.nephele.template.AbstractInvokable;
 import eu.stratosphere.nephele.types.Record;
+import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.Value;
+import eu.stratosphere.pact.common.type.base.PactLong;
+import eu.stratosphere.pact.common.type.base.PactString;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
 import eu.stratosphere.pact.iterative.nephele.util.BackTrafficQueueStore;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent;
@@ -111,10 +114,9 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		processInput(statsIter, statsOutput);
 		
 		//Send iterative close event to indicate that this round is finished
+		sendCounter("iter.received.messages", statsIter.getCount());
+		sendCounter("iter.send.messages", statsOutput.getCount());
 		AbstractIterativeTask.publishState(ChannelState.CLOSED, iterStateGates);
-		if (LOG.isInfoEnabled()) {
-			LOG.info(constructIterationStats(-1, statsIter, statsOutput));
-		}
 		//AbstractIterativeTask.publishState(ChannelState.CLOSED, terminationOutputGate);
 		
 		//Loop until iteration terminates
@@ -163,10 +165,9 @@ public abstract class IterationHead extends AbstractMinimalTask {
 					statsOutput = new CountingOutput(innerOutput);
 					processUpdates(statsIter, statsOutput);
 					
+					sendCounter("iter.received.messages", statsIter.getCount());
+					sendCounter("iter.send.messages", statsOutput.getCount());
 					AbstractIterativeTask.publishState(ChannelState.CLOSED, iterStateGates);
-					if (LOG.isInfoEnabled()) {
-						LOG.info(constructIterationStats(iterationCounter, statsIter, statsOutput));
-					}
 					
 					updatesBuffer = null;
 					iterationCounter++;
@@ -240,12 +241,15 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		return gates;
 	}
 	
-	private Object constructIterationStats(int iteration, CountingIterator statsIter,
-			CountingOutput statsOutput) {
-		long duration = (System.nanoTime() - statsIter.getStartTime())/1000000;
-		String stats = "ITER-STATS::"+iteration+"::"+duration+"::"+statsIter.getCount()+"::"+statsOutput.getCounter();
-		
-		return constructLogString(stats, getEnvironment().getTaskName(), this);
+	PactRecord countRec = new PactRecord();
+	PactString keyStr = new PactString();
+	PactLong countLng = new PactLong();	
+	protected void sendCounter(String key, long count) throws IOException, InterruptedException {
+		keyStr.setValue(key);
+		countLng.setValue(count);
+		countRec.setField(0, keyStr);
+		countRec.setField(1, countLng);
+		//output.getWriters().get(2).emit(countRec);
 	}
 	
 	protected class ClosedListener implements EventListener {
@@ -383,7 +387,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 			throw new UnsupportedOperationException();
 		}
 		
-		public long getCounter() {
+		public long getCount() {
 			return counter;
 		}
 	}

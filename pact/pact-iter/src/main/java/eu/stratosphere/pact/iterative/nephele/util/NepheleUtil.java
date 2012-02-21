@@ -158,6 +158,7 @@ public class NepheleUtil {
 			outputConfig.addOutputShipStrategy(shipStrategy, keyPos, keyTypes);
 		}
 		inputConfig.addInputShipStrategy(shipStrategy, 0);
+		System.out.println(outputVertex.getName() + " --> " + inputVertex.getName() + "::" + channelType);
 	}
 	
 	public static void connectBoundedRoundsIterationLoop(AbstractJobVertex iterationInput, AbstractJobVertex iterationOutput,

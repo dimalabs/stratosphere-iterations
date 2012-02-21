@@ -20,12 +20,14 @@ import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.common.type.base.PactLong;
 import eu.stratosphere.pact.programs.inputs.AdjListInput;
+import eu.stratosphere.pact.programs.pagerank.tasks.ForwardingHead;
 import eu.stratosphere.pact.programs.pagerank.tasks.InitialRankAssigner;
 import eu.stratosphere.pact.programs.pagerank.tasks.RankOutput;
 import eu.stratosphere.pact.programs.pagerank.tasks.RankReducePresorted;
 import eu.stratosphere.pact.programs.pagerank.tasks.SortPairByNeighbour;
 import eu.stratosphere.pact.programs.pagerank.tasks.VertexNeighbourContribCreator;
-import eu.stratosphere.pact.programs.pagerank.tasks.VertexRankMatchingProbeCaching;
+import eu.stratosphere.pact.programs.pagerank.tasks.VertexRankMatchBuild;
+import eu.stratosphere.pact.programs.pagerank.tasks.VertexRankMatchProbeCaching;
 import eu.stratosphere.pact.programs.pagerank.tasks.VertexRankTempTask;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
@@ -42,7 +44,7 @@ public class PageRankBulkFixedRound {
 		final String input = args[1];
 		final String output = args[2];
 		final int spi = Integer.valueOf(args[3]);
-		final int baseMemory = Integer.valueOf(args[4]);
+		final long baseMemory = Long.valueOf(args[4]);
 		final Class<? extends Key> keyType = PactLong.class;
 		
 		JobGraph graph = new JobGraph("Bulk PageRank Broadcast -- Optimized Twitter");
@@ -62,13 +64,21 @@ public class PageRankBulkFixedRound {
 		
 		JobTaskVertex sortedNeighbours = createTask(SortPairByNeighbour.class, graph, dop, spi);
 		sortedNeighbours.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(sortedNeighbours, baseMemory*3 /9);
+		setMemorySize(sortedNeighbours, baseMemory*1 /9);
 		
-		JobTaskVertex contribMatch = createTask(VertexRankMatchingProbeCaching.class, graph, dop, spi);
-		contribMatch.setVertexToShareInstancesWith(sourceVertex);
-		setMemorySize(contribMatch, baseMemory*4 /9);
+		JobTaskVertex forward = createTask(ForwardingHead.class, graph, dop, spi);
+		forward.setVertexToShareInstancesWith(sourceVertex);
+		setMemorySize(forward, baseMemory*1 / 9);
 		
 		//Inner iteration loop tasks -- START		
+		JobTaskVertex buildMatch = createTask(VertexRankMatchBuild.class, graph, 4, 1);
+		buildMatch.setVertexToShareInstancesWith(sourceVertex);
+		setMemorySize(buildMatch, (baseMemory*4*spi) / 9);
+		
+		JobTaskVertex rankMatch = createTask(VertexRankMatchProbeCaching.class, graph, dop, spi);
+		rankMatch.setVertexToShareInstancesWith(sourceVertex);
+		setMemorySize(rankMatch, baseMemory*2 / 9);
+		
 		JobTaskVertex rankReduce = createTask(RankReducePresorted.class, graph, dop, spi);
 		rankReduce.setVertexToShareInstancesWith(sourceVertex);
 		//Inner iteration loop tasks -- END
@@ -86,11 +96,14 @@ public class PageRankBulkFixedRound {
 		connectJobVertices(ShipStrategy.PARTITION_HASH, vertexRankContrib, sortedNeighbours, 
 				new int[] {1}, new Class[] {keyType});
 		
-		connectBoundedRoundsIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {rankReduce}, 
-				new ShipStrategy[] {ShipStrategy.FORWARD}, rankReduce, contribMatch, 
-				ShipStrategy.BROADCAST, 21, graph, false);
+		connectBoundedRoundsIterationLoop(tmpTask, sinkVertex, new JobTaskVertex[] {buildMatch}, 
+				new ShipStrategy[] {ShipStrategy.BROADCAST}, rankReduce, forward, 
+				ShipStrategy.FORWARD, 21, graph, false);
 		
-		connectJobVertices(ShipStrategy.FORWARD, sortedNeighbours, contribMatch, null, null);
+		connectJobVertices(ShipStrategy.BROADCAST, buildMatch, rankMatch, null, null);
+		connectJobVertices(ShipStrategy.FORWARD, rankMatch, rankReduce, null, null);
+		
+		connectJobVertices(ShipStrategy.FORWARD, sortedNeighbours, rankMatch, null, null);
 	
 		//Submit job
 		submit(graph, getConfiguration());

@@ -72,11 +72,7 @@ public class VertexRankMatchingBuildCaching extends IterationHead {
 		
 		VertexPageRank result = new VertexPageRank();
 		
-		int countMatches = 0;
-		int countProbes = 0;
-		
 		while(iter.next(pageRank)) {
-			countProbes++;
 			HashBucketIterator<Value, VertexPageRank> tableIter = table.getMatchesFor(pageRank);
 			while(tableIter.next(state)) {
 				double rank = pageRank.getRank();
@@ -88,12 +84,9 @@ public class VertexRankMatchingBuildCaching extends IterationHead {
 					result.setVid(state.getNid());
 					result.setRank(rank*partial);
 					output.collect(result);
-					countMatches++;
 				}
 			}
 		}
-		LOG.info("Count entries: " + countProbes);
-		LOG.info("Match count: " + countMatches);
 	}
 	
 	@Override

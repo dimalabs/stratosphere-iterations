@@ -56,6 +56,7 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 		}
 		
 		memorySize = config.getMemorySize();
+		System.out.println("Assigned Memory: " + memorySize / 1024 / 1024);
 		
 		initInputs();
 		initOutputs();
@@ -136,17 +137,17 @@ public abstract class AbstractMinimalTask extends AbstractTask {
 	}
 	
 	@Override
-	public final void invoke() throws Exception {
-		initEnvironmentManagers();
-		setOutputAccessors();
-		
+	public final void invoke() throws Exception {		
 		try {
+			initEnvironmentManagers();
+			setOutputAccessors();
+			
 			prepareInternal();
 			
 			prepare();
 			
 			run();
-		} catch (Exception ex) {
+		} catch (Throwable ex) {
 			LOG.error(ex, ex);
 			throw new Exception("Error during execution of task ", ex);
 		} finally {

@@ -111,7 +111,7 @@ public class UpdateableMatchingOptimizedBulk extends IterationHead {
 		this.combinerThread = new CombinerThread(sorter, keyPos, keyClasses, this.stub, new PactRecordToUpdateCollector(output));
 		this.combinerThread.start();
 		
-		int count = 0;
+		int preCombineCount = 0;
 		
 		while(iter.next(probe)) {
 			HashBucketIterator<Value, ComponentUpdate> tableIter = table.getMatchesFor(probe);
@@ -133,15 +133,16 @@ public class UpdateableMatchingOptimizedBulk extends IterationHead {
 				for (int i = 0; i < numNeighbours; i++) {
 					vid.setValue(neighbourIds[i]);
 					update.setField(0, vid);
+					preCombineCount++;
 					inputCollector.collect(update);
 				}
-				count++;
 			}
 			if(tableIter.next(state)) {
 				throw new RuntimeException("there should only be one");
 			}
 		}
 		
+		this.sendCounter("iteration.combine.inputCount", preCombineCount);
 		inputCollector.close();
 		while (this.combinerThread.isAlive()) {
 			try {
@@ -150,7 +151,6 @@ public class UpdateableMatchingOptimizedBulk extends IterationHead {
 			catch (InterruptedException iex) {}
 		}
 		
-		LOG.info("MATCH-STATS::" + count);
 		sorter.close();
 	}
 	
