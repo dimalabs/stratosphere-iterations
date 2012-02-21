@@ -505,6 +505,33 @@ public class JobManager implements DeploymentManager, ExtendedManagementProtocol
 			return result;
 		}
 
+		Iterator<ExecutionVertex> it = new ExecutionGraphIterator(eg, true);
+		
+		InstanceType instanceType = instanceManager.getDefaultInstanceType();
+		AllocatedResource[] resources = new AllocatedResource[] { 
+				new AllocatedResource(
+						DummyInstance.createDummyInstance(instanceType), instanceType,
+						null),
+				new AllocatedResource(
+						DummyInstance.createDummyInstance(instanceType), instanceType,
+						null),
+				new AllocatedResource(
+						DummyInstance.createDummyInstance(instanceType), instanceType,
+						null),
+				new AllocatedResource(
+						DummyInstance.createDummyInstance(instanceType), instanceType,
+						null),
+		};
+		
+		while(it.hasNext()) {
+			ExecutionVertex vertex = it.next();
+			int ix = vertex.getEnvironment().getIndexInSubtaskGroup();
+			int cnt = vertex.getEnvironment().getCurrentNumberOfSubtasks();
+			
+			int subtasksPerInstance =  cnt >= 4? cnt / 4 : 1;
+			vertex.setAllocatedResource(resources[ix/subtasksPerInstance]);
+		}
+		
 		// Perform graph optimizations
 		if (this.optimizer != null) {
 			this.optimizer.optimize(eg);
@@ -520,7 +547,7 @@ public class JobManager implements DeploymentManager, ExtendedManagementProtocol
 		if (this.eventCollector != null) {
 			this.eventCollector.registerJob(eg, profilingEnabled);
 		}
-
+		
 		// Check if profiling should be enabled for this job
 		if (profilingEnabled) {
 			this.profiler.registerProfilingJob(eg);
