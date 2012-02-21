@@ -151,6 +151,10 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 	private HashPartition(HashPartition<BT, PT> part) throws IOException {
 		super(part.getCurrentSegment(), part.getCurrentSegmentLimit(), 0);
 		
+		this.overflowSegments = part.overflowSegments;
+		this.numOverflowSegments = part.numOverflowSegments;
+		this.nextOverflowBucket = part.nextOverflowBucket;
+		
 		this.buildSideAccessors = part.buildSideAccessors.duplicate();
 		this.probeSideAccessors = part.probeSideAccessors.duplicate();
 		this.partitionBuffers = part.partitionBuffers;
@@ -158,6 +162,9 @@ class HashPartition<BT, PT> extends AbstractPagedInputViewV2 implements Seekable
 		this.finalBufferLimit = part.finalBufferLimit;
 		this.buildSideWriteBuffer = part.buildSideWriteBuffer;
 		this.probeSideBuffer = part.probeSideBuffer;
+		this.overwriteBuffer = part.overwriteBuffer;
+		this.buildSideRecordCounter = part.buildSideRecordCounter;
+		this.probeSideRecordCounter = part.probeSideRecordCounter;
 		this.segmentSizeBits = part.segmentSizeBits;
 		this.memorySegmentSize = part.memorySegmentSize;
 		this.partitionNumber = part.partitionNumber;
