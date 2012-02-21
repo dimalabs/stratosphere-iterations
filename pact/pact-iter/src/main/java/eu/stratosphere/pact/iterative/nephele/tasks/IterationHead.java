@@ -50,13 +50,13 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		
 		if(useFixedPointTerminator) {
 			terminationStateListener = new ClosedListener();
-			getEnvironment().getOutputGate(3).subscribeToEvent(terminationStateListener, ChannelStateEvent.class);
-			numInternalOutputs = 4;
+			getEnvironment().getOutputGate(4).subscribeToEvent(terminationStateListener, ChannelStateEvent.class);
+			numInternalOutputs = 5;
 		} else {
 			int numIterations = 
 					getRuntimeConfiguration().getInteger(NUMBER_OF_ITERATIONS, -1);
 			terminationStateListener = new FixedRoundListener(numIterations);
-			numInternalOutputs = 3;
+			numInternalOutputs = 4;
 		}
 		
 		updateBufferSize = memorySize*1 / 5;
@@ -233,9 +233,10 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		int numIterOutputs = this.config.getNumOutputs() - numInternalOutputs;
 		
 		@SuppressWarnings("unchecked")
-		OutputGate<? extends Record>[] gates = new OutputGate[numIterOutputs];
+		OutputGate<? extends Record>[] gates = new OutputGate[numIterOutputs + 1];
+		gates[0] = getEnvironment().getOutputGate(3);
 		for (int i = 0; i < numIterOutputs; i++) {
-			gates[i]  = getEnvironment().getOutputGate(numInternalOutputs + i);
+			gates[1 +i]  = getEnvironment().getOutputGate(numInternalOutputs + i);
 		}
 		
 		return gates;
@@ -249,7 +250,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		countLng.setValue(count);
 		countRec.setField(0, keyStr);
 		countRec.setField(1, countLng);
-		//output.getWriters().get(2).emit(countRec);
+		output.getWriters().get(3).emit(countRec);
 	}
 	
 	protected class ClosedListener implements EventListener {

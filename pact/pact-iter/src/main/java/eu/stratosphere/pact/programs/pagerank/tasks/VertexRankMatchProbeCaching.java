@@ -34,16 +34,12 @@ public class VertexRankMatchProbeCaching extends AbstractIterativeTask {
 		VertexPageRank pageRank = new VertexPageRank();
 		VertexPageRank result = new VertexPageRank();
 		
-		int countMatches = 0;
-		int countEntries = 0;
-		
 		//Blocks until Hashtable is build
 		while(iterationIter.next(pageRank));
 		
 		MutableHashTable<Value, VertexNeighbourPartial> table = VertexRankMatchBuild.tables.get(iteration).duplicate(((TypeComparator)new VertexRankMatchBuild.MatchComparator()));
 		
 		while(stateIterator.next(state)) {
-			countEntries++;
 			HashBucketIterator<Value, VertexNeighbourPartial> tableIter = table.getMatchesFor(state);
 			while(tableIter.next(pageRank)) {
 				double rank = pageRank.getRank();
@@ -55,12 +51,10 @@ public class VertexRankMatchProbeCaching extends AbstractIterativeTask {
 					result.setVid(state.getNid());
 					result.setRank(rank*partial);
 					output.collect(result);
-					countMatches++;
 				}
 			}
 		}
-		LOG.info("Count entries: " + countEntries);
-		LOG.info("Match count: " + countMatches);
+		
 		//table.close();
 		iteration++;
 	}

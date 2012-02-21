@@ -29,6 +29,7 @@ import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.iterative.nephele.bulk.BulkIterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.AbstractMinimalTask;
 import eu.stratosphere.pact.iterative.nephele.tasks.AsynchronousIterationTail;
+import eu.stratosphere.pact.iterative.nephele.tasks.CounterTask;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationHead;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationStateSynchronizer;
 import eu.stratosphere.pact.iterative.nephele.tasks.IterationTail;
@@ -214,9 +215,15 @@ public class NepheleUtil {
 		JobTaskVertex iterationStateSynchronizer = createTask(IterationStateSynchronizer.class, graph, 1);
 		iterationStateSynchronizer.setVertexToShareInstancesWith(iterationInput);
 		
+		JobTaskVertex counter = createTask(CounterTask.class, graph, 1);
+		counter.setVertexToShareInstancesWith(iterationInput);
+		
 		//Create dummy sink for synchronization point so that nephele does not complain
 		JobOutputVertex dummySinkA = createDummyOutput(graph, 1);
 		dummySinkA.setVertexToShareInstancesWith(iterationInput);
+		
+		JobOutputVertex dummySinkB = createDummyOutput(graph, 1);
+		dummySinkB.setVertexToShareInstancesWith(iterationInput);
 
 		//Create a connection between iteration input and iteration head
 		connectJobVertices(iterationInputShipStrategy, iterationInput, iterationHead, null, null);
@@ -229,6 +236,7 @@ public class NepheleUtil {
 		//Connect synchronization task with head and tail
 		connectJobVertices(ShipStrategy.BROADCAST, iterationTail, iterationStateSynchronizer, null, null);
 		connectJobVertices(ShipStrategy.BROADCAST, iterationHead, iterationStateSynchronizer, null, null);
+		connectJobVertices(ShipStrategy.BROADCAST, iterationHead, counter, null, null);
 		
 		if(!(innerLoopStarts == null && innerLoopEnd == null)) {
 			for (int i = 0; i < innerLoopStarts.length; i++) {
@@ -244,6 +252,7 @@ public class NepheleUtil {
 		
 		//Connect synchronization task with dummy output
 		connectJobVertices(ShipStrategy.FORWARD, iterationStateSynchronizer, dummySinkA, null, null);
+		connectJobVertices(ShipStrategy.FORWARD, counter, dummySinkB, null, null);
 	}
 	
 	/*
