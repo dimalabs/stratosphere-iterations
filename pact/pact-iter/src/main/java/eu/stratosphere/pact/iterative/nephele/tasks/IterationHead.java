@@ -126,7 +126,7 @@ public abstract class IterationHead extends AbstractMinimalTask {
 			//Wait until previous iteration run is finished for this subtask
 			//and retrieve buffered updates
 			try {
-				updatesBuffer = BackTrafficQueueStore.getInstance().receiveIterationEnd(
+				updatesBuffer = (SerializedUpdateBuffer) BackTrafficQueueStore.getInstance().receiveIterationEnd(
 						getEnvironment().getJobID(), 
 						getEnvironment().getIndexInSubtaskGroup());
 			} catch (InterruptedException ex) {	
@@ -182,8 +182,8 @@ public abstract class IterationHead extends AbstractMinimalTask {
 		
 		//Release the structures for this iteration
 		if(updatesBuffer != null) {
-			//TODO!
-			updatesBuffer.close();
+			//TODO: Deactivated so that broadcast job finnished
+			//updatesBuffer.close();
 		}
 		memoryManager.release(updateMemory);
 		

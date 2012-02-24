@@ -12,7 +12,7 @@ import eu.stratosphere.pact.runtime.plugable.TypeAccessorsV2;
 import eu.stratosphere.pact.runtime.plugable.TypeComparator;
 import eu.stratosphere.pact.runtime.resettable.SpillingResettableMutableObjectIteratorV2;
 
-public class VertexRankMatchProbeCaching extends AbstractIterativeTask {
+public class ParallelVertexRankMatchProbeCaching extends AbstractIterativeTask {
 
 	boolean firstRound = true;
 	private SpillingResettableMutableObjectIteratorV2<Value> stateIterator;
@@ -38,7 +38,7 @@ public class VertexRankMatchProbeCaching extends AbstractIterativeTask {
 		while(iterationIter.next(pageRank));
 		
 		MutableHashTable<Value, VertexNeighbourPartial> table = 
-				VertexRankMatchBuild.tables.get(iteration).duplicate(((TypeComparator)new VertexRankMatchBuild.MatchComparator()));
+				ParallelVertexRankMatchBuild.tables.get(iteration).duplicate(((TypeComparator)new VertexRankMatchBuild.MatchComparator()));
 		
 		while(stateIterator.next(state)) {
 			HashBucketIterator<Value, VertexNeighbourPartial> tableIter = table.getMatchesFor(state);

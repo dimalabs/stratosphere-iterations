@@ -9,10 +9,10 @@ import eu.stratosphere.nephele.jobgraph.JobID;
 import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
 
 public class BackTrafficQueueStore {
-	private volatile HashMap<String, BlockingQueue<SerializedUpdateBuffer>> iterOpenMap =
-			new HashMap<String, BlockingQueue<SerializedUpdateBuffer>>();
-	private volatile HashMap<String, BlockingQueue<SerializedUpdateBuffer>> iterEndMap =
-			new HashMap<String, BlockingQueue<SerializedUpdateBuffer>>();
+	private volatile HashMap<String, BlockingQueue<Object>> iterOpenMap =
+			new HashMap<String, BlockingQueue<Object>>();
+	private volatile HashMap<String, BlockingQueue<Object>> iterEndMap =
+			new HashMap<String, BlockingQueue<Object>>();
 	
 	private static final BackTrafficQueueStore store = new BackTrafficQueueStore();
 	
@@ -27,10 +27,10 @@ public class BackTrafficQueueStore {
 					throw new RuntimeException("Internal Error");
 				}
 				
-				BlockingQueue<SerializedUpdateBuffer> openQueue = 
-						new ArrayBlockingQueue<SerializedUpdateBuffer>(1);
-				BlockingQueue<SerializedUpdateBuffer> endQueue = 
-						new ArrayBlockingQueue<SerializedUpdateBuffer>(1);
+				BlockingQueue<Object> openQueue = 
+						new ArrayBlockingQueue<Object>(1);
+				BlockingQueue<Object> endQueue = 
+						new ArrayBlockingQueue<Object>(1);
 				
 				iterOpenMap.put(getIdentifier(jobID, subTaskId), openQueue);
 				iterEndMap.put(getIdentifier(jobID, subTaskId), endQueue);
@@ -51,9 +51,9 @@ public class BackTrafficQueueStore {
 		}
 	}
 	
-	public void publishUpdateBuffer(JobID jobID, int subTaskId, SerializedUpdateBuffer buffer) {
+	public void publishUpdateBuffer(JobID jobID, int subTaskId, Object buffer) {
 		//publishUpdateBuffer(jobID, subTaskId, memorySegments, segmentSize, UpdateQueueStrategy.IN_MEMORY_SERIALIZED);
-		BlockingQueue<SerializedUpdateBuffer> queue = 
+		BlockingQueue<Object> queue = 
 				 safeRetrieval(iterOpenMap, getIdentifier(jobID, subTaskId));
 		if(queue == null) {
 			throw new RuntimeException("Internal Error");
@@ -73,8 +73,8 @@ public class BackTrafficQueueStore {
 //		queue.add(strategy.getUpdateBufferFactory().createBuffer(jobID, subTaskId, memorySegments, segmentSize));
 //	}
 	
-	public synchronized SerializedUpdateBuffer receiveUpdateBuffer(JobID jobID, int subTaskId) throws InterruptedException {
-		BlockingQueue<SerializedUpdateBuffer> queue = null;
+	public synchronized Object receiveUpdateBuffer(JobID jobID, int subTaskId) throws InterruptedException {
+		BlockingQueue<Object> queue = null;
 		int count = 0;
 		while(queue == null) {
 			queue = safeRetrieval(iterOpenMap, getIdentifier(jobID, subTaskId));
@@ -90,8 +90,8 @@ public class BackTrafficQueueStore {
 		return queue.take();
 	}
 	
-	public void publishIterationEnd(JobID jobID, int subTaskId, SerializedUpdateBuffer outputBuffer) {
-		BlockingQueue<SerializedUpdateBuffer> queue = 
+	public void publishIterationEnd(JobID jobID, int subTaskId, Object outputBuffer) {
+		BlockingQueue<Object> queue = 
 				 safeRetrieval(iterEndMap, getIdentifier(jobID, subTaskId));
 		if(queue == null) {
 			throw new RuntimeException("Internal Error");
@@ -100,8 +100,8 @@ public class BackTrafficQueueStore {
 		queue.add(outputBuffer);
 	}
 	
-	public SerializedUpdateBuffer receiveIterationEnd(JobID jobID, int subTaskId) throws InterruptedException {
-		BlockingQueue<SerializedUpdateBuffer> queue = 
+	public Object receiveIterationEnd(JobID jobID, int subTaskId) throws InterruptedException {
+		BlockingQueue<Object> queue = 
 				safeRetrieval(iterEndMap, getIdentifier(jobID, subTaskId));
 		if(queue == null) {
 			throw new RuntimeException("Internal Error");

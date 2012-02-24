@@ -41,6 +41,8 @@ public class UpdateTempTask extends AbstractMinimalTask {
 		while(readIter.next(update)) {
 			output.collect(update);
 		}
+		
+		buffer.close();
 	}
 
 	@Override

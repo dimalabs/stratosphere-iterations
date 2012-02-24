@@ -30,7 +30,7 @@ import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 public class CombiningReducingConnectedComponentsOptimized {	
 	public static void main(String[] args) throws JobGraphDefinitionException, IOException, JobExecutionException
 	{
-		if(args.length != 5) {
+		if(args.length != 6) {
 			System.out.println("Not correct parameters");
 			System.exit(-1);
 		}
@@ -40,6 +40,7 @@ public class CombiningReducingConnectedComponentsOptimized {
 		final String output = args[2];
 		final int spi = Integer.valueOf(args[3]);
 		final int baseMemory = Integer.valueOf(args[4]);
+		final int iterations = Integer.valueOf(args[5]);
 		
 		JobGraph graph = new JobGraph("Connected Components");
 		
@@ -81,7 +82,7 @@ public class CombiningReducingConnectedComponentsOptimized {
 
 		NepheleUtil.connectBoundedRoundsIterationLoop(tmpTask, sinkVertex, 
 				new JobTaskVertex[] {reduceUpdates}, new ShipStrategy[] {ShipStrategy.PARTITION_HASH},
-				reduceUpdates, updatesMatch, ShipStrategy.FORWARD, 13, graph, false);
+				reduceUpdates, updatesMatch, ShipStrategy.FORWARD, iterations, graph, false);
 		
 		connectJobVertices(ShipStrategy.FORWARD, initialState, updatesMatch, null, null);
 		

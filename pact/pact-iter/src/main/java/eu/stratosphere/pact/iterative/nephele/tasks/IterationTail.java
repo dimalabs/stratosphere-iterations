@@ -73,7 +73,7 @@ public class IterationTail extends AbstractMinimalTask {
 					}
 					else if(stateListeners[DATA_INPUT].getState() == ChannelState.OPEN && buffer == null) {
 						//Get new queue to put items into
-						buffer = BackTrafficQueueStore.getInstance().receiveUpdateBuffer(
+						buffer = (SerializedUpdateBuffer) BackTrafficQueueStore.getInstance().receiveUpdateBuffer(
 								getEnvironment().getJobID(),
 								getEnvironment().getIndexInSubtaskGroup());
 						//writeOutput = buffer.getWriteEnd();

@@ -16,7 +16,7 @@ import eu.stratosphere.pact.runtime.io.MemorySegmentSource;
  *
  * @author Stephan Ewen (stephan.ewen@tu-berlin.de)
  */
-public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBuffer
+public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBufferOld
 {	
 	private final ArrayBlockingQueue<MemorySegment> emptyBuffers;
 	
@@ -56,6 +56,10 @@ public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBuffer
 	
 	public void incCount() {
 		count.incrementAndGet();
+	}
+	
+	public void decCount() {
+		count.decrementAndGet();
 	}
 	
 	public int getCount() {
@@ -128,7 +132,7 @@ public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBuffer
 								SerializedPassthroughUpdateBuffer.this.unlock();
 								seg = source.take();
 								count2 = 0;
-							} else if(count2 < 100) {
+							} else if(count2 < 300) {
 								seg = source.poll(100, TimeUnit.MILLISECONDS);
 								count2++;
 							} else {
@@ -147,9 +151,5 @@ public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBuffer
 				}
 			}
 		};
-	}
-
-	public void decCount() {
-		count.decrementAndGet();
 	}
 }

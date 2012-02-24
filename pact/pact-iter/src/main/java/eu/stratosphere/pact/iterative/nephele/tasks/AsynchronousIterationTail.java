@@ -11,7 +11,6 @@ import eu.stratosphere.pact.iterative.nephele.util.BackTrafficQueueStore;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelState;
 import eu.stratosphere.pact.iterative.nephele.util.ChannelStateTracker;
 import eu.stratosphere.pact.iterative.nephele.util.SerializedPassthroughUpdateBuffer;
-import eu.stratosphere.pact.iterative.nephele.util.SerializedUpdateBuffer;
 import eu.stratosphere.pact.iterative.nephele.util.StateChangeException;
 import eu.stratosphere.pact.programs.connected.types.ComponentUpdate;
 
@@ -53,6 +52,7 @@ public class AsynchronousIterationTail extends AbstractMinimalTask {
 					rec.write(writeOutput);
 					buffer.incCount();
 					buffer.unlock();
+					//buffer.unlock();
 				}
 				
 				//Iterator is exhausted, when channel is closed = FINISHING

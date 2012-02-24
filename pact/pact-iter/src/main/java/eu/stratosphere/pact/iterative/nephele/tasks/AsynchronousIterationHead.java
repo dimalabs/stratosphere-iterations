@@ -16,6 +16,7 @@ import eu.stratosphere.pact.iterative.nephele.util.DeserializingIterator;
 import eu.stratosphere.pact.iterative.nephele.util.OutputCollectorV2;
 import eu.stratosphere.pact.iterative.nephele.util.SerializedPassthroughUpdateBuffer;
 import eu.stratosphere.pact.iterative.nephele.util.SerializedUpdateBuffer;
+import eu.stratosphere.pact.iterative.nephele.util.SerializedUpdateBufferOld;
 
 public abstract class AsynchronousIterationHead extends IterationHead {
 
@@ -69,7 +70,7 @@ public abstract class AsynchronousIterationHead extends IterationHead {
 		AbstractIterativeTask.publishState(ChannelState.CLOSED, iterStateGates);
 		
 		Thread.sleep(2000);
-		memoryManager.release(updateMemory);
+		//memoryManager.release(updateMemory);
 		
 		finished = true;
 	}
@@ -80,7 +81,7 @@ public abstract class AsynchronousIterationHead extends IterationHead {
 		private int subtaskIndex;
 		private MutableObjectIterator<Value> initialIter;
 		private boolean second = false;
-		private SerializedUpdateBuffer updatesBuffer;
+		private SerializedUpdateBufferOld updatesBuffer;
 		private DeserializingIterator updatesIter;
 		private SerializedPassthroughUpdateBuffer buffer;
 		
@@ -101,7 +102,7 @@ public abstract class AsynchronousIterationHead extends IterationHead {
 					second = true;
 					
 					try {
-						updatesBuffer = BackTrafficQueueStore.getInstance().receiveIterationEnd(
+						updatesBuffer = (SerializedUpdateBufferOld) BackTrafficQueueStore.getInstance().receiveIterationEnd(
 								id, subtaskIndex);
 						updatesIter = new DeserializingIterator(updatesBuffer.getReadEnd());
 					} catch (InterruptedException e) {

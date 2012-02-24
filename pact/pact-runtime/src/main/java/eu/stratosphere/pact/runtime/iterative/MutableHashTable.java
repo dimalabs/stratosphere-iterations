@@ -325,6 +325,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	 */
 	private volatile boolean closed;
 
+	private final boolean useLocks;
 	
 	// ------------------------------------------------------------------------
 	//                         Construction and Teardown
@@ -364,6 +365,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		this.writeBehindBuffersAvailable = table.writeBehindBuffersAvailable;
 		this.currentRecursionDepth = table.currentRecursionDepth;
 		this.closed = table.closed;
+		this.useLocks = table.useLocks;
 		
 		try {
 			for (HashPartition<BT, PT> partition : table.partitionsBeingBuilt) {
@@ -381,10 +383,17 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		return new MutableHashTable<BT, PT>(this, comparator);
 	}
 	
-	
 	public MutableHashTable(TypeAccessorsV2<BT> buildSideAccessors, TypeAccessorsV2<PT> probeSideAccessors,
 			TypeComparator<PT, BT> comparator, List<MemorySegment> memorySegments,
 			IOManager ioManager, int avgRecordLen)
+	{
+		this(buildSideAccessors, probeSideAccessors, comparator, memorySegments, ioManager, 
+				avgRecordLen, false);
+	}
+	
+	public MutableHashTable(TypeAccessorsV2<BT> buildSideAccessors, TypeAccessorsV2<PT> probeSideAccessors,
+			TypeComparator<PT, BT> comparator, List<MemorySegment> memorySegments,
+			IOManager ioManager, int avgRecordLen, boolean useLocks)
 	{
 		// some sanity checks first
 		if (memorySegments == null) {
@@ -394,6 +403,8 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 			throw new IllegalArgumentException("Too few memory segments provided. Hash Join needs at least " + 
 				MIN_NUM_MEMORY_SEGMENTS + " memory segments.");
 		}
+		
+		this.useLocks = useLocks;
 		
 		// assign the members
 		this.buildSideAccessors = buildSideAccessors;
@@ -679,6 +690,65 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	//                       Hash Table Building
 	// ------------------------------------------------------------------------
 	
+	public void openParallel()
+			throws IOException
+	{
+		// sanity checks
+		if (!this.closed) {
+			throw new IllegalStateException("Hash Join cannot be opened, because it is currently closed.");
+		}
+		this.closed = false;
+		
+		// grab the write behind buffers first
+		for (int i = this.numWriteBehindBuffers; i > 0; --i)
+		{
+			this.writeBehindBuffers.add(this.availableMemory.remove(this.availableMemory.size() - 1));
+		}
+		
+		// open builds the initial table by consuming the build-side input
+		this.currentRecursionDepth = 0;
+		
+		// create the partitions
+		final int partitionFanOut = getPartitioningFanOutNoEstimates(this.availableMemory.size());
+		if (partitionFanOut > MAX_NUM_PARTITIONS) {
+			throw new RuntimeException("Hash join created ");
+		}
+		createPartitions(partitionFanOut, 0);
+		
+		// set up the table structure. the write behind buffers are taken away, as are one buffer per partition
+		final int numBuckets = getInitialTableSize(this.availableMemory.size(), this.segmentSize, 
+			partitionFanOut, this.avgRecordLen);
+		initTable(numBuckets, (byte) partitionFanOut);
+	}
+	
+	public void buildParallelInitialTable(final MutableObjectIterator<BT> input)
+	throws IOException
+	{
+		final TypeAccessorsV2<BT> buildTypeAccessors = this.buildSideAccessors.duplicate();
+		final BT record = buildTypeAccessors.createInstance();
+		
+		// go over the complete input and insert every element into the hash table
+		while (input.next(record))
+		{
+			final int hashCode = hash(buildTypeAccessors.hash(record), 0);
+			insertIntoTable(record, hashCode);
+		}
+	}
+	
+	public void finnishParalle(final MutableObjectIterator<PT> probeSide) throws IOException{
+		// finalize the partitions
+		for (int i = 0; i < this.partitionsBeingBuilt.size(); i++) {
+			HashPartition<BT, PT> p = this.partitionsBeingBuilt.get(i);
+			p.finalizeBuildPhase(this.ioManager, this.currentEnumerator, this.writeBehindBuffers);
+		}
+		
+		// the first prober is the probe-side input
+		this.probeIterator = new ProbeIterator<PT>(probeSide, this.probeSideAccessors.createInstance());
+		
+		// the bucket iterator can remain constant over the time
+		this.bucketIterator = new HashBucketIterator<BT, PT>(this.buildSideAccessors.duplicate(), this.recordComparator);
+		this.lazyBucketIterator = new LazyHashBucketIterator<BT, PT>(this.buildSideAccessors.duplicate(), this.recordComparator);
+	}
 	/**
 	 * @param input
 	 * @throws IOException
@@ -830,7 +900,7 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 	 * @param hashCode
 	 * @throws IOException
 	 */
-	protected final void insertIntoTable(final BT record, final int hashCode)
+	protected synchronized final void insertIntoTable(final BT record, final int hashCode)
 	throws IOException
 	{
 		final int posHashCode = hashCode % this.numBuckets;
@@ -840,21 +910,41 @@ public class MutableHashTable<BT, PT> implements MemorySegmentSource
 		final int bucketInSegmentPos = (posHashCode & this.bucketsPerSegmentMask) << NUM_INTRA_BUCKET_BITS;
 		final MemorySegment bucket = this.buckets[bucketArrayPos];
 		
-		// get the basic characteristics of the bucket
-		final int partitionNumber = bucket.get(bucketInSegmentPos + HEADER_PARTITION_OFFSET);
-		
-		// get the partition descriptor for the bucket
-		if (partitionNumber < 0 || partitionNumber >= this.partitionsBeingBuilt.size()) {
-			throw new RuntimeException("Error: Hash structures in Hash-Join are corrupt. Invalid partition number for bucket.");
-		}
-		final HashPartition<BT, PT> p = this.partitionsBeingBuilt.get(partitionNumber);
-		
 		// --------- Step 1: Get the partition for this pair and put the pair into the buffer ---------
-		
-		long pointer = p.insertIntoBuildBuffer(record);
-		if (pointer != -1) {
-			// record was inserted into an in-memory partition. a pointer must be inserted into the buckets
-			insertBucketEntry(p, bucket, bucketInSegmentPos, hashCode, pointer);
+		if(useLocks) {
+			synchronized(bucket) {
+				// get the basic characteristics of the bucket
+				final int partitionNumber = bucket.get(bucketInSegmentPos + HEADER_PARTITION_OFFSET);
+				
+				// get the partition descriptor for the bucket
+				if (partitionNumber < 0 || partitionNumber >= this.partitionsBeingBuilt.size()) {
+					throw new RuntimeException("Error: Hash structures in Hash-Join are corrupt. Invalid partition number for bucket.");
+				}
+				final HashPartition<BT, PT> p = this.partitionsBeingBuilt.get(partitionNumber);
+				
+				synchronized(p) {
+					long pointer = p.insertIntoBuildBuffer(record);
+					if (pointer != -1) {
+						// record was inserted into an in-memory partition. a pointer must be inserted into the buckets
+						insertBucketEntry(p, bucket, bucketInSegmentPos, hashCode, pointer);
+					} 
+				}
+			}
+		} else {
+			// get the basic characteristics of the bucket
+			final int partitionNumber = bucket.get(bucketInSegmentPos + HEADER_PARTITION_OFFSET);
+			
+			// get the partition descriptor for the bucket
+			if (partitionNumber < 0 || partitionNumber >= this.partitionsBeingBuilt.size()) {
+				throw new RuntimeException("Error: Hash structures in Hash-Join are corrupt. Invalid partition number for bucket.");
+			}
+			final HashPartition<BT, PT> p = this.partitionsBeingBuilt.get(partitionNumber);
+			
+			long pointer = p.insertIntoBuildBuffer(record);
+			if (pointer != -1) {
+				// record was inserted into an in-memory partition. a pointer must be inserted into the buckets
+				insertBucketEntry(p, bucket, bucketInSegmentPos, hashCode, pointer);
+			}
 		}
 	}
 	

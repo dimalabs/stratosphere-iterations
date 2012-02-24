@@ -94,10 +94,18 @@ public class OutputEmitterV2 implements ChannelSelector<Value>
 		case FORWARD:
 			return robin(numberOfChannels);
 		case PARTITION_RANGE:
-			throw new UnsupportedOperationException("Unsupported distribution strategy: " + strategy.name());
+			System.arraycopy(usedChannels, 0, chan, 0, 4);
+			return chan;
 		default:
 			throw new UnsupportedOperationException("Unsupported distribution strategy: " + strategy.name());
 		}
+	}
+	
+	int[] chan = new int[4];
+	int[] usedChannels;
+	
+	public void setChannels(int[] usedChannels) {
+		this.usedChannels = usedChannels;
 	}
 	
 //	/**
