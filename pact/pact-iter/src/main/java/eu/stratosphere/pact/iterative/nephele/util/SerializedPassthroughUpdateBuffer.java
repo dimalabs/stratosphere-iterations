@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -30,8 +31,6 @@ public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBufferOld
 	
 	private final java.util.concurrent.atomic.AtomicInteger count;
 	private final Lock lock;
-	//private java.util.concurrent.atomic.AtomicBoolean wantFlush;
-	//private java.util.concurrent.locks.Lock lock;
 	
 	
 	public SerializedPassthroughUpdateBuffer(List<MemorySegment> memSegments, int segmentSize)
@@ -108,6 +107,8 @@ public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBufferOld
 		};
 	}
 	
+	private volatile boolean blocks = false;
+	
 	private MemorySegmentSource getTimeoutSource(final ArrayBlockingQueue<MemorySegment> source)
 	{
 		return new MemorySegmentSource() {
@@ -132,8 +133,9 @@ public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBufferOld
 								SerializedPassthroughUpdateBuffer.this.unlock();
 								seg = source.take();
 								count2 = 0;
-							} else if(count2 < 300) {
-								seg = source.poll(100, TimeUnit.MILLISECONDS);
+							} else if(count2 < 100) {
+								blocks = true;
+								seg = source.poll(5, TimeUnit.MILLISECONDS);
 								count2++;
 							} else {
 								return null;
@@ -151,5 +153,9 @@ public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBufferOld
 				}
 			}
 		};
+	}
+
+	public boolean isBlocking() {
+		return blocks;
 	}
 }

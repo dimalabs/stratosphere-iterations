@@ -42,11 +42,12 @@ public abstract class AsynchronousIterationHead extends IterationHead {
 		//Gates where the iterative channel state is send to
 		OutputGate<? extends Record>[] iterStateGates = getIterationOutputGates();
 		
+		int segmentSize = 4*1024;
 		//Allocate memory for update queue
 		List<MemorySegment> updateMemory = memoryManager.allocateStrict(this,
-				(int)(updateBufferSize / MEMORY_SEGMENT_SIZE), MEMORY_SEGMENT_SIZE);
+				(int)(updateBufferSize / segmentSize), segmentSize);
 		SerializedPassthroughUpdateBuffer buffer = 
-				new SerializedPassthroughUpdateBuffer(updateMemory, MEMORY_SEGMENT_SIZE);
+				new SerializedPassthroughUpdateBuffer(updateMemory, segmentSize);
 		
 		//Create and initialize internal structures for the transport of the iteration
 		//updates from the tail to the head (this class)
@@ -69,13 +70,13 @@ public abstract class AsynchronousIterationHead extends IterationHead {
 		
 		AbstractIterativeTask.publishState(ChannelState.CLOSED, iterStateGates);
 		
-		Thread.sleep(2000);
+		//Thread.sleep(2000);
 		//memoryManager.release(updateMemory);
 		
 		finished = true;
 	}
 	
-	protected static class WrappedIterator implements MutableObjectIterator<Value> {
+	public static class WrappedIterator implements MutableObjectIterator<Value> {
 
 		private JobID id;
 		private int subtaskIndex;
@@ -122,6 +123,17 @@ public abstract class AsynchronousIterationHead extends IterationHead {
 			return true;
 		}
 		
+		public boolean isBlocking() {
+			if(!second) {
+				return false;
+			} else {
+				return buffer.isBlocking();
+			}
+		}
+		
+		public int getCounter() {
+			return buffer.getCount();
+		}
 	}
 	@Override
 	public void cleanup() throws Exception {

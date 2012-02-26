@@ -5,6 +5,7 @@ import java.util.List;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import eu.stratosphere.nephele.io.RecordWriter;
 import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
 import eu.stratosphere.pact.common.type.Value;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
@@ -71,6 +72,9 @@ public class AsynchronousUpdateableMatchingOptimized extends AsynchronousIterati
 		int countUpdated = 0;
 		int countUnchanged = 0;
 		
+		boolean blocking = false;
+		RecordWriter unblockWriter = null;
+		
 		while(iter.next(probe)) {
 			LazyHashBucketIterator<Value, ComponentUpdate> tableIter = table.getLazyMatchesFor(probe);
 			if(tableIter.next(state)) {
@@ -87,7 +91,7 @@ public class AsynchronousUpdateableMatchingOptimized extends AsynchronousIterati
 					update.setCid(updateCid);
 					for (int i = 0; i < numNeighbours; i++) {
 						update.setVid(neighbourIds[i]);
-						output.collect(update);
+						output.collect(update);						
 					}
 					countUpdated++;
 				} else {
@@ -97,6 +101,18 @@ public class AsynchronousUpdateableMatchingOptimized extends AsynchronousIterati
 			if(tableIter.next(state)) {
 				throw new RuntimeException("there should only be one");
 			}
+			
+			if(!blocking) {
+				if(((WrappedIterator) iter).isBlocking()) {
+					unblockWriter = output.getWriters().get(0);
+					unblockWriter.flush();
+				}
+			}  else {
+				unblockWriter.flush();
+			}
+			//else if(((WrappedIterator) iter).getCounter() == 0) {
+			//	unblockWriter.flush();
+			//}
 		}
 		
 		LOG.info("Processing stats - Updated: " + countUpdated + " - Unchanged:" + countUnchanged);
