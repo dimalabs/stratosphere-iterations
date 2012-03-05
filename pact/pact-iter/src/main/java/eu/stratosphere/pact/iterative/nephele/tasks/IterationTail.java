@@ -44,7 +44,7 @@ public class IterationTail extends AbstractMinimalTask {
 		SerializedUpdateBuffer buffer = null;
 		//DataOutputViewV2 writeOutput = null;
 		
-		ComponentUpdateFlag rec = new ComponentUpdateFlag();
+		ComponentUpdate rec = new ComponentUpdate();
 		while(true) {
 			try {
 				boolean success = input.next(rec);

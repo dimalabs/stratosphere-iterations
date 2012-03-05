@@ -107,7 +107,8 @@ public class AsynchronousUpdateableMatchingOptimized extends AsynchronousIterati
 					unblockWriter = output.getWriters().get(0);
 					unblockWriter.flush();
 				}
-			}  else {
+			} 
+			else if(((WrappedIterator) iter).getCounter() == 0) {
 				unblockWriter.flush();
 			}
 			//else if(((WrappedIterator) iter).getCounter() == 0) {

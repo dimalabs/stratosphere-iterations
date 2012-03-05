@@ -15,8 +15,6 @@ import eu.stratosphere.pact.iterative.nephele.util.ChannelStateEvent.ChannelStat
 import eu.stratosphere.pact.iterative.nephele.util.DeserializingIterator;
 import eu.stratosphere.pact.iterative.nephele.util.OutputCollectorV2;
 import eu.stratosphere.pact.iterative.nephele.util.SerializedPassthroughUpdateBuffer;
-import eu.stratosphere.pact.iterative.nephele.util.SerializedUpdateBuffer;
-import eu.stratosphere.pact.iterative.nephele.util.SerializedUpdateBufferOld;
 
 public abstract class AsynchronousIterationHead extends IterationHead {
 
@@ -42,7 +40,7 @@ public abstract class AsynchronousIterationHead extends IterationHead {
 		//Gates where the iterative channel state is send to
 		OutputGate<? extends Record>[] iterStateGates = getIterationOutputGates();
 		
-		int segmentSize = 4*1024;
+		int segmentSize = 1024*1024;
 		//Allocate memory for update queue
 		List<MemorySegment> updateMemory = memoryManager.allocateStrict(this,
 				(int)(updateBufferSize / segmentSize), segmentSize);
@@ -66,7 +64,7 @@ public abstract class AsynchronousIterationHead extends IterationHead {
 		MutableObjectIterator<Value> input = inputs[0];
 		processInput(new WrappedIterator(input, 
 				getEnvironment().getJobID(), 
-				getEnvironment().getIndexInSubtaskGroup(), buffer), innerOutput);
+				getEnvironment().getIndexInSubtaskGroup()), innerOutput);
 		
 		AbstractIterativeTask.publishState(ChannelState.CLOSED, iterStateGates);
 		
@@ -82,17 +80,15 @@ public abstract class AsynchronousIterationHead extends IterationHead {
 		private int subtaskIndex;
 		private MutableObjectIterator<Value> initialIter;
 		private boolean second = false;
-		private SerializedUpdateBufferOld updatesBuffer;
+		private SerializedPassthroughUpdateBuffer updatesBuffer;
 		private DeserializingIterator updatesIter;
-		private SerializedPassthroughUpdateBuffer buffer;
 		
-		public WrappedIterator(MutableObjectIterator<Value> initialIter, JobID id, int subtaskIndex,
-				SerializedPassthroughUpdateBuffer buffer) {
+		public WrappedIterator(MutableObjectIterator<Value> initialIter, JobID id, int subtaskIndex) {
 			this.initialIter = initialIter;
 			this.id = id;
 			this.subtaskIndex = subtaskIndex;
-			this.buffer = buffer;
 		}
+		
 		@Override
 		public boolean next(Value target) throws IOException {
 			if(!second) {
@@ -103,7 +99,7 @@ public abstract class AsynchronousIterationHead extends IterationHead {
 					second = true;
 					
 					try {
-						updatesBuffer = (SerializedUpdateBufferOld) BackTrafficQueueStore.getInstance().receiveIterationEnd(
+						updatesBuffer = (SerializedPassthroughUpdateBuffer) BackTrafficQueueStore.getInstance().receiveIterationEnd(
 								id, subtaskIndex);
 						updatesIter = new DeserializingIterator(updatesBuffer.getReadEnd());
 					} catch (InterruptedException e) {
@@ -113,26 +109,25 @@ public abstract class AsynchronousIterationHead extends IterationHead {
 			}
 			
 			if(updatesIter.next(target)) {
-				buffer.decCount();
-			} else if(buffer.getCount() != 0) {
-				throw new RuntimeException("Could not read but there should be messages: " + buffer.getCount());
+				updatesBuffer.decCount();
+				return true;
+			} else if(updatesBuffer.getCount() != 0) {
+				throw new RuntimeException("Could not read but there should be messages: " + updatesBuffer.getCount());
 			} else {
 				return false;
 			}
-			//No else on purpose 
-			return true;
 		}
 		
 		public boolean isBlocking() {
 			if(!second) {
 				return false;
 			} else {
-				return buffer.isBlocking();
+				return updatesBuffer.isBlocking();
 			}
 		}
 		
 		public int getCounter() {
-			return buffer.getCount();
+			return updatesBuffer.getCount();
 		}
 	}
 	@Override

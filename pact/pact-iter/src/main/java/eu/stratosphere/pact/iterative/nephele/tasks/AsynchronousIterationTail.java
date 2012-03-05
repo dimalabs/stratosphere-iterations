@@ -48,11 +48,11 @@ public class AsynchronousIterationTail extends AbstractMinimalTask {
 			try {
 				boolean success = input.next(rec);
 				if(success) {
-					buffer.lock();
-					rec.write(writeOutput);
-					buffer.incCount();
-					buffer.unlock();
-					//buffer.unlock();
+					synchronized (buffer) {
+						rec.write(writeOutput);
+						buffer.incCount();
+						buffer.notifyAll();
+					}
 				}
 				
 				//Iterator is exhausted, when channel is closed = FINISHING

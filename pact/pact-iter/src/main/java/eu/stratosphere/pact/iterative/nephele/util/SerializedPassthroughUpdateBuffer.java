@@ -1,15 +1,15 @@
 package eu.stratosphere.pact.iterative.nephele.util;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 import eu.stratosphere.nephele.services.memorymanager.MemorySegment;
+import eu.stratosphere.pact.runtime.io.AbstractPagedInputViewV2;
+import eu.stratosphere.pact.runtime.io.AbstractPagedOutputViewV2;
 import eu.stratosphere.pact.runtime.io.MemorySegmentSource;
 
 /**
@@ -17,8 +17,10 @@ import eu.stratosphere.pact.runtime.io.MemorySegmentSource;
  *
  * @author Stephan Ewen (stephan.ewen@tu-berlin.de)
  */
-public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBufferOld
+public class SerializedPassthroughUpdateBuffer
 {	
+	private static final int HEADER_LENGTH = 4;
+	
 	private final ArrayBlockingQueue<MemorySegment> emptyBuffers;
 	
 	private final ArrayBlockingQueue<MemorySegment> fullBuffers;
@@ -30,13 +32,12 @@ public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBufferOld
 	private volatile boolean closed;
 	
 	private final java.util.concurrent.atomic.AtomicInteger count;
-	private final Lock lock;
+	private volatile boolean blocks = false;
 	
 	
 	public SerializedPassthroughUpdateBuffer(List<MemorySegment> memSegments, int segmentSize)
 	{
 		count = new AtomicInteger();
-		lock = new ReentrantLock();
 		final MemorySegmentSource fullBufferSource;
 		final MemorySegmentSource emptyBufferSource;
 		
@@ -63,14 +64,6 @@ public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBufferOld
 	
 	public int getCount() {
 		return count.get();
-	}
-	
-	public void lock() {
-		lock.lock();
-	}
-	
-	public void unlock() {
-		lock.unlock();
 	}
 	
 	public WriteEnd getWriteEnd() {
@@ -107,13 +100,15 @@ public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBufferOld
 		};
 	}
 	
-	private volatile boolean blocks = false;
-	
 	private MemorySegmentSource getTimeoutSource(final ArrayBlockingQueue<MemorySegment> source)
 	{
+		final SerializedPassthroughUpdateBuffer buffer = this;
+		
 		return new MemorySegmentSource() {
 			int count = 0;
-			int count2 = 0;
+			
+			SerializedPassthroughUpdateBuffer buf = buffer;
+			
 			@Override
 			public MemorySegment nextSegment() {
 				if (SerializedPassthroughUpdateBuffer.this.closed && source.isEmpty()) {
@@ -126,24 +121,30 @@ public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBufferOld
 						} else {
 							seg = source.poll();
 						}
-						while(seg == null) {
-							if(SerializedPassthroughUpdateBuffer.this.getCount() > 0) {
-								SerializedPassthroughUpdateBuffer.this.lock();
-								SerializedPassthroughUpdateBuffer.this.writeEnd.flush();
-								SerializedPassthroughUpdateBuffer.this.unlock();
-								seg = source.take();
-								count2 = 0;
-							} else if(count2 < 100) {
-								blocks = true;
-								seg = source.poll(5, TimeUnit.MILLISECONDS);
-								count2++;
-							} else {
-								return null;
+						
+						if(seg == null) {
+							synchronized (buf) {
+								//Are there some records already available?
+								if(buf.getCount() > 0) {
+									buf.writeEnd.flush();
+									seg = source.take();
+								} else {
+									//Wait up to 2 seconds to see whether some arrived
+									if(!blocks) {
+										blocks = true;
+									}
+									buf.wait(5000);
+									if(buf.getCount() > 0) {
+										buf.writeEnd.flush();
+										seg = source.take();
+									} else {
+										return null;
+									}
+								}
 							}
 						}
 						
 						count++;
-						count2 = 0;
 						return seg;
 					} catch (InterruptedException e) {
 						throw new RuntimeException("FifoBuffer was interrupted waiting next memory segment.");
@@ -157,5 +158,86 @@ public class SerializedPassthroughUpdateBuffer extends SerializedUpdateBufferOld
 
 	public boolean isBlocking() {
 		return blocks;
+	}
+	
+	protected static final class ReadEnd extends AbstractPagedInputViewV2
+	{
+		private final BlockingQueue<MemorySegment> emptyBufferTarget;
+		
+		private final MemorySegmentSource fullBufferSource;
+		
+		ReadEnd(BlockingQueue<MemorySegment> emptyBufferTarget, MemorySegmentSource fullBufferSource, int segmentSize)
+		{
+			super(HEADER_LENGTH);
+			
+			this.emptyBufferTarget = emptyBufferTarget;
+			this.fullBufferSource = fullBufferSource;
+			
+			seekInput(emptyBufferTarget.poll(), segmentSize, segmentSize);
+		}
+		
+		/* (non-Javadoc)
+		 * @see eu.stratosphere.pact.runtime.io.AbstractPagedInputViewV2#nextSegment(eu.stratosphere.nephele.services.memorymanager.MemorySegment)
+		 */
+		@Override
+		protected MemorySegment nextSegment(MemorySegment current) throws IOException {
+			try {
+				this.emptyBufferTarget.put(current);
+			} catch(Exception ex) {
+				throw new RuntimeException(ex);
+			}
+			
+			final MemorySegment seg = this.fullBufferSource.nextSegment();
+			if (seg != null) {
+				return seg;
+			} else {
+				throw new EOFException();
+			}
+		}
+
+		/* (non-Javadoc)
+		 * @see eu.stratosphere.pact.runtime.io.AbstractPagedInputViewV2#getLimitForSegment(eu.stratosphere.nephele.services.memorymanager.MemorySegment)
+		 */
+		@Override
+		protected int getLimitForSegment(MemorySegment segment) throws IOException {
+			return segment.getInt(0);
+		}
+	}
+	
+	protected static final class WriteEnd extends AbstractPagedOutputViewV2
+	{	
+		private final BlockingQueue<MemorySegment> fullBufferTarget;
+		
+		private final MemorySegmentSource emptyBufferSource;
+		
+		WriteEnd(BlockingQueue<MemorySegment> fullBufferTarget, MemorySegmentSource emptyBufferSource, int segmentSize)
+		{
+			super(emptyBufferSource.nextSegment(), segmentSize, HEADER_LENGTH);
+			
+			this.fullBufferTarget = fullBufferTarget;
+			this.emptyBufferSource = emptyBufferSource;
+		}
+
+		/* (non-Javadoc)
+		 * @see eu.stratosphere.pact.runtime.io.AbstractPagedOutputViewV2#nextSegment(eu.stratosphere.nephele.services.memorymanager.MemorySegment, int)
+		 */
+		@Override
+		protected MemorySegment nextSegment(MemorySegment current, int positionInCurrent) throws IOException
+		{
+			current.putInt(0, positionInCurrent);
+			
+			try {
+				this.fullBufferTarget.put(current);
+			} catch (Exception ex) {
+				throw new RuntimeException(ex);
+			}
+			
+			return this.emptyBufferSource.nextSegment();
+		}
+		
+		void flush() throws IOException
+		{
+			advance();
+		}
 	}
 }
