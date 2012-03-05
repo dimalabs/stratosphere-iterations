@@ -505,24 +505,34 @@ public class JobManager implements DeploymentManager, ExtendedManagementProtocol
 			return result;
 		}
 
+		//BEGIN: HACK
+		/* 
+		 * This code does a manual scheduling of the job across all available instances.
+		 * It assumes assumes that all hosts have the same instance type.
+		 */		
+		//Find out how many hosts are connected
+		Map<InstanceType, InstanceTypeDescription> instanceTypes = 
+				instanceManager.getMapOfAvailableInstanceTypes();
+		InstanceType serverType = null;
+		int numHosts = Integer.MAX_VALUE;
+		for (InstanceTypeDescription typeDescription : instanceTypes.values()) {
+			int numInstances = typeDescription.getMaximumNumberOfAvailableInstances();
+			if(numInstances >= 0 && numInstances < numHosts) {
+				numHosts = numInstances;
+				serverType = typeDescription.getInstanceType();
+			}
+		}
+		
+		//Create dummy instances
 		Iterator<ExecutionVertex> it = new ExecutionGraphIterator(eg, true);
+		AllocatedResource[] resources = new AllocatedResource[numHosts];
+		for (int i = 0; i < numHosts; i++) {
+			resources[i] = new AllocatedResource(
+					DummyInstance.createDummyInstance(serverType), serverType,
+					null);
+		}
 		
-		InstanceType instanceType = instanceManager.getDefaultInstanceType();
-		AllocatedResource[] resources = new AllocatedResource[] { 
-				new AllocatedResource(
-						DummyInstance.createDummyInstance(instanceType), instanceType,
-						null),
-				new AllocatedResource(
-						DummyInstance.createDummyInstance(instanceType), instanceType,
-						null),
-				new AllocatedResource(
-						DummyInstance.createDummyInstance(instanceType), instanceType,
-						null),
-				new AllocatedResource(
-						DummyInstance.createDummyInstance(instanceType), instanceType,
-						null),
-		};
-		
+		//Schedule dummy instances
 		while(it.hasNext()) {
 			ExecutionVertex vertex = it.next();
 			int ix = vertex.getEnvironment().getIndexInSubtaskGroup();
@@ -531,6 +541,7 @@ public class JobManager implements DeploymentManager, ExtendedManagementProtocol
 			int subtasksPerInstance =  cnt >= 4? cnt / 4 : 1;
 			vertex.setAllocatedResource(resources[ix/subtasksPerInstance]);
 		}
+		//END HACK
 		
 		// Perform graph optimizations
 		if (this.optimizer != null) {
