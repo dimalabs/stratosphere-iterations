@@ -57,6 +57,10 @@ constructPactWebFrontendClassPath() {
 			add=1
 		elif [[ "$jarfile" =~ 'pact-compiler' ]]; then
 			add=1
+		elif [[ "$jarfile" =~ 'pact4s-common' ]]; then
+			add=1
+		elif [[ "$jarfile" =~ 'scala-library' ]]; then
+			add=1
 		elif [[ "$jarfile" =~ 'commons-logging' ]]; then
 			add=1
 		elif [[ "$jarfile" =~ 'log4j' ]]; then

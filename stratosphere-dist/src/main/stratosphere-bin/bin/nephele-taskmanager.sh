@@ -54,6 +54,10 @@ constructTaskManagerClassPath() {
 			add=1
 		elif [[ "$jarfile" =~ 'pact-runtime' ]]; then
 			add=1
+		elif [[ "$jarfile" =~ 'pact4s-common' ]]; then
+			add=1
+		elif [[ "$jarfile" =~ 'scala-library' ]]; then
+			add=1
 		elif [[ "$jarfile" =~ 'jackson' ]]; then
 			add=1
 		elif [[ "$jarfile" =~ 'commons-cli' ]]; then

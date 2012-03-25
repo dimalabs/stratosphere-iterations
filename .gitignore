@@ -9,3 +9,4 @@ target
 filter.properties
 tmp/*
 pact/pact-tests/tmp/*
+.DS_Store
