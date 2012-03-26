@@ -86,6 +86,30 @@
               </includes>
             </configuration>
           </execution>
+
+      <!-- WordCountScalaPlain -->
+          <execution>
+            <id>WordCountScalaPlain</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>WordCountScalaPlain</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.example.wordcount.WordCountScalaPlain</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/wordcount/WordCountScalaPlain.class</include>
+                <include>**/wordcount/WordCountScalaPlain$*.class</include>
+              </includes>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
       

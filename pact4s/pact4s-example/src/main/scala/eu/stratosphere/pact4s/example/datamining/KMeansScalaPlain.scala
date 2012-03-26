@@ -112,21 +112,19 @@ object KMeansScalaPlain {
       out.collect(cid, sumPointSums(dataPoints))
 
     private def sumPointSums(dataPoints: Iterator[PointSum]): PointSum = {
-      dataPoints.fold(PointSum(0, Point(0, 0, 0)))(_ + _)
+      dataPoints.fold(PointSum(0, Point(0, 0)))(_ + _)
     }
   }
 
   class PointInFormat extends TextInputFormat[PactInteger, Point] {
 
-    val PointInputPattern = """(\d+)|(\d+\.\d+)|(\d+\.\d+)|(\d+\.\d+)|""".r
+    val PointInputPattern = """(\d+)\|(\d+\.\d+)\|(\d+\.\d+)\|""".r
 
-    override def readLine(pair: KeyValuePair[PactInteger, Point], line: Array[Byte]): Boolean = new String(line) match {
-      case PointInputPattern(id, x, y, z) => {
-        pair.setKey(new PactInteger(id.toInt))
-        pair.setValue(Point(x.toDouble, y.toDouble, z.toDouble))
-        true
-      }
-      case _ => false
+    override def readLine(pair: KeyValuePair[PactInteger, Point], line: Array[Byte]): Boolean = {
+      val PointInputPattern(id, x, y) = new String(line)
+      pair.setKey(new PactInteger(id.toInt))
+      pair.setValue(Point(x.toDouble, y.toDouble))
+      true        
     }
   }
 
@@ -134,30 +132,28 @@ object KMeansScalaPlain {
 
     override def writeLine(pair: KeyValuePair[PactInteger, Point]): Array[Byte] = {
       val id = pair.getKey().getValue()
-      val Point(x, y, z) = pair.getValue()
+      val Point(x, y) = pair.getValue()
 
-      "%d|%.2f|%.2f|%.2f|\n".format(id, x, y, z).getBytes()
+      "%d|%.2f|%.2f|\n".format(id, x, y).getBytes()
     }
   }
 
-  case class Point(var x: Double, var y: Double, var z: Double) extends Value {
+  case class Point(var x: Double, var y: Double) extends Value {
 
-    def this() = this(0, 0, 0)
+    def this() = this(0, 0)
 
     def computeEuclidianDistance(other: Point) = other match {
-      case Point(x2, y2, z2) => sqrt(pow(x - x2, 2) + pow(y - y2, 2) + pow(z - z2, 2))
+      case Point(x2, y2) => sqrt(pow(x - x2, 2) + pow(y - y2, 2))
     }
 
     override def read(in: DataInput) = {
       x = in.readDouble()
       y = in.readDouble()
-      z = in.readDouble()
     }
 
     override def write(out: DataOutput) = {
       out.writeDouble(x)
       out.writeDouble(y)
-      out.writeDouble(z)
     }
   }
 
@@ -195,9 +191,9 @@ object KMeansScalaPlain {
     }
 
     def +(that: PointSum) = that match {
-      case PointSum(c, Point(x, y, z)) => PointSum(count + c, Point(x + pointSum.x, y + pointSum.y, z + pointSum.z))
+      case PointSum(c, Point(x, y)) => PointSum(count + c, Point(x + pointSum.x, y + pointSum.y))
     }
 
-    def toPoint() = Point(pointSum.x / count, pointSum.y / count, pointSum.z / count)
+    def toPoint() = Point(pointSum.x / count, pointSum.y / count)
   }
 }
