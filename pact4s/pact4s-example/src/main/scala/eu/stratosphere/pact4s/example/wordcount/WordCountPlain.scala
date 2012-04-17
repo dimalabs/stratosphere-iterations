@@ -38,18 +38,18 @@ class WordCountScalaPlain extends PlanAssembler with PlanAssemblerDescription {
     val data = new FileDataSourceContract(classOf[LineInFormat], dataInput, "Input Lines")
     data.setDegreeOfParallelism(numSubTasks)
 
-	val mapper = new MapContract(classOf[TokenizeLine], "Tokenize Lines");
-	mapper.setDegreeOfParallelism(numSubTasks)
+    val mapper = new MapContract(classOf[TokenizeLine], "Tokenize Lines");
+    mapper.setDegreeOfParallelism(numSubTasks)
 
-	val reducer = new ReduceContract(classOf[CountWords], "Count Words");
-	reducer.setDegreeOfParallelism(numSubTasks)
+    val reducer = new ReduceContract(classOf[CountWords], "Count Words");
+    reducer.setDegreeOfParallelism(numSubTasks)
 
-	val out = new FileDataSinkContract(classOf[WordCountOutFormat], output, "Word Counts");
-	out.setDegreeOfParallelism(numSubTasks)
+    val out = new FileDataSinkContract(classOf[WordCountOutFormat], output, "Word Counts");
+    out.setDegreeOfParallelism(numSubTasks)
 
-	out.setInput(reducer);
-	reducer.setInput(mapper);
-	mapper.setInput(data);
+    out.setInput(reducer);
+    reducer.setInput(mapper);
+    mapper.setInput(data);
 
     new Plan(out, "WordCount Example")
   }
@@ -58,12 +58,12 @@ class WordCountScalaPlain extends PlanAssembler with PlanAssemblerDescription {
 }
 
 object WordCountScalaPlain {
-    
+
   class TokenizeLine extends MapStub[PactNull, PactString, PactString, PactInteger] {
-    
+
     override def map(key: PactNull, value: PactString, out: Collector[PactString, PactInteger]) = {
-        
-      for (val word <- value.toString().toLowerCase().split("""\W+""")) {
+
+      for (word <- value.toString().toLowerCase().split("""\W+""")) {
         out.collect(new PactString(word), new PactInteger(1))
       }
     }
@@ -74,7 +74,7 @@ object WordCountScalaPlain {
   class CountWords extends ReduceStub[PactString, PactInteger, PactString, PactInteger] {
 
     override def reduce(key: PactString, values: Iterator[PactInteger], out: Collector[PactString, PactInteger]) = {
-      val sum = values.map(_.getValue()).fold(0)(_ + _)
+      val sum = values.map(_.getValue()).sum
       out.collect(key, new PactInteger(sum))
     }
 
@@ -86,9 +86,9 @@ object WordCountScalaPlain {
   class LineInFormat extends TextInputFormat[PactNull, PactString] {
 
     override def readLine(pair: KeyValuePair[PactNull, PactString], line: Array[Byte]): Boolean = {
-        pair.setKey(new PactNull())
-        pair.setValue(new PactString(new String(line)))
-        true
+      pair.setKey(new PactNull())
+      pair.setValue(new PactString(new String(line)))
+      true
     }
   }
 

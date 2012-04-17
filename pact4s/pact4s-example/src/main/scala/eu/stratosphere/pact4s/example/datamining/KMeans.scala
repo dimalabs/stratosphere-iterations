@@ -5,13 +5,13 @@ import eu.stratosphere.pact4s.common._
 
 class KMeansScalaDSL(args: String*) extends PACTProgram {
 
-  val dataPoints       = new DataSource(params.dataPointInput, params.delimeter, parseInput)
-  val clusterPoints    = new DataSource(params.clusterInput, params.delimeter, parseInput)
+  val dataPoints = new DataSource(params.dataPointInput, params.delimeter, parseInput)
+  val clusterPoints = new DataSource(params.clusterInput, params.delimeter, parseInput)
   val newClusterPoints = new DataSink(params.output, params.delimeter, formatOutput)
 
-  val distances        = dataPoints cross clusterPoints map computeDistance _
-  val nearestCenters   = distances combine { (_, ds) => ds.minBy(_.distance) } map asPointSum _
-  val newCenters       = nearestCenters combine sumPointSums map { (cid: Int, pSum: PointSum) => pSum.toPoint() }
+  val distances = dataPoints cross clusterPoints map computeDistance _
+  val nearestCenters = distances combine { (_: Int, ds: Iterable[Distance]) => ds.minBy(_.distance) } map asPointSum _
+  val newCenters = nearestCenters combine sumPointSums map { (cid: Int, pSum: PointSum) => pSum.toPoint() }
 
   override def outputs = newClusterPoints <~ newCenters
 
@@ -37,25 +37,25 @@ class KMeansScalaDSL(args: String*) extends PACTProgram {
   def formatOutput(cid: Int, dataPoint: Point): String = dataPoint match {
     case Point(x, y, z) => "%d|%.2f|%.2f|%.2f|".format(cid, x, y, z)
   }
-  
+
   override def name = "KMeans Iteration"
   override def description = "Parameters: [noSubStasks] [dataPoints] [clusterCenters] [output]"
 
   val params = new {
-    val delimeter      = "\n"
-    val numSubTasks    = if (args.length > 0) args(0).toInt else 1
+    val delimeter = "\n"
+    val numSubTasks = if (args.length > 0) args(0).toInt else 1
     val dataPointInput = if (args.length > 1) args(1) else ""
-    val clusterInput   = if (args.length > 2) args(2) else ""
-    val output         = if (args.length > 3) args(3) else ""
+    val clusterInput = if (args.length > 2) args(2) else ""
+    val output = if (args.length > 3) args(3) else ""
   }
 
   override def getHints(item: Hintable) = item match {
-    case dataPoints()       => UniqueKey +: Degree(params.numSubTasks)
-    case clusterPoints()    => UniqueKey +: Degree(1)
+    case dataPoints() => UniqueKey +: Degree(params.numSubTasks)
+    case clusterPoints() => UniqueKey +: Degree(1)
     case newClusterPoints() => Degree(params.numSubTasks)
-    case distances()        => Degree(params.numSubTasks) +: AvgRecordSize(48)
-    case nearestCenters()   => Degree(params.numSubTasks) +: AvgRecordSize(48)
-    case newCenters()       => Degree(params.numSubTasks) +: AvgRecordSize(36)
+    case distances() => Degree(params.numSubTasks) +: RecordSize(48)
+    case nearestCenters() => Degree(params.numSubTasks) +: RecordSize(48)
+    case newCenters() => Degree(params.numSubTasks) +: RecordSize(36)
   }
 }
 

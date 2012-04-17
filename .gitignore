@@ -5,6 +5,8 @@ target
 .classpath
 .project
 .settings
+.cache
+.metadata/*
 *.class
 filter.properties
 tmp/*
