@@ -2,7 +2,6 @@ package eu.stratosphere.pact.common.io;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.MockitoAnnotations.initMocks;
 
@@ -19,9 +18,7 @@ import org.mockito.Mock;
 import eu.stratosphere.nephele.configuration.Configuration;
 import eu.stratosphere.nephele.fs.FileInputSplit;
 import eu.stratosphere.nephele.fs.Path;
-import eu.stratosphere.pact.common.io.FileInputFormat;
-import eu.stratosphere.pact.common.io.FixedLengthInputFormat;
-import eu.stratosphere.pact.common.type.KeyValuePair;
+import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactInteger;
 
 public class FixedLenghtInputFormatTest {
@@ -31,7 +28,7 @@ public class FixedLenghtInputFormatTest {
 	
 	protected File tempFile;
 	
-	private final FixedLengthInputFormat<PactInteger, PactInteger> format = new MyFixedLengthInputFormat();
+	private final FixedLengthInputFormat format = new MyFixedLengthInputFormat();
 	
 	// --------------------------------------------------------------------------------------------
 	
@@ -61,29 +58,27 @@ public class FixedLenghtInputFormatTest {
 		parameters.setInteger(FixedLengthInputFormat.RECORDLENGTH_PARAMETER_KEY, 8);
 		
 		format.configure(parameters);
-		format.setTargetReadBufferSize(5);
 		format.open(split);
 		assertEquals(0, format.start);
-		assertEquals(8, format.getReadBufferSize());
-		
+		assertEquals(0, format.getReadBufferSize() % 8);
 		format.close();
-		format.setTargetReadBufferSize(13);
+
+		parameters.setInteger(FixedLengthInputFormat.RECORDLENGTH_PARAMETER_KEY, 13);
+		format.configure(parameters);
+		format.close();
 		format.open(split);
-		assertEquals(16, format.getReadBufferSize());
+		assertEquals(0, format.getReadBufferSize() % 13);
+		format.close();
+		
+		parameters.setInteger(FixedLengthInputFormat.RECORDLENGTH_PARAMETER_KEY, 27);
+		format.configure(parameters);
+		format.close();
+		format.open(split);
+		assertEquals(0, format.getReadBufferSize() % 27);
+		format.close();
+		
 	}
 	
-	
-
-	@Test
-	public void testCreatePair() {
-		KeyValuePair<PactInteger, PactInteger> pair = format.createPair();
-		assertNotNull(pair);
-		assertNotNull(pair.getKey());
-		assertNotNull(pair.getValue());
-
-	}
-
-
 	@Test
 	public void testRead() throws IOException
 	{
@@ -95,29 +90,27 @@ public class FixedLenghtInputFormatTest {
 		parameters.setInteger(FixedLengthInputFormat.RECORDLENGTH_PARAMETER_KEY, 8);
 		
 		format.configure(parameters);
-		format.setTargetReadBufferSize(16);
 		format.open(split);
 		
-		KeyValuePair<PactInteger, PactInteger> pair = new KeyValuePair<PactInteger, PactInteger>();
-		pair.setKey(new PactInteger());
-		pair.setValue(new PactInteger());
-		assertTrue(format.nextRecord(pair));
-		assertEquals(1, pair.getKey().getValue());
-		assertEquals(2, pair.getValue().getValue());	
+		PactRecord record = new PactRecord();
 		
-		assertTrue(format.nextRecord(pair));
-		assertEquals(3, pair.getKey().getValue());
-		assertEquals(4, pair.getValue().getValue());
+		assertTrue(format.nextRecord(record));
+		assertEquals(1, record.getField(0, PactInteger.class).getValue());
+		assertEquals(2, record.getField(1, PactInteger.class).getValue());	
 		
-		assertTrue(format.nextRecord(pair));
-		assertEquals(5, pair.getKey().getValue());
-		assertEquals(6, pair.getValue().getValue());
+		assertTrue(format.nextRecord(record));
+		assertEquals(3, record.getField(0, PactInteger.class).getValue());
+		assertEquals(4, record.getField(1, PactInteger.class).getValue());
 		
-		assertTrue(format.nextRecord(pair));
-		assertEquals(7, pair.getKey().getValue());
-		assertEquals(8, pair.getValue().getValue());
+		assertTrue(format.nextRecord(record));
+		assertEquals(5, record.getField(0, PactInteger.class).getValue());
+		assertEquals(6, record.getField(1, PactInteger.class).getValue());
 		
-		assertFalse(format.nextRecord(pair));
+		assertTrue(format.nextRecord(record));
+		assertEquals(7, record.getField(0, PactInteger.class).getValue());
+		assertEquals(8, record.getField(1, PactInteger.class).getValue());
+		
+		assertFalse(format.nextRecord(record));
 		assertTrue(format.reachedEnd());
 	}
 
@@ -134,32 +127,29 @@ public class FixedLenghtInputFormatTest {
 		parameters.setInteger(FixedLengthInputFormat.RECORDLENGTH_PARAMETER_KEY, 8);
 		
 		format.configure(parameters);
-		format.setTargetReadBufferSize(17);
 		format.open(split);
 		
-		KeyValuePair<PactInteger, PactInteger> pair = new KeyValuePair<PactInteger, PactInteger>();
-		pair.setKey(new PactInteger());
-		pair.setValue(new PactInteger());
+		PactRecord record = new PactRecord();
 
 		try {
 		
-			assertTrue(format.nextRecord(pair));
-			assertEquals(1, pair.getKey().getValue());
-			assertEquals(2, pair.getValue().getValue());
+			assertTrue(format.nextRecord(record));
+			assertEquals(1, record.getField(0, PactInteger.class).getValue());
+			assertEquals(2, record.getField(1, PactInteger.class).getValue());
 			
-			assertTrue(format.nextRecord(pair));
-			assertEquals(3, pair.getKey().getValue());
-			assertEquals(4, pair.getValue().getValue());
-	
-			assertTrue(format.nextRecord(pair));
-			assertEquals(5, pair.getKey().getValue());
-			assertEquals(6, pair.getValue().getValue());
-	
-			assertTrue(format.nextRecord(pair));
-			assertEquals(7, pair.getKey().getValue());
-			assertEquals(8, pair.getValue().getValue());
+			assertTrue(format.nextRecord(record));
+			assertEquals(3, record.getField(0, PactInteger.class).getValue());
+			assertEquals(4, record.getField(1, PactInteger.class).getValue());
 			
-			format.nextRecord(pair);
+			assertTrue(format.nextRecord(record));
+			assertEquals(5, record.getField(0, PactInteger.class).getValue());
+			assertEquals(6, record.getField(1, PactInteger.class).getValue());
+			
+			assertTrue(format.nextRecord(record));
+			assertEquals(7, record.getField(0, PactInteger.class).getValue());
+			assertEquals(8, record.getField(1, PactInteger.class).getValue());
+			
+			assertFalse(format.nextRecord(record));
 
 		} catch(IOException ioe) {
 			assertTrue(ioe.getMessage().equals("Unable to read full record"));
@@ -182,23 +172,30 @@ public class FixedLenghtInputFormatTest {
 	}
 		
 	
-	private final class MyFixedLengthInputFormat extends FixedLengthInputFormat<PactInteger, PactInteger> {
+	private final class MyFixedLengthInputFormat extends FixedLengthInputFormat {
 
+		PactInteger p1 = new PactInteger();
+		PactInteger p2 = new PactInteger();
+		
 		@Override
-		public boolean readBytes(KeyValuePair<PactInteger, PactInteger> pair, byte[] record) {
-			int key = 0;
-			key = (key | record[0]) << 8;
-			key = (key | record[1]) << 8;
-			key = (key | record[2]) << 8;
-			key = (key | record[3]);
-			int value = 0;
-			value = (value | record[4]) << 8;
-			value = (value | record[5]) << 8;
-			value = (value | record[6]) << 8;
-			value = (value | record[7]);
+		public boolean readBytes(PactRecord target, byte[] buffer, int startPos) {
+			int v1 = 0;
+			v1 = (v1 | buffer[startPos+0]) << 8;
+			v1 = (v1 | buffer[startPos+1]) << 8;
+			v1 = (v1 | buffer[startPos+2]) << 8;
+			v1 = (v1 | buffer[startPos+3]);
+			p1.setValue(v1);
 			
-			pair.getKey().setValue(key);
-			pair.getValue().setValue(value);
+			int v2 = 0;
+			v2 = (v2 | buffer[startPos+4]) << 8;
+			v2 = (v2 | buffer[startPos+5]) << 8;
+			v2 = (v2 | buffer[startPos+6]) << 8;
+			v2 = (v2 | buffer[startPos+7]);
+			p2.setValue(v2);
+			
+			target.setField(0, p1);
+			target.setField(1, p2);
+			
 			return true;
 		}
 	}

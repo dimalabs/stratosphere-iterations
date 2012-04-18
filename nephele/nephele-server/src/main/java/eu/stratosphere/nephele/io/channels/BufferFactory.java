@@ -15,33 +15,36 @@
 
 package eu.stratosphere.nephele.io.channels;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Deque;
 
-import eu.stratosphere.nephele.io.channels.Buffer;
-import eu.stratosphere.nephele.io.channels.ChannelID;
-import eu.stratosphere.nephele.io.channels.InternalBuffer;
+import eu.stratosphere.nephele.io.AbstractID;
 
-public abstract class BufferFactory {
+public final class BufferFactory {
 
-	public static Buffer createFromCheckpoint(int bufferSize, ChannelID sourceChannelID, long offset,
-			FileBufferManager fileBufferManager) {
+	public static FileBuffer createFromFile(final int bufferSize, final AbstractID ownerID,
+			final FileBufferManager fileBufferManager, final boolean distributed, final boolean deleteOnClose)
+			throws IOException {
 
-		final InternalBuffer internalBuffer = new CheckpointFileBuffer(bufferSize, sourceChannelID, offset,
-			fileBufferManager);
-		return new Buffer(internalBuffer);
+		return new FileBuffer(bufferSize, ownerID, fileBufferManager, distributed, deleteOnClose);
 	}
 
-	public static Buffer createFromFile(int bufferSize, ChannelID sourceChannelID, FileBufferManager fileBufferManager) {
+	public static FileBuffer createFromCheckpoint(final int bufferSize, final long offset,
+			final AbstractID ownerID, final FileBufferManager fileBufferManager, final boolean distributed)
+			throws IOException {
 
-		final InternalBuffer internalBuffer = new FileBuffer(bufferSize, sourceChannelID, fileBufferManager);
-		return new Buffer(internalBuffer);
+		return new FileBuffer(bufferSize, offset, ownerID, fileBufferManager, distributed, false);
 	}
 
-	public static Buffer createFromMemory(int bufferSize, ByteBuffer byteBuffer,
-			Deque<ByteBuffer> queueForRecycledBuffers) {
+	public static Buffer createFromMemory(final int bufferSize, final ByteBuffer byteBuffer,
+			final MemoryBufferPoolConnector bufferPoolConnector) {
 
-		final InternalBuffer internalBuffer = new MemoryBuffer(bufferSize, byteBuffer, queueForRecycledBuffers);
-		return new Buffer(internalBuffer);
+		return new MemoryBuffer(bufferSize, byteBuffer, bufferPoolConnector);
+	}
+
+	/**
+	 * Private constructor to prevent instantiation.
+	 */
+	private BufferFactory() {
 	}
 }

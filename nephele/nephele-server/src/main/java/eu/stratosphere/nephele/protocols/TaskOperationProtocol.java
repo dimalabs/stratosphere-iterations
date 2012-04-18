@@ -17,15 +17,17 @@ package eu.stratosphere.nephele.protocols;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 
-import eu.stratosphere.nephele.configuration.Configuration;
-import eu.stratosphere.nephele.execution.Environment;
 import eu.stratosphere.nephele.execution.librarycache.LibraryCacheProfileRequest;
 import eu.stratosphere.nephele.execution.librarycache.LibraryCacheProfileResponse;
 import eu.stratosphere.nephele.execution.librarycache.LibraryCacheUpdate;
 import eu.stratosphere.nephele.executiongraph.ExecutionVertexID;
+import eu.stratosphere.nephele.io.channels.ChannelID;
 import eu.stratosphere.nephele.protocols.VersionedProtocol;
 import eu.stratosphere.nephele.taskmanager.TaskCancelResult;
+import eu.stratosphere.nephele.taskmanager.TaskCheckpointResult;
+import eu.stratosphere.nephele.taskmanager.TaskKillResult;
 import eu.stratosphere.nephele.taskmanager.TaskSubmissionResult;
 import eu.stratosphere.nephele.taskmanager.TaskSubmissionWrapper;
 
@@ -39,22 +41,6 @@ import eu.stratosphere.nephele.taskmanager.TaskSubmissionWrapper;
 public interface TaskOperationProtocol extends VersionedProtocol {
 
 	/**
-	 * Submits a task to the task manager.
-	 * 
-	 * @param id
-	 *        the ID of the corresponding execution vertex
-	 * @param jobConfiguration
-	 *        the job configuration that has been attached to the original job graph
-	 * @param ee
-	 *        the environment containing the task
-	 * @return the result of the task submission
-	 * @throws IOException
-	 *         thrown if an error occurs during this remote procedure call
-	 */
-	TaskSubmissionResult submitTask(ExecutionVertexID id, Configuration jobConfiguration, Environment ee)
-			throws IOException;
-
-	/**
 	 * Submits a list of tasks to the task manager.
 	 * 
 	 * @param tasks
@@ -66,15 +52,28 @@ public interface TaskOperationProtocol extends VersionedProtocol {
 	List<TaskSubmissionResult> submitTasks(List<TaskSubmissionWrapper> tasks) throws IOException;
 
 	/**
-	 * Advises the task manager to cancel the task with the given ID
+	 * Advises the task manager to cancel the task with the given ID.
 	 * 
 	 * @param id
 	 *        the ID of the task to cancel
-	 * @return the result of the task cancel
+	 * @return the result of the task cancel attempt
 	 * @throws IOException
 	 *         thrown if an error occurs during this remote procedure call
 	 */
 	TaskCancelResult cancelTask(ExecutionVertexID id) throws IOException;
+
+	/**
+	 * Advises the task manager to kill the task with the given ID.
+	 * 
+	 * @param id
+	 *        the ID of the task to kill
+	 * @return the result of the task kill attempt
+	 * @throws IOException
+	 *         thrown if an error occurs during this remote procedure call
+	 */
+	TaskKillResult killTask(ExecutionVertexID id) throws IOException;
+
+	TaskCheckpointResult requestCheckpointDecision(ExecutionVertexID id) throws IOException;
 
 	/**
 	 * Queries the task manager about the cache status of the libraries stated in the {@link LibraryCacheProfileRequest}
@@ -95,7 +94,7 @@ public interface TaskOperationProtocol extends VersionedProtocol {
 	 * @param update
 	 *        a {@link LibraryCacheUpdate} object used to transmit the library data
 	 * @throws IOException
-	 *         if an error occurs during this remote procedure call
+	 *         thrown if an error occurs during this remote procedure call
 	 */
 	void updateLibraryCache(LibraryCacheUpdate update) throws IOException;
 
@@ -105,16 +104,34 @@ public interface TaskOperationProtocol extends VersionedProtocol {
 	 * @param listOfVertexIDs
 	 *        the list of vertex IDs which identify the checkpoints to be removed
 	 * @throws IOException
-	 *         if an error occurs during this remote procedure call
+	 *         thrown if an error occurs during this remote procedure call
 	 */
 	void removeCheckpoints(List<ExecutionVertexID> listOfVertexIDs) throws IOException;
+
+	/**
+	 * Invalidates the entries identified by the given channel IDs from the task manager's receiver lookup cache.
+	 * 
+	 * @param channelIDs
+	 *        the channel IDs identifying the cache entries to invalidate
+	 * @throws IOException
+	 *         thrown if an error occurs during this remote procedure call
+	 */
+	void invalidateLookupCacheEntries(Set<ChannelID> channelIDs) throws IOException;
 
 	/**
 	 * Triggers the task manager write the current utilization of its read and write buffers to its logs.
 	 * This method is primarily for debugging purposes.
 	 * 
 	 * @throws IOException
-	 *         throws if an error occurs while transmitting the request
+	 *         thrown if an error occurs while transmitting the request
 	 */
 	void logBufferUtilization() throws IOException;
+
+	/**
+	 * Kills the task manager. This method is mainly intended to test and debug Nephele's fault tolerance mechanisms.
+	 * 
+	 * @throws IOException
+	 *         thrown if an error occurs during this remote procedure call
+	 */
+	void killTaskManager() throws IOException;
 }

@@ -140,8 +140,7 @@ public class LocalFileSystem extends FileSystem {
 	 */
 	@Override
 	public FSDataInputStream open(final Path f, final int bufferSize) throws IOException {
-		// TODO Auto-generated method stub
-		return null;
+		return open(f);
 	}
 
 	/**
@@ -281,5 +280,17 @@ public class LocalFileSystem extends FileSystem {
 	public FSDataOutputStream create(final Path f, final boolean overwrite) throws IOException {
 
 		return create(f, overwrite, 0, (short) 0, 0);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public boolean rename(final Path src, final Path dst) throws IOException {
+
+		final File srcFile = pathToFile(src);
+		final File dstFile = pathToFile(dst);
+
+		return srcFile.renameTo(dstFile);
 	}
 }

@@ -20,6 +20,7 @@ import java.io.IOException;
 import eu.stratosphere.nephele.instance.HardwareDescription;
 import eu.stratosphere.nephele.instance.InstanceConnectionInfo;
 import eu.stratosphere.nephele.protocols.VersionedProtocol;
+import eu.stratosphere.nephele.taskmanager.TaskCheckpointState;
 import eu.stratosphere.nephele.taskmanager.TaskExecutionState;
 
 /**
@@ -45,11 +46,22 @@ public interface JobManagerProtocol extends VersionedProtocol {
 			throws IOException;
 
 	/**
-	 * Reports the result of a task execution to the job manager.
+	 * Reports an update of a task's execution state to the job manager.
 	 * 
-	 * @param executionResult
+	 * @param taskExecutionState
+	 *        the new task execution state
 	 * @throws IOException
 	 *         thrown if an error occurs during this remote procedure call
 	 */
-	void updateTaskExecutionState(TaskExecutionState executionResult) throws IOException;
+	void updateTaskExecutionState(TaskExecutionState taskExecutionState) throws IOException;
+
+	/**
+	 * Reports an update of a task's checkpoint state to the job manager.
+	 * 
+	 * @param taskCheckpointState
+	 *        the new checkpoint state of the task
+	 * @throws IOException
+	 *         thrown if an error occurs during this remote procedure call
+	 */
+	void updateCheckpointState(TaskCheckpointState taskCheckpointState) throws IOException;
 }

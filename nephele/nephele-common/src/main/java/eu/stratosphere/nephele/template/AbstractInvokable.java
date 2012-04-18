@@ -28,7 +28,7 @@ public abstract class AbstractInvokable {
 	/**
 	 * The environment assigned to this invokable.
 	 */
-	private Environment environment = null;
+	private volatile Environment environment = null;
 
 	/**
 	 * Must be overwritten by the concrete task to instantiate the required record reader and record writer.
@@ -50,7 +50,7 @@ public abstract class AbstractInvokable {
 	 * @param environment
 	 *        the environment of this task
 	 */
-	public final void setEnvironment(Environment environment) {
+	public final void setEnvironment(final Environment environment) {
 		this.environment = environment;
 	}
 
@@ -59,7 +59,7 @@ public abstract class AbstractInvokable {
 	 * 
 	 * @return the environment of this task or <code>null</code> if the environment has not yet been set
 	 */
-	//TODO: This method should be final
+	// TODO: This method should be final
 	public Environment getEnvironment() {
 		return this.environment;
 	}
@@ -119,13 +119,23 @@ public abstract class AbstractInvokable {
 	}
 
 	/**
-	 * Returns the runtime configuration object which was attached to the original {@link JobVertex}.
+	 * Returns the task configuration object which was attached to the original {@link JobVertex}.
 	 * 
-	 * @return the runtime configuration object which was attached to the original {@link JobVertex}
+	 * @return the task configuration object which was attached to the original {@link JobVertex}
 	 */
-	public final Configuration getRuntimeConfiguration() {
+	public final Configuration getTaskConfiguration() {
 
-		return this.environment.getRuntimeConfiguration();
+		return this.environment.getTaskConfiguration();
+	}
+
+	/**
+	 * Returns the job configuration object which was attached to the original {@link JobGraph}.
+	 * 
+	 * @return the job configuration object which was attached to the original {@link JobGraph}
+	 */
+	public final Configuration getJobConfiguration() {
+
+		return this.environment.getJobConfiguration();
 	}
 
 	/**

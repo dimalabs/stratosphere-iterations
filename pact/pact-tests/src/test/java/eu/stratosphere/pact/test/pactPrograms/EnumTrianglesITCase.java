@@ -49,8 +49,8 @@ public class EnumTrianglesITCase extends TestBase {
 						   "<f> <http://xmlns.com/foaf/0.1/knows> <i>\n" + "<g> <http://xmlns.com/foaf/0.1/knows> <i>\n" +
 						   "<g> <http://willNotWork> <h>\n";
 
-	private String expected = "<a> <b> <a> <c> <b> <c>\n" + "<a> <b> <a> <d> <b> <d>\n" + "<a> <c> <a> <d> <c> <d>\n" + 
-	                          "<b> <c> <b> <d> <c> <d>\n" + "<f> <g> <f> <i> <g> <i>\n";
+	private String expected = "<a> <b> <c>\n" + "<a> <b> <d>\n" + "<a> <c> <d>\n" + 
+	                          "<b> <c> <d>\n" + "<f> <g> <i>\n";
 	
 	public EnumTrianglesITCase(Configuration config) {
 		super(config);

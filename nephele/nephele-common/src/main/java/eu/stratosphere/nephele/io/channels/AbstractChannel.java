@@ -98,8 +98,10 @@ public abstract class AbstractChannel implements IOReadableWritable {
 	 * @return <code>true</code> if the channel is closed, <code>false</code> otherwise
 	 * @throws IOException
 	 *         thrown if an error occurred while closing the channel
+	 * @throws InterruptedException
+	 *         thrown if the channel is interrupted while waiting for this operation to complete
 	 */
-	public abstract boolean isClosed() throws IOException;
+	public abstract boolean isClosed() throws IOException, InterruptedException;
 
 	/**
 	 * {@inheritDoc}
@@ -169,5 +171,12 @@ public abstract class AbstractChannel implements IOReadableWritable {
 	 * Releases all resources (especially buffers) which are currently allocated by this channel. This method should be
 	 * called in case of a task error or as a result of a cancel operation.
 	 */
-	public abstract void releaseResources();
+	public abstract void releaseAllResources();
+
+	/**
+	 * Returns the number of bytes which have been transmitted through this channel since its instantiation.
+	 * 
+	 * @return the number of bytes which have been transmitted through this channel since its instantiation
+	 */
+	public abstract long getAmountOfDataTransmitted();
 }

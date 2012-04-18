@@ -22,6 +22,7 @@ import java.util.Map;
 import eu.stratosphere.pact.common.contract.Contract;
 import eu.stratosphere.pact.common.contract.ReduceContract;
 import eu.stratosphere.pact.common.plan.Visitor;
+import eu.stratosphere.pact.common.util.FieldSet;
 import eu.stratosphere.pact.compiler.DataStatistics;
 import eu.stratosphere.pact.compiler.costs.CostEstimator;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
@@ -33,7 +34,7 @@ import eu.stratosphere.pact.runtime.task.util.TaskConfig.LocalStrategy;
 public class CombinerNode extends OptimizerNode {
 	private PactConnection input;
 
-	public CombinerNode(ReduceContract<?, ?, ?, ?> reducer, OptimizerNode predecessor, float reducingFactor) {
+	public CombinerNode(ReduceContract reducer, OptimizerNode predecessor, float reducingFactor) {
 		super(reducer);
 
 		this.input = new PactConnection(predecessor, this, ShipStrategy.FORWARD);
@@ -46,9 +47,11 @@ public class CombinerNode extends OptimizerNode {
 		this.setInstancesPerMachine(predecessor.getInstancesPerMachine());
 
 		// set the estimates
-		this.estimatedKeyCardinality = predecessor.estimatedKeyCardinality;
+		this.estimatedCardinality.putAll(predecessor.estimatedCardinality);
+		
+		long estKeyCard = getEstimatedCardinality(new FieldSet(getPactContract().getKeyColumnNumbers(0)));
 
-		if (predecessor.estimatedNumRecords >= 1 && predecessor.estimatedKeyCardinality >= 1
+		if (predecessor.estimatedNumRecords >= 1 && estKeyCard >= 1
 			&& predecessor.estimatedOutputSize >= -1) {
 			this.estimatedNumRecords = (long) (predecessor.estimatedNumRecords * reducingFactor);
 			this.estimatedOutputSize = (long) (predecessor.estimatedOutputSize * reducingFactor);
@@ -81,6 +84,11 @@ public class CombinerNode extends OptimizerNode {
 			default:	        return 0;
 		}
 	}
+	
+	@Override
+	public ReduceContract getPactContract() {
+		return (ReduceContract) super.getPactContract();
+	}
 
 	@Override
 	public void setInputs(Map<Contract, OptimizerNode> contractToNode) {
@@ -88,8 +96,8 @@ public class CombinerNode extends OptimizerNode {
 	}
 
 	@Override
-	public List<PactConnection> getIncomingConnections() {
-		return Collections.singletonList(input);
+	public List<List<PactConnection>> getIncomingConnections() {
+		return Collections.singletonList(Collections.singletonList(this.input));
 	}
 
 	@Override
@@ -115,9 +123,85 @@ public class CombinerNode extends OptimizerNode {
 	@Override
 	public void accept(Visitor<OptimizerNode> visitor) {
 		if (visitor.preVisit(this)) {
-			input.getSourcePact().accept(visitor);
+			this.input.getSourcePact().accept(visitor);
 			visitor.postVisit(this);
 		}
 	}
 
+	public boolean isFieldKept(int input, int fieldNumber) {
+		return false;
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#readCopyProjectionAnnotations()
+	 */
+	@Override
+	protected void readCopyProjectionAnnotations() {
+		// DO NOTHING		
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#readReadsAnnotation()
+	 */
+	@Override
+	protected void readReadsAnnotation() {
+		// DO NOTHING
+	}
+	
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#deriveOutputSchema()
+	 */
+	@Override
+	public void deriveOutputSchema() {
+		// DataSink has no output
+		// DO NOTHING
+	}
+	
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#getWriteSet(int)
+	 */
+	@Override
+	public FieldSet getWriteSet(int input) {
+		return null;
+	}
+	
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#getReadSet(int)
+	 */
+	@Override
+	public FieldSet getReadSet(int input) {
+		return null;
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#computeOutputSchema(java.util.List)
+	 */
+	@Override
+	public FieldSet computeOutputSchema(List<FieldSet> inputSchemas) {
+		return null;
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#getWriteSet(int, java.util.List)
+	 */
+	@Override
+	public FieldSet getWriteSet(int input, List<FieldSet> inputSchemas) {
+		return null;
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#isValidInputSchema(int, int[])
+	 */
+	@Override
+	public boolean isValidInputSchema(int input, FieldSet inputSchema) {
+		return false;
+	}
 }

@@ -1,3 +1,4 @@
+#!/bin/bash
 ########################################################################################################################
 # 
 #  Copyright (C) 2010 by the Stratosphere project (http://stratosphere.eu)
@@ -12,8 +13,6 @@
 #  specific language governing permissions and limitations under the License.
 # 
 ########################################################################################################################
-
-#!/bin/bash
 
 STARTSTOP=$1
 EXECUTIONMODE=$2
@@ -62,6 +61,8 @@ constructJobManagerClassPath() {
 		elif [[ "$jarfile" =~ 'nephele-clustermanager' ]]; then
 			add=1
 		elif [[ "$jarfile" =~ 'nephele-ec2cloudmanager' ]]; then
+			add=1
+		elif [[ "$jarfile" =~ 'nephele-streaming' ]]; then
 			add=1
 		elif [[ "$jarfile" =~ 'commons-codec' ]]; then
 			add=1

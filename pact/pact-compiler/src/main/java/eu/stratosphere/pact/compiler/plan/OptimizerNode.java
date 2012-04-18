@@ -15,30 +15,35 @@
 
 package eu.stratosphere.pact.compiler.plan;
 
-import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.Map.Entry;
 
+import eu.stratosphere.pact.common.contract.AbstractPact;
 import eu.stratosphere.pact.common.contract.CoGroupContract;
+import eu.stratosphere.pact.common.contract.CompilerHints;
 import eu.stratosphere.pact.common.contract.Contract;
 import eu.stratosphere.pact.common.contract.CrossContract;
-import eu.stratosphere.pact.common.contract.FileDataSinkContract;
-import eu.stratosphere.pact.common.contract.FileDataSourceContract;
+import eu.stratosphere.pact.common.contract.GenericDataSink;
+import eu.stratosphere.pact.common.contract.GenericDataSource;
 import eu.stratosphere.pact.common.contract.MapContract;
 import eu.stratosphere.pact.common.contract.MatchContract;
-import eu.stratosphere.pact.common.contract.OutputContractConfigurable;
 import eu.stratosphere.pact.common.contract.ReduceContract;
 import eu.stratosphere.pact.common.plan.Visitable;
 import eu.stratosphere.pact.common.plan.Visitor;
+import eu.stratosphere.pact.common.stubs.StubAnnotation.ExplicitModifications;
+import eu.stratosphere.pact.common.stubs.StubAnnotation.OutCardBounds;
+import eu.stratosphere.pact.common.util.FieldSet;
 import eu.stratosphere.pact.compiler.CompilerException;
 import eu.stratosphere.pact.compiler.Costs;
 import eu.stratosphere.pact.compiler.DataStatistics;
 import eu.stratosphere.pact.compiler.GlobalProperties;
 import eu.stratosphere.pact.compiler.LocalProperties;
-import eu.stratosphere.pact.compiler.OutputContract;
 import eu.stratosphere.pact.compiler.costs.CostEstimator;
 import eu.stratosphere.pact.runtime.task.util.TaskConfig.LocalStrategy;
 
@@ -47,7 +52,7 @@ import eu.stratosphere.pact.runtime.task.util.TaskConfig.LocalStrategy;
  * representation is used by the optimizer to determine the algorithms to be used
  * and to create the Nephele schedule for the runtime system.
  * 
- * @author Fabian Hüske (fabian.hueske@tu-berlin.de)
+ * @author Fabian Hueske (fabian.hueske@tu-berlin.de)
  * @author Stephan Ewen (stephan.ewen@tu -berlin.de)
  */
 public abstract class OptimizerNode implements Visitable<OptimizerNode>
@@ -62,8 +67,8 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	public enum PactType {
 		Cogroup(CoGroupContract.class),
 		Cross(CrossContract.class),
-		DataSource(FileDataSourceContract.class),
-		DataSink(FileDataSinkContract.class),
+		DataSource(GenericDataSource.class),
+		DataSink(GenericDataSink.class),
 		Map(MapContract.class),
 		Match(MatchContract.class),
 		Reduce(ReduceContract.class);
@@ -112,9 +117,15 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	// ------------------------------------------------------------------------
 
 	private final Contract pactContract; // The contract (Reduce / Match / DataSource / ...)
-
-	private final OutputContract outputContract; // the outputContract
-
+	
+	protected int stubOutCardLB; // The lower bound of the stubs output cardinality
+	
+	protected int stubOutCardUB; // The upper bound of the stubs output cardinality
+	
+	protected FieldSet explWrites; // The set of explicitly written fields
+	
+	protected FieldSet outputSchema; // The fields are present in the output records
+	
 	private List<PactConnection> outgoingConnections; // The links to succeeding nodes
 
 	private List<InterestingProperties> intProps; // the interesting properties of this node
@@ -127,6 +138,9 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	
 	protected Map<OptimizerNode, OptimizerNode> branchPlan; // the actual plan alternative chosen at a branch point
 
+	protected OptimizerNode lastJoinedBranchNode; // the node with latest branch (node with multiple outputs)
+	                                          // that both children share and that is at least partially joined
+
 	protected LocalStrategy localStrategy; // The local strategy (sorting / hashing, ...)
 
 	protected Costs nodeCosts; // the costs incurred by this node
@@ -137,7 +151,9 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 
 	protected long estimatedNumRecords = -1; // the estimated number of key/value pairs in the output
 
-	protected long estimatedKeyCardinality = -1; // the estimated number of distinct keys in the output
+	protected Map<FieldSet, Long> estimatedCardinality = new HashMap<FieldSet, Long>(); // the estimated number of distinct keys in the output
+	
+	protected Set<FieldSet> uniqueFields = new HashSet<FieldSet>(); // the fields which are unique
 
 	private int degreeOfParallelism = -1; // the number of parallel instances of this node
 
@@ -171,7 +187,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 		this.localProps = new LocalProperties();
 		this.globalProps = new GlobalProperties();
 
-		this.outputContract = determineOutputContractFromStub();
+		this.readStubAnnotations();
 	}
 
 	/**
@@ -193,18 +209,31 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 		this.pactContract = toClone.pactContract;
 		this.localStrategy = toClone.localStrategy;
 
-		this.outputContract = toClone.outputContract;
+//		this.outputContract = toClone.outputContract;
 
 		this.localProps = localProps;
 		this.globalProps = globalProps;
 
 		this.estimatedOutputSize = toClone.estimatedOutputSize;
-		this.estimatedKeyCardinality = toClone.estimatedKeyCardinality;
+		
+		this.estimatedCardinality.putAll(toClone.estimatedCardinality);
 		this.estimatedNumRecords = toClone.estimatedNumRecords;
 
 		this.id = toClone.id;
 		this.degreeOfParallelism = toClone.degreeOfParallelism;
 		this.instancesPerMachine = toClone.instancesPerMachine;
+		
+		this.stubOutCardLB = toClone.stubOutCardLB;
+		this.stubOutCardUB = toClone.stubOutCardUB;
+		
+		if (toClone.uniqueFields != null && toClone.uniqueFields.size() > 0) {
+			for (FieldSet uniqueField : toClone.uniqueFields) {
+				this.uniqueFields.add((FieldSet)uniqueField.clone());
+			}
+		}
+		
+		this.explWrites = toClone.explWrites;
+		this.outputSchema = toClone.outputSchema == null ? null : (FieldSet)toClone.outputSchema.clone(); 
 
 		// check, if this node branches. if yes, this candidate must be associated with
 		// the branching template node.
@@ -212,7 +241,10 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 			this.branchPlan = new HashMap<OptimizerNode, OptimizerNode>(6);
 			this.branchPlan.put(toClone, this);
 		}
-	}
+
+		// remember the highest node in our sub-plan that branched.
+		this.lastJoinedBranchNode = toClone.lastJoinedBranchNode;
+}
 
 	// ------------------------------------------------------------------------
 	//      Abstract methods that implement node specific behavior
@@ -244,24 +276,15 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * 
 	 * @return The list of incoming links.
 	 */
-	public abstract List<PactConnection> getIncomingConnections();
+	public abstract List<List<PactConnection>> getIncomingConnections();
 
-	/**
-	 * Causes this node to compute its output estimates (such as number of rows, size in bytes)
-	 * based on the inputs and the compiler hints. The compiler hints are instantiated with conservative
-	 * default values which are used if no other values are provided. Nodes may access the statistics to
-	 * determine relevant information.
-	 * 
-	 * @param statistics
-	 *        The statistics object which may be accessed to get statistical information.
-	 *        The parameter may be null, if no statistics are available.
-	 */
-	public abstract void computeOutputEstimates(DataStatistics statistics);
 
 	/**
 	 * Tells the node to compute the interesting properties for its inputs. The interesting properties
 	 * for the node itself must have been computed before.
 	 * The node must then see how many of interesting properties it preserves and add its own.
+	 * 
+	 * @param estimator		The {@code CostEstimator} instance to use for plan cost estimation. 
 	 */
 	public abstract void computeInterestingPropertiesForInputs(CostEstimator estimator);
 
@@ -295,6 +318,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 *        The graph traversing visitor.
 	 * @see eu.stratosphere.pact.common.plan.Visitable#accept(eu.stratosphere.pact.common.plan.Visitor)
 	 */
+	@Override
 	public abstract void accept(Visitor<OptimizerNode> visitor);
 
 	/**
@@ -314,7 +338,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * @return This node's id, or -1, if not yet set.
 	 */
 	public int getId() {
-		return id;
+		return this.id;
 	}
 
 	/**
@@ -351,7 +375,11 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * @return The list of outgoing connections.
 	 */
 	public List<PactConnection> getOutgoingConnections() {
-		return this.outgoingConnections == null ? Collections.<PactConnection> emptyList() : this.outgoingConnections;
+		
+		if(this.outgoingConnections == null) {
+			this.outgoingConnections = new ArrayList<PactConnection>();
+		}
+		return this.outgoingConnections;
 	}
 
 	/**
@@ -369,16 +397,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * @return The type of the PACT.
 	 */
 	public PactType getPactType() {
-		return PactType.getType(pactContract.getClass());
-	}
-
-	/**
-	 * Gets the output contract declared on the user function that is wrapped in the PACT of this node.
-	 * 
-	 * @return The declared output contract, or <tt>OutputContract.None</tt>, if none was declared.
-	 */
-	public OutputContract getOutputContract() {
-		return outputContract;
+		return PactType.getType(this.pactContract.getClass());
 	}
 
 	/**
@@ -390,7 +409,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * @return The degree of parallelism.
 	 */
 	public int getDegreeOfParallelism() {
-		return degreeOfParallelism;
+		return this.degreeOfParallelism;
 	}
 
 	/**
@@ -419,7 +438,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * @return The number of instances per machine.
 	 */
 	public int getInstancesPerMachine() {
-		return instancesPerMachine;
+		return this.instancesPerMachine;
 	}
 
 	/**
@@ -444,7 +463,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * @return The memory per task, in MiBytes.
 	 */
 	public int getMemoryPerTask() {
-		return memoryPerTask;
+		return this.memoryPerTask;
 	}
 
 	/**
@@ -464,7 +483,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * @return The node-costs, or null, if not yet set.
 	 */
 	public Costs getNodeCosts() {
-		return nodeCosts;
+		return this.nodeCosts;
 	}
 
 	/**
@@ -474,7 +493,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * @return The cumulative costs, or null, if not yet set.
 	 */
 	public Costs getCumulativeCosts() {
-		return cumulativeCosts;
+		return this.cumulativeCosts;
 	}
 
 	/**
@@ -484,7 +503,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * @return The local strategy.
 	 */
 	public LocalStrategy getLocalStrategy() {
-		return localStrategy;
+		return this.localStrategy;
 	}
 
 	/**
@@ -513,7 +532,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * @return The local properties.
 	 */
 	public LocalProperties getLocalProperties() {
-		return localProps;
+		return this.localProps;
 	}
 
 	/**
@@ -522,7 +541,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * @return The global properties.
 	 */
 	public GlobalProperties getGlobalProperties() {
-		return globalProps;
+		return this.globalProps;
 	}
 
 	/**
@@ -531,7 +550,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * @return The estimated output size.
 	 */
 	public long getEstimatedOutputSize() {
-		return estimatedOutputSize;
+		return this.estimatedOutputSize;
 	}
 
 	/**
@@ -540,16 +559,20 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * @return The estimated number of records.
 	 */
 	public long getEstimatedNumRecords() {
-		return estimatedNumRecords;
+		return this.estimatedNumRecords;
 	}
 
-	/**
-	 * Gets the estimated key cardinality of this node's output.
-	 * 
-	 * @return The estimated key cardinality.
-	 */
-	public long getEstimatedKeyCardinality() {
-		return estimatedKeyCardinality;
+	
+	public Map<FieldSet, Long> getEstimatedCardinalities() {
+		return estimatedCardinality;
+	}
+	
+	public long getEstimatedCardinality(FieldSet cP) {
+		Long estimate;
+		if ((estimate = estimatedCardinality.get(cP)) == null) {
+			estimate = -1L;
+		}
+		return estimate;
 	}
 
 	/**
@@ -562,6 +585,12 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 		return getOutgoingConnections() != null && getOutgoingConnections().size() > 1;
 	}
 
+	/**
+	 * Sets the basic cost for this {@code OptimizerNode}
+	 * 
+	 * @param nodeCosts		The already knows costs for this node
+	 * 						(this cost a produces by a concrete {@code OptimizerNode} subclass.
+	 */
 	public void setCosts(Costs nodeCosts) {
 		// set the node costs
 		this.nodeCosts = nodeCosts;
@@ -570,8 +599,12 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 		this.cumulativeCosts = new Costs(0, 0);
 		this.cumulativeCosts.addCosts(nodeCosts);
 
-		for (PactConnection p : getIncomingConnections()) {
-			this.cumulativeCosts.addCosts(p.getSourcePact().cumulativeCosts);
+		for(List<PactConnection> pl : getIncomingConnections()) {
+			for (PactConnection p : pl) {
+				Costs parentCosts = p.getSourcePact().cumulativeCosts;
+				if(parentCosts != null)
+					this.cumulativeCosts.addCosts(parentCosts);
+			}
 		}
 	}
 
@@ -580,16 +613,54 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	// ------------------------------------------------------------------------
 
 	/**
+	 * This method step over all inputs recursively and combines all alternatives per input with all
+	 * other alternative of all other inputs.
+	 * 
+	 * @param inPlans		all alternative plans for all incoming connections (which are unioned)
+	 * @param predList		list of currently chosen alternative plans (has one entry for each incoming connection)
+	 * 						[this list is build up recursively within the method]
+	 * @param estimator		the cost estimator
+	 * @param alternativeSubPlans	all generated alternative for this node
+	 */
+	@SuppressWarnings("unchecked")
+	final protected void getAlternativeSubPlanCombinationsRecursively(List<? extends OptimizerNode>[] inPlans,
+			ArrayList<OptimizerNode> predList, List<List<OptimizerNode>> alternativeSubPlans)
+	{
+		final int inputNumberToProcess = predList.size();
+		final int numberOfAlternatives = inPlans[inputNumberToProcess].size();
+
+		for(int i = 0; i < numberOfAlternatives; ++i) {
+			predList.add(inPlans[inputNumberToProcess].get(i));
+		
+			// check if the hit the last recursion level
+			if(inputNumberToProcess + 1 == inPlans.length) {
+				// last recursion level: create a new alternative now
+
+				// we clone the current list in order to preserve this alternative plan combination
+				// otherwise we would override it later in...
+				alternativeSubPlans.add((ArrayList<OptimizerNode>)predList.clone());
+				
+			} else {
+				// step to next input and start to step though all plan alternatives
+				getAlternativeSubPlanCombinationsRecursively(inPlans, predList, alternativeSubPlans);
+			}
+			
+			// remove the added alternative plan node, in order to replace it with the next alternative at the beginning of the loop
+			predList.remove(inputNumberToProcess);
+		}
+	}
+	
+	/**
 	 * Checks, if all outgoing connections have their interesting properties set from their target nodes.
 	 * 
 	 * @return True, if on all outgoing connections, the interesting properties are set. False otherwise.
 	 */
 	public boolean haveAllOutputConnectionInterestingProperties() {
-		if (outgoingConnections == null) {
+		if (this.outgoingConnections == null) {
 			return true;
 		}
 
-		for (PactConnection conn : outgoingConnections) {
+		for (PactConnection conn : this.outgoingConnections) {
 			if (conn.getInterestingProperties() == null) {
 				return false;
 			}
@@ -619,56 +690,199 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 
 		this.intProps = props.isEmpty() ? Collections.<InterestingProperties> emptyList() : props;
 	}
-
+	
+	
 	/**
-	 * Utility method that gets the output contract declared on a user function.
+	 * Causes this node to compute its output estimates (such as number of rows, size in bytes)
+	 * based on the inputs and the compiler hints. The compiler hints are instantiated with conservative
+	 * default values which are used if no other values are provided. Nodes may access the statistics to
+	 * determine relevant information.
 	 * 
-	 * @return The <tt>OutputContract</tt> enum for the declared output contract, or <tt>OutputContract.None</tt>,
-	 *         if none is declared.
-	 * @throws CompilerException
-	 *         Thrown, if more than one output contract is declared on the user function.
+	 * @param statistics
+	 *        The statistics object which may be accessed to get statistical information.
+	 *        The parameter may be null, if no statistics are available.
 	 */
-	protected OutputContract determineOutputContractFromStub() {
-		Class<? extends Annotation> clazz = null;
-		OutputContract oc = null;
-
-		// Check whether output Contact is overridden
-		if (getPactContract() instanceof OutputContractConfigurable) {
-			clazz = ((OutputContractConfigurable) getPactContract()).getOutputContract();
-			if (clazz != null) {
-				OutputContract cc = OutputContract.getOutputContract(clazz);
-				if (cc != null) {
-					oc = cc;
-				}
+	public void computeOutputEstimates(DataStatistics statistics) {
+		
+		boolean allPredsAvailable = true;
+		
+		for (List<PactConnection> incomingConnections : getIncomingConnections()) {
+			if (allPredsAvailable) {
+				for (PactConnection incomingConnection : incomingConnections) {
+					if (incomingConnection.getSourcePact() == null) {
+						allPredsAvailable = false;
+						break;
+					}
+				}	
+			}
+			else {
+				break;
 			}
 		}
+		
+		CompilerHints hints = getPactContract().getCompilerHints();
 
-		// get all annotations on the class
-		if (oc == null) {
-			Class<?> stubClass = getPactContract().getUserCodeClass();
-			Annotation[] allAnnotations = stubClass.getAnnotations();
+		computeUniqueFields();
+		
+		// check if preceding nodes are available
+		if (!allPredsAvailable) {
+			// Preceding node is not available, we take hints as given
+			//this.estimatedKeyCardinality = hints.getKeyCardinality();
+			this.estimatedCardinality.putAll(hints.getDistinctCounts());
+			
+			this.estimatedNumRecords = 0;
+			int count = 0;
+			
+			for (Entry<FieldSet, Long> cardinality : hints.getDistinctCounts().entrySet()) {
+				float avgNumValues = hints.getAvgNumRecordsPerDistinctFields(cardinality.getKey());
+				if (avgNumValues != -1) {
+					this.estimatedNumRecords += cardinality.getValue() * avgNumValues;
+					count++;
+				}
+			}
+			
+			if (count > 0) {
+				this.estimatedNumRecords = (this.estimatedNumRecords /count) >= 1 ?
+						(this.estimatedNumRecords /count) : 1;
+			}
+			else {
+				this.estimatedNumRecords = -1;
+			}
+			
+			if (this.estimatedNumRecords != -1 && hints.getAvgBytesPerRecord() != -1) {
+				this.estimatedOutputSize = (this.estimatedNumRecords * hints.getAvgBytesPerRecord() >= 1) ? 
+						(long) (this.estimatedNumRecords * hints.getAvgBytesPerRecord()) : 1;
+			}
+			
+		} else {
+			// We have a preceding node
+		
+			// ############# output cardinality estimation ##############
+			
+			boolean outputCardEstimated = true;
+				
+			this.estimatedNumRecords = 0;
+			int count = 0;
 
-			// for each annotation, see if it is a output contract annotation
-			for (int i = 0; i < allAnnotations.length; i++) {
-				clazz = allAnnotations[i].annotationType();
+			//If we have cardinalities and avg num values available for some fields, calculate 
+			//the average of those
+			for (Entry<FieldSet, Long> cardinality : hints.getDistinctCounts().entrySet()) {
+				float avgNumValues = hints.getAvgNumRecordsPerDistinctFields(cardinality.getKey());
+				if (avgNumValues != -1) {
+					this.estimatedNumRecords += cardinality.getValue() * avgNumValues;
+					count++;
+				}
+			}
+			
+			if (count > 0) {
+				this.estimatedNumRecords = (this.estimatedNumRecords /count) >= 1 ?
+						(this.estimatedNumRecords /count) : 1;
+			}
+			else {
 
-				// check if this is an output contract annotation
-				if (clazz.getEnclosingClass().equals(eu.stratosphere.pact.common.contract.OutputContract.class)) {
-					OutputContract cc = OutputContract.getOutputContract(clazz);
-					if (cc != null) {
-						if (oc == null) {
-							oc = cc;
-						} else {
-							throw new CompilerException("Contract '" + pactContract.getName() + "' ("
-								+ getPactType().name() + ") has more than one output contract.");
-						}
+				// default output cardinality is equal to number of stub calls
+				this.estimatedNumRecords = this.computeNumberOfStubCalls();
+				
+				if(hints.getAvgRecordsEmittedPerStubCall() != -1.0 && this.computeNumberOfStubCalls() != -1) {
+					// we know how many records are in average emitted per stub call
+					this.estimatedNumRecords = (this.computeNumberOfStubCalls() * hints.getAvgRecordsEmittedPerStubCall() >= 1) ?
+							(long) (this.computeNumberOfStubCalls() * hints.getAvgRecordsEmittedPerStubCall()) : 1;
+				} else {
+					outputCardEstimated = false;
+				}
+			}
+						
+			// ############# output key cardinality estimation ##########
+
+			this.estimatedCardinality.putAll(hints.getDistinctCounts());	
+
+			
+			if (this.getUniqueFields() != null) {
+				for (FieldSet uniqueFieldSet : this.uniqueFields) {
+					if (this.estimatedCardinality.get(uniqueFieldSet) == null) {
+						this.estimatedCardinality.put(uniqueFieldSet, this.estimatedNumRecords);
 					}
 				}
 			}
-		}
+			
+			
+			for (int input = 0; input < getIncomingConnections().size(); input++) {
+				int[] keyColumns;
+				if ((keyColumns = getConstantKeySet(input)) != null) {
+					long estimatedKeyCardinality; 
+					if(hints.getAvgRecordsEmittedPerStubCall() < 1.0) {
+						// in average less than one record is emitted per stub call
+						
+						// compute the probability that at least one stub call emits a record for a given key 
+						double probToKeepKey = 1.0 - Math.pow((1.0 - hints.getAvgRecordsEmittedPerStubCall()), this.computeStubCallsPerProcessedKey());
 
-		return oc == null ? OutputContract.None : oc;
+						estimatedKeyCardinality = (this.computeNumberOfProcessedKeys() * probToKeepKey >= 1) ?
+								(long) (this.computeNumberOfProcessedKeys() * probToKeepKey) : 1;
+					} else {
+						// in average more than one record is emitted per stub call. We assume all keys are kept.
+						estimatedKeyCardinality = this.computeNumberOfProcessedKeys();
+					}
+					
+					FieldSet fieldSet = new FieldSet(keyColumns);
+					if (estimatedCardinality.get(fieldSet) == null) {
+						estimatedCardinality.put(fieldSet, estimatedKeyCardinality);	
+					}
+				}
+			}
+			
+			if(this.estimatedNumRecords != -1) {
+				for (Entry<FieldSet, Float> avgNumValues : hints.getAvgNumRecordsPerDistinctFields().entrySet()) {
+					if (estimatedCardinality.get(avgNumValues.getKey()) == null) {
+						long estimatedCard = (this.estimatedNumRecords / avgNumValues.getValue() >= 1) ? 
+								(long) (this.estimatedNumRecords / avgNumValues.getValue()) : 1;
+						estimatedCardinality.put(avgNumValues.getKey(), estimatedCard);
+					}
+				}
+			}
+			 
+			// try to reversely estimate output cardinality from key cardinality
+			if(!outputCardEstimated) { //this.estimatedKeyCardinality != -1 &&
+				// we could derive an estimate for key cardinality but could not derive an estimate for the output cardinality
+				
+				long newEstimatedNumRecords = 0;
+				count = 0;
+				
+				for (Entry<FieldSet, Long> cardinality : estimatedCardinality.entrySet()) {
+					float avgNumValues = hints.getAvgNumRecordsPerDistinctFields(cardinality.getKey());
+					if (avgNumValues != -1) {
+						// we have a hint for average values per key
+						newEstimatedNumRecords += cardinality.getValue() * avgNumValues;
+						count++;
+					}
+				}
+				
+				if (count > 0) {
+					newEstimatedNumRecords = (newEstimatedNumRecords /count) >= 1 ?
+							(newEstimatedNumRecords /count) : 1;
+				}
+			}
+			
+				
+			// ############# output size estimation #####################
+
+			double estAvgRecordWidth = this.computeAverageRecordWidth();
+			
+			if(this.estimatedNumRecords != -1 && estAvgRecordWidth != -1) {
+				// we have a cardinality estimate and width estimate
+
+				this.estimatedOutputSize = (this.estimatedNumRecords * estAvgRecordWidth) >= 1 ? 
+						(long)(this.estimatedNumRecords * estAvgRecordWidth) : 1;
+			}
+			
+			// check that the key-card is maximally as large as the number of rows
+			for (Entry<FieldSet, Long> cardinality : this.estimatedCardinality.entrySet()) {
+				if (cardinality.getValue() > this.estimatedNumRecords) {
+					cardinality.setValue(this.estimatedNumRecords);
+				}
+			}
+		}
 	}
+	
 
 	/**
 	 * Takes the given list of plans that are candidates for this node in the final plan and retains for each distinct
@@ -732,9 +946,9 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	}
 
 	private final <T extends OptimizerNode> void prunePlansWithCommonBranchAlternatives(List<T> plans) {
-		List<List<T>> toKeep = new ArrayList<List<T>>(intProps.size()); // for each interesting property, which plans
+		List<List<T>> toKeep = new ArrayList<List<T>>(this.intProps.size()); // for each interesting property, which plans
 		// are cheapest
-		for (int i = 0; i < intProps.size(); i++) {
+		for (int i = 0; i < this.intProps.size(); i++) {
 			toKeep.add(null);
 		}
 
@@ -748,8 +962,8 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 			}
 
 			// find the interesting properties that this plan matches
-			for (int i = 0; i < intProps.size(); i++) {
-				if (intProps.get(i).isMetBy(candidate)) {
+			for (int i = 0; i < this.intProps.size(); i++) {
+				if (this.intProps.get(i).isMetBy(candidate)) {
 					// the candidate meets them
 					if (toKeep.get(i) == null) {
 						// first one to meet the interesting properties, so store it
@@ -807,7 +1021,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 			List<T> l = toKeep.get(i);
 
 			if (l != null) {
-				Costs maxDelta = intProps.get(i).getMaximalCosts();
+				Costs maxDelta = this.intProps.get(i).getMaximalCosts();
 
 				for (T plan : l) {
 					if (plan != null && !plan.pFlag) {
@@ -832,41 +1046,66 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	 * (non-Javadoc)
 	 * @see java.lang.Object#toString()
 	 */
+	@Override
 	public String toString() {
 		StringBuilder bld = new StringBuilder();
 
 		bld.append(getName());
 		bld.append(" (").append(getPactType().name()).append(") ");
 
-		if (localStrategy != null) {
+		if (this.localStrategy != null) {
 			bld.append('(');
 			bld.append(getLocalStrategy().name());
 			bld.append(") ");
 		}
 
-		for (PactConnection conn : getIncomingConnections()) {
-			bld.append('(').append(conn.getShipStrategy() == null ? "null" : conn.getShipStrategy().name()).append(')');
+		List<List<PactConnection>> pl = getIncomingConnections();
+		final int size = pl.size();
+		for(int i = 0; i < size; ++i) {
+			for (PactConnection conn : pl.get(i)) {
+				bld.append('(').append(i).append(":").append(conn.getShipStrategy() == null ? "null" : conn.getShipStrategy().name()).append(')');
+			}
 		}
 
 		return bld.toString();
 	}
 
+	
+	/**
+	 * Computes the width of output records
+	 * 
+	 * @return width of output records
+	 */
+	protected double computeAverageRecordWidth() {
+		return -1;
+	}
+	
+	/**
+	 * Computes the number of stub calls.
+	 * 
+	 * @return the number of stub calls.
+	 */
+	protected long computeNumberOfStubCalls() {
+		return -1;
+	}
+	
+	
 	// ------------------------------------------------------------------------
 	// Handling of branches
 	// ------------------------------------------------------------------------
 
 	public boolean hasUnclosedBranches()
 	{
-		return openBranches != null && !openBranches.isEmpty();
+		return this.openBranches != null && !this.openBranches.isEmpty();
 	}
 
 	protected List<UnclosedBranchDescriptor> getBranchesForParent(OptimizerNode parent)
 	{
-		if (outgoingConnections.size() == 1) {
+		if (this.outgoingConnections.size() == 1) {
 			// return our own stack of open branches, because nothing is added
 			return this.openBranches;
 		}
-		else if (outgoingConnections.size() > 1) {
+		else if (this.outgoingConnections.size() > 1) {
 			// we branch add a branch info to the stack
 			List<UnclosedBranchDescriptor> branches = new ArrayList<UnclosedBranchDescriptor>(4);
 			if (this.openBranches != null) {
@@ -875,12 +1114,12 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 
 			// find out, which output number the connection to the parent
 			int num;
-			for (num = 0; num < outgoingConnections.size(); num++) {
-				if (outgoingConnections.get(num).getTargetPact() == parent) {
+			for (num = 0; num < this.outgoingConnections.size(); num++) {
+				if (this.outgoingConnections.get(num).getTargetPact() == parent) {
 					break;
 				}
 			}
-			if (num >= outgoingConnections.size()) {
+			if (num >= this.outgoingConnections.size()) {
 				throw new CompilerException("Error in compiler: "
 					+ "Parent to get branch info for is not contained in the outgoing connections.");
 			}
@@ -895,7 +1134,296 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 				"Error in compiler: Cannot get branch info for parent in a node woth no parents.");
 		}
 	}
+	
+	/**
+	 * Checks whether to candidate plans for the sub-plan of this node are comparable. The two
+	 * alternative plans are comparable, if
+	 * a) There is no branch in the sub-plan of this node
+	 * b) Both candidates have the same candidate as the child at the last open branch. 
+	 * 
+	 * @param child1Candidate
+	 * @param child2Candidate
+	 * @return
+	 */
+	protected boolean areBranchCompatible(List<OptimizerNode> child1Candidate, List<OptimizerNode> child2Candidate)
+	{
+		// if there is no open branch, the children are always compatible.
+		// in most plans, that will be the dominant case
+		if (this.lastJoinedBranchNode == null) {
+			return true;
+		}
 
+		
+		// the order of the branches in <joinedLists> does not matter 
+		List<OptimizerNode> joinedLists;
+		
+		final int size1 = child1Candidate.size();
+		int size = size1;
+		
+		if(child2Candidate != null) {
+			final int size2 = child2Candidate.size();
+			size += size2;
+			
+			joinedLists = new ArrayList<OptimizerNode>(size);
+			
+			for(int i = 0; i < size2; ++i) {
+				joinedLists.add(child2Candidate.get(i));
+			}			
+		} else {
+			joinedLists = new ArrayList<OptimizerNode>(size);			
+		}
+
+		for(int i = 0; i < size1; ++i) {
+			joinedLists.add(child1Candidate.get(i));
+		}
+
+		// we check if each branch is compatible with all others
+		for(int i = 0; i < size; ++i) {
+			
+			final OptimizerNode nodeToCompare = joinedLists.get(i).branchPlan.get(this.lastJoinedBranchNode);
+			
+			for(int j = i+1; j < size; ++j) {
+				if(!(nodeToCompare == joinedLists.get(j).branchPlan.get(this.lastJoinedBranchNode))) {
+					return false;
+				}
+			}
+		}
+		
+		return true;
+	}
+
+	/*
+	 * node IDs are assigned in graph-traversal order (pre-order)
+	 * hence, each list is sorted by ID in ascending order and all consecutive lists start with IDs in ascending order
+	 */
+	protected List<UnclosedBranchDescriptor> mergeLists(List<UnclosedBranchDescriptor> child1open, List<UnclosedBranchDescriptor> child2open) {
+		// check how many open branches we have. the cases:
+		// 1) if both are null or empty, the result is null
+		// 2) if one side is null (or empty), the result is the other side.
+		// 3) both are set, then we need to merge.
+		if(child1open == null || child1open.isEmpty()) {
+			return child2open;
+		}
+		
+		if(child2open == null || child2open.isEmpty()) {
+			return child1open;
+		}
+		
+		// both have a history. merge...
+		ArrayList<UnclosedBranchDescriptor> result = new ArrayList<UnclosedBranchDescriptor>(4);
+
+
+		int index1 = child1open.size() - 1;
+		int index2 = child2open.size() - 1;
+
+		// as both lists (child1open and child2open) are sorted in ascending ID order
+		// we can do a merge-join-like loop which preserved the order in the result list
+		// and eliminates duplicates
+		while(index1 >= 0 || index2 >= 0) {
+			int id1 = -1;
+			int id2 = index2 >= 0 ? child2open.get(index2).getBranchingNode().getId() : -1;
+
+			while (index1 >= 0 && (id1 = child1open.get(index1).getBranchingNode().getId()) > id2) {
+				result.add(child1open.get(index1));
+				index1--;
+			}
+			while (index2 >= 0 && (id2 = child2open.get(index2).getBranchingNode().getId()) > id1) {
+				result.add(child2open.get(index2));
+				index2--;
+			}
+
+			// match: they share a common branching child
+			if (id1 == id2) {
+				// if this is the latest common child, remember it
+				OptimizerNode currBanchingNode = child1open.get(index1).getBranchingNode();
+
+				if (this.lastJoinedBranchNode == null) {
+					this.lastJoinedBranchNode = currBanchingNode;
+				}
+
+				// see, if this node closes the branch
+				long joinedInputs = child1open.get(index1).getJoinedPathsVector()
+					| child2open.get(index2).getJoinedPathsVector();
+
+				// this is 2^size - 1, which is all bits set at positions 0..size-1
+				long allInputs = (0x1L << currBanchingNode.getOutgoingConnections().size()) - 1;
+
+				if (joinedInputs == allInputs) {
+					// closed - we can remove it from the stack
+				} else {
+					// not quite closed
+					result.add(new UnclosedBranchDescriptor(currBanchingNode, joinedInputs));
+				}
+
+				index1--;
+				index2--;
+			}
+
+		}
+
+		// merged. now we need to reverse the list, because we added the elements in reverse order
+		Collections.reverse(result);
+		
+		return result;
+	}
+
+	// ------------------------------------------------------------------------
+	// Reading of stub annotations
+	// ------------------------------------------------------------------------
+	
+	/**
+	 * Reads all stub annotations
+	 */
+	private void readStubAnnotations() {
+		this.readReadsAnnotation();
+		this.readCopyProjectionAnnotations();
+		this.readWritesAnnotation();
+		this.readOutputCardBoundAnnotation();
+		this.readUniqueFieldsAnnotation();
+	}
+
+	/**
+	 * Reads the explicit writes stub annotation
+	 */
+	protected void readWritesAnnotation() {
+
+		// get readSet annotation from stub
+		ExplicitModifications addSetAnnotation = pactContract.getUserCodeClass().getAnnotation(ExplicitModifications.class);
+		
+		// extract addSet from annotation
+		if(addSetAnnotation == null) {
+			this.explWrites = null;
+		} else {
+			this.explWrites = new FieldSet(addSetAnnotation.fields());
+		}
+	}
+	
+	protected void readUniqueFieldsAnnotation() {
+		if (pactContract.getCompilerHints() != null) {
+			Set<FieldSet> uniqueFieldSets = pactContract.getCompilerHints().getUniqueFields();
+			if (uniqueFieldSets != null) {
+				this.uniqueFields.addAll(uniqueFieldSets);
+			}
+		}	
+	}
+
+	/**
+	 * Reads the output cardinality stub annotations
+	 */
+	protected void readOutputCardBoundAnnotation() {
+		
+		// get readSet annotation from stub
+		OutCardBounds outCardAnnotation = pactContract.getUserCodeClass().getAnnotation(OutCardBounds.class);
+		
+		// extract addSet from annotation
+		if(outCardAnnotation == null) {
+			this.stubOutCardLB = OutCardBounds.UNKNOWN;
+			this.stubOutCardUB = OutCardBounds.UNKNOWN;
+		} else {
+			this.stubOutCardLB = outCardAnnotation.lowerBound();
+			this.stubOutCardUB = outCardAnnotation.upperBound();
+		}
+	}
+	
+	/**
+	 * Reads all reads stub annotations.
+	 * Reads stub annotations are defined per input.
+	 */
+	protected abstract void readReadsAnnotation();
+	
+	/**
+	 * Reads the copy and projection stub annotations.
+	 * These annotations are defined per input.
+	 */
+	protected abstract void readCopyProjectionAnnotations();
+	
+	/**
+	 * Reads and sets the output schema of the node.
+	 * The schema can change if the input schema changes.
+	 */
+	public abstract void deriveOutputSchema();
+	
+	// ------------------------------------------------------------------------
+	// Access of stub annotations
+	// ------------------------------------------------------------------------
+	
+	/**
+	 * Returns the lower output cardinality bound of the node.
+	 * 
+	 * @return the lower output cardinality bound of the node.
+	 */
+	public int getStubOutCardLowerBound() {
+		return this.stubOutCardLB;
+	}
+	
+	/**
+	 * Returns the upper output cardinality bound of the node.
+	 * 
+	 * @return the upper output cardinality bound of the node.
+	 */
+	public int getStubOutCardUpperBound() {
+		return this.stubOutCardUB;
+	}
+	
+	/**
+	 * Returns the output schema of the node.
+	 * 
+	 * @return the output schema of the node.
+	 */
+	public FieldSet getOutputSchema() {
+		return this.outputSchema;
+	}
+	
+	/**
+	 * Computes the output schema of the node for given input schemas (one per input).
+	 * 
+	 * @param inputSchemas A list of input schemas. Element 0 of the list refers to the first input, and so on.
+	 * @return The output schema of the node for the given input schemas.
+	 */
+	public abstract FieldSet computeOutputSchema(List<FieldSet> inputSchemas);
+
+	/**
+	 * Determines whether the node can on the given input schema for the specified input.
+	 * 
+	 * @param input The input for which the input schema is assumed.
+	 * @param inputSchema The input schema for the specified input
+	 * @return True, if the node can operate on the the schema for the specified input, false otherwise.
+	 */
+	public abstract boolean isValidInputSchema(int input, FieldSet inputSchema);
+	
+	/**
+	 * Gives the read set of the node. 
+	 * The read set is used to decide about reordering of nodes.
+	 * 
+	 * @param id of input for which the read set should be returned. 
+	 *        -1 if the unioned read set over all inputs is requested. 
+	 *  
+	 * @return the read set for the requested input(s)
+	 */
+	public abstract FieldSet getReadSet(int input);
+	
+	/**
+	 * Give the write set of the node.
+	 * The write set is used to decide about reordering of nodes.
+	 * 
+	 * @param id of input for which the write set should be returned. 
+	 *        -1 if the unioned write set over all inputs is requested. 
+	 *  
+	 * @return the write set for the requested input(s)
+	 */
+	public abstract FieldSet getWriteSet(int input);
+	
+	/**
+	 * Give the write set of the node.
+	 * 
+	 * @param id of input for which the write set should be returned. 
+	 *        -1 if the unioned write set over all inputs is requested. 
+	 * @param inputNodes for which the write set should be computed 
+	 *  
+	 * @return the write set for the requested input(s)
+	 */
+	public abstract FieldSet getWriteSet(int input, List<FieldSet> inputSchemas);
+	
 	protected static final class UnclosedBranchDescriptor
 	{
 		protected OptimizerNode branchingNode;
@@ -913,11 +1441,152 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 		}
 
 		public OptimizerNode getBranchingNode() {
-			return branchingNode;
+			return this.branchingNode;
 		}
 
 		public long getJoinedPathsVector() {
-			return joinedPathsVector;
+			return this.joinedPathsVector;
 		}
+	}
+	
+	public abstract boolean isFieldKept(int input, int fieldNumber);
+	
+	/**
+	 * Computes the number of keys that are processed by the PACT.
+	 * 
+	 * @return the number of keys processed by the PACT.
+	 */
+	protected long computeNumberOfProcessedKeys() {
+		return -1;
+	}
+	
+	/**
+	 * Computes the number of stub calls for one processed key. 
+	 * 
+	 * @return the number of stub calls for one processed key.
+	 */
+	protected double computeStubCallsPerProcessedKey() {
+		return -1;
+	}
+	
+	
+	/**
+	 * Returns the key column numbers for the specific input if it
+	 * is preserved by this node. Null, otherwise.
+	 * 
+	 * @param input
+	 * @return
+	 */
+	protected int[] getConstantKeySet(int input) {
+		int[] keyColumns = null;
+		Contract contract = getPactContract();
+		if (contract instanceof AbstractPact<?>) {
+			AbstractPact<?> abstractPact = (AbstractPact<?>) contract;
+			keyColumns = abstractPact.getKeyColumnNumbers(input);
+			if (keyColumns != null) {
+				if (keyColumns.length == 0) {
+					return null;
+				}
+				
+				for (int keyColumn : keyColumns) {
+					if (isFieldKept(input, keyColumn) == false) {
+						return null;	
+					}
+				}
+			}
+		}
+		return keyColumns;
+	}
+	
+	public void computeUniqueFields() {
+		
+		if (stubOutCardUB > 1 || stubOutCardUB < 0) {
+			return;
+		}
+		
+		//check for inputs
+		List<List<PactConnection>> inConnections = getIncomingConnections();
+		
+		for (int i = 0; i < inConnections.size(); i++) {
+		
+			Set<FieldSet> uniqueInChild = getUniqueFieldsForInput(i);
+			
+			for (FieldSet uniqueField : uniqueInChild) {
+				if (keepsUniqueProperty(uniqueField, i)) {
+					this.uniqueFields.add(uniqueField);
+				}
+			}
+		}
+		
+		//check which uniqueness properties are created by this node
+		List<FieldSet> uniqueFields = createUniqueFieldsForNode();
+		if (uniqueFields != null ) {
+			this.uniqueFields.addAll(uniqueFields);
+		}
+		
+	}
+	
+	public boolean keepsUniqueProperty(FieldSet uniqueSet, int input) {
+		for (Integer uniqueField : uniqueSet) {
+			if (isFieldKept(input, uniqueField) == false) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public List<FieldSet> createUniqueFieldsForNode() {
+		return null;
+	}
+	
+	/**
+	 * Gets the FieldSets which are unique in the output of the node 
+	 * 
+	 * @return
+	 */
+	public Set<FieldSet> getUniqueFields() {
+		return uniqueFields;
+	}
+	
+	
+	/**
+	 * Checks whether the FieldSet is unique in the input of the node
+	 * 
+	 * @param fieldSet
+	 * @param input
+	 * @return
+	 */
+	public boolean isFieldSetUnique(FieldSet fieldSet, int input) {
+
+		if (fieldSet == null || fieldSet.size() == 0) {
+			return true;
+		}
+		
+		for (FieldSet uniqueField : this.getUniqueFieldsForInput(input)) {
+			if (fieldSet.containsAll(uniqueField)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	/**
+	 * Get the unique FieldSets of the given input
+	 */
+	protected Set<FieldSet> getUniqueFieldsForInput(int input) {
+		
+		if (input < 0 || input >= getIncomingConnections().size()) {
+			return Collections.emptySet();
+		}
+		
+		List<PactConnection> inConnection = getIncomingConnections().get(input);
+		
+		if (inConnection.size() != 1) {
+			return Collections.emptySet();
+		}
+		
+		return inConnection.get(0).getSourcePact().getUniqueFields();
+		
+		
 	}
 }

@@ -19,45 +19,51 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
-import java.util.Deque;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import eu.stratosphere.nephele.io.channels.InternalBuffer;
+public final class MemoryBuffer extends Buffer {
 
-public class MemoryBuffer implements InternalBuffer {
+	private final MemoryBufferRecycler bufferRecycler;
 
 	private final ByteBuffer byteBuffer;
 
-	private volatile boolean writeMode = true;
+	private final AtomicBoolean writeMode = new AtomicBoolean(true);
 
-	private final Deque<ByteBuffer> queueForRecycledBuffers;
-
-	MemoryBuffer(int bufferSize, ByteBuffer byteBuffer, Deque<ByteBuffer> queueForRecycledBuffers) {
-
-		this.queueForRecycledBuffers = queueForRecycledBuffers;
+	MemoryBuffer(final int bufferSize, final ByteBuffer byteBuffer, final MemoryBufferPoolConnector bufferPoolConnector) {
 
 		if (bufferSize > byteBuffer.capacity()) {
 			throw new IllegalArgumentException("Requested buffer size is " + bufferSize
 				+ ", but provided byte buffer only has a capacity of " + byteBuffer.capacity());
 		}
 
+		this.bufferRecycler = new MemoryBufferRecycler(byteBuffer, bufferPoolConnector);
+
 		this.byteBuffer = byteBuffer;
 		this.byteBuffer.position(0);
 		this.byteBuffer.limit(bufferSize);
 	}
 
-	@Override
-	public int read(ByteBuffer dst) throws IOException {
+	private MemoryBuffer(final int bufferSize, final ByteBuffer byteBuffer, final MemoryBufferRecycler bufferRecycler) {
 
-		if (this.writeMode) {
-			this.writeMode = false;
-			this.byteBuffer.flip();
-			// System.out.println("Switching to read mode: " + this.byteBuffer);
+		this.bufferRecycler = bufferRecycler;
+		this.byteBuffer = byteBuffer;
+		this.byteBuffer.position(0);
+		this.byteBuffer.limit(bufferSize);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public int read(final ByteBuffer dst) throws IOException {
+
+		if (this.writeMode.get()) {
+			throw new IOException("Buffer is still in write mode!");
 		}
 
 		if (!this.byteBuffer.hasRemaining()) {
 			return -1;
 		}
-
 		if (!dst.hasRemaining()) {
 			return 0;
 		}
@@ -73,14 +79,16 @@ public class MemoryBuffer implements InternalBuffer {
 			dst.put(this.byteBuffer);
 		}
 
-		// System.out.println("Position is " + this.byteBuffer);
 		return (this.byteBuffer.position() - oldPosition);
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
-	public int read(WritableByteChannel writableByteChannel) throws IOException {
+	public int read(final WritableByteChannel writableByteChannel) throws IOException {
 
-		if (this.writeMode) {
+		if (this.writeMode.get()) {
 			throw new IOException("Buffer is still in write mode!");
 		}
 
@@ -91,42 +99,59 @@ public class MemoryBuffer implements InternalBuffer {
 		return writableByteChannel.write(this.byteBuffer);
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public void close() throws IOException {
 
 		this.byteBuffer.position(this.byteBuffer.limit());
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public boolean isOpen() {
 
 		return this.byteBuffer.hasRemaining();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
-	public int write(ByteBuffer src) throws IOException {
+	public int write(final ByteBuffer src) throws IOException {
 
-		if (!this.writeMode) {
+		if (!this.writeMode.get()) {
 			throw new IOException("Cannot write to buffer, buffer already switched to read mode");
 		}
 
-		final int bytesToCopy = Math.min(src.remaining(), this.byteBuffer.remaining());
+		final int sourceRemaining = src.remaining();
+		final int thisRemaining = this.byteBuffer.remaining();
+		final int excess = sourceRemaining - thisRemaining;
 
-		if (bytesToCopy == 0) {
-			return 0;
+		if (excess <= 0) {
+			// there is enough space here for all the source data
+			this.byteBuffer.put(src);
+			return sourceRemaining;
+		} else {
+			// not enough space here, we need to limit the source
+			final int oldLimit = src.limit();
+			src.limit(src.position() + thisRemaining);
+			this.byteBuffer.put(src);
+			src.limit(oldLimit);
+			return thisRemaining;
 		}
-
-		this.byteBuffer.put(src.array(), src.position(), bytesToCopy);
-		src.position(src.position() + bytesToCopy);
-		// this.byteBuffer.position(this.byteBuffer.position() + bytesToCopy);
-
-		return bytesToCopy;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
-	public int write(ReadableByteChannel readableByteChannel) throws IOException {
+	public int write(final ReadableByteChannel readableByteChannel) throws IOException {
 
-		if (!this.writeMode) {
+		if (!this.writeMode.get()) {
 			throw new IOException("Cannot write to buffer, buffer already switched to read mode");
 		}
 
@@ -137,12 +162,17 @@ public class MemoryBuffer implements InternalBuffer {
 		return readableByteChannel.read(this.byteBuffer);
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public int remaining() {
-
 		return this.byteBuffer.remaining();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public int size() {
 		return this.byteBuffer.limit();
@@ -152,46 +182,87 @@ public class MemoryBuffer implements InternalBuffer {
 		return this.byteBuffer;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
-	public void recycleBuffer() {
+	protected void recycle() {
 
-		this.byteBuffer.clear();
-
-		synchronized (this.queueForRecycledBuffers) {
-			this.queueForRecycledBuffers.add(this.byteBuffer);
-			this.queueForRecycledBuffers.notify();
-			// System.out.println("Recycled buffer: " + this.queueForRecycledBuffers.size() + " (" +
-			// this.queueForRecycledBuffers.hashCode() + ")");
-		}
+		this.bufferRecycler.decreaseReferenceCounter();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public void finishWritePhase() {
 
-		if (!this.writeMode) {
-			throw new IllegalStateException("MemoryBuffer is already in write mode!");
+		if (!this.writeMode.compareAndSet(true, false)) {
+			throw new IllegalStateException("MemoryBuffer is already in read mode!");
 		}
 
 		this.byteBuffer.flip();
-		this.writeMode = false;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
 	public boolean isBackedByMemory() {
 
 		return true;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
 	@Override
-	public InternalBuffer duplicate() {
+	public MemoryBuffer duplicate() {
 
-		final MemoryBuffer duplicatedMemoryBuffer = new MemoryBuffer(this.byteBuffer.limit(), this.byteBuffer
-			.duplicate(), this.queueForRecycledBuffers);
+		if (this.writeMode.get()) {
+			throw new IllegalStateException("Cannot duplicate buffer that is still in write mode");
+		}
 
-		duplicatedMemoryBuffer.byteBuffer.position(this.byteBuffer.position());
-		duplicatedMemoryBuffer.byteBuffer.limit(this.byteBuffer.limit());
-		duplicatedMemoryBuffer.writeMode = this.writeMode;
+		final MemoryBuffer duplicatedMemoryBuffer = new MemoryBuffer(this.byteBuffer.limit(),
+			this.byteBuffer.duplicate(), this.bufferRecycler);
 
+		this.bufferRecycler.increaseReferenceCounter();
+		duplicatedMemoryBuffer.writeMode.set(this.writeMode.get());
 		return duplicatedMemoryBuffer;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void copyToBuffer(final Buffer destinationBuffer) throws IOException {
+
+		if (this.writeMode.get()) {
+			throw new IllegalStateException("Cannot copy buffer that is still in write mode");
+		}
+		if (size() > destinationBuffer.size()) {
+			throw new IllegalArgumentException("Destination buffer is too small to store content of source buffer: "
+				+ size() + " vs. " + destinationBuffer.size());
+		}
+
+		final int oldPos = this.byteBuffer.position();
+		this.byteBuffer.position(0);
+
+		while (remaining() > 0) {
+			destinationBuffer.write(this.byteBuffer);
+		}
+
+		this.byteBuffer.position(oldPos);
+
+		destinationBuffer.finishWritePhase();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public boolean isInWriteMode() {
+
+		return this.writeMode.get();
 	}
 }

@@ -7,12 +7,10 @@
   <parent>
     <artifactId>pact</artifactId>
     <groupId>eu.stratosphere</groupId>
-    <version>0.1.1</version>
+    <version>0.2</version>
   </parent>
 
-  <groupId>eu.stratosphere</groupId>
   <artifactId>pact-examples</artifactId>
-  <version>0.1.1</version>
   <name>pact-examples</name>
   
   <packaging>jar</packaging>
@@ -25,12 +23,12 @@
     	<version>${version}</version>
     </dependency>
     
-    <dependency>
+    <!--<dependency>
     	<groupId>eu.stratosphere</groupId>
     	<artifactId>pact-runtime</artifactId>
     	<version>${version}</version>
     	<scope>test</scope>
-    </dependency>
+    </dependency>-->
   </dependencies>
 
   <reporting>
@@ -204,8 +202,7 @@
               </archive>
 
               <includes>
-                <include>**/wordcount/WordCount.class</include>
-                <include>**/wordcount/WordCount$*.class</include>
+                <include>**/wordcount/*.class</include>
               </includes>
             </configuration>
           </execution>

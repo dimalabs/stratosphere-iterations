@@ -26,7 +26,6 @@ import eu.stratosphere.nephele.io.OutputGate;
 import eu.stratosphere.nephele.io.channels.AbstractOutputChannel;
 import eu.stratosphere.nephele.io.channels.Buffer;
 import eu.stratosphere.nephele.io.channels.ChannelID;
-import eu.stratosphere.nephele.io.channels.ChannelType;
 import eu.stratosphere.nephele.io.channels.SerializationBuffer;
 import eu.stratosphere.nephele.io.compression.CompressionEvent;
 import eu.stratosphere.nephele.io.compression.CompressionLevel;
@@ -52,25 +51,9 @@ public abstract class AbstractByteBufferedOutputChannel<T extends Record> extend
 	private boolean closeRequested = false;
 
 	/**
-	 * Stores whether the channel has received the acknowledgement
-	 * for the close request from its connected input channel.
-	 */
-	private boolean closeAcknowledgementReceived = false;
-
-	/**
 	 * The output channel broker the channel should contact to request and release write buffers.
 	 */
 	private ByteBufferedOutputChannelBroker outputChannelBroker = null;
-
-	/**
-	 * Synchronization object to protect variables that are accessed by the task and the framework.
-	 */
-	private final Object synchronisationObject = new Object();
-
-	/**
-	 * Temporarily stores a possible IOException that may be reported by the framework.
-	 */
-	private IOException ioException = null;
 
 	/**
 	 * The compressor used to compress the outgoing data.
@@ -78,16 +61,16 @@ public abstract class AbstractByteBufferedOutputChannel<T extends Record> extend
 	private Compressor compressor = null;
 
 	/**
-	 * Indicates the period of time this output channel shall throttle down so that the consumer can catch up.
-	 */
-	private long throttelingDuration = 0L;
-
-	/**
 	 * Buffer for the uncompressed data.
 	 */
 	private Buffer uncompressedDataBuffer = null;
 
-	private static final Log LOG = LogFactory.getLog(AbstractByteBufferedInputChannel.class);
+	/**
+	 * Stores the number of bytes transmitted through this output channel since its instantiation.
+	 */
+	private long amountOfDataTransmitted = 0L;
+
+	private static final Log LOG = LogFactory.getLog(AbstractByteBufferedOutputChannel.class);
 
 	/**
 	 * Creates a new byte buffered output channel.
@@ -112,19 +95,13 @@ public abstract class AbstractByteBufferedOutputChannel<T extends Record> extend
 	 * {@inheritDoc}
 	 */
 	@Override
-	public boolean isClosed() throws IOException {
+	public boolean isClosed() throws IOException, InterruptedException {
 
 		if (this.closeRequested && this.uncompressedDataBuffer == null
 			&& !this.serializationBuffer.dataLeftFromPreviousSerialization()) {
 
-			if (this.ioException != null) {
-				throw this.ioException;
-			}
-
-			synchronized (this.synchronisationObject) {
-				if (this.closeAcknowledgementReceived) {
-					return true;
-				}
+			if (!this.outputChannelBroker.hasDataLeftToTransmit()) {
+				return true;
 			}
 		}
 
@@ -139,8 +116,15 @@ public abstract class AbstractByteBufferedOutputChannel<T extends Record> extend
 
 		if (!this.closeRequested) {
 			this.closeRequested = true;
-			transferEvent(new ByteBufferedChannelCloseEvent());
-			flush();
+			if (this.serializationBuffer.dataLeftFromPreviousSerialization()) {
+				// make sure we serialized all data before we send the close event
+				flush();
+			}
+
+			if (!isBroadcastChannel() || getChannelIndex() == 0) {
+				transferEvent(new ByteBufferedChannelCloseEvent());
+				flush();
+			}
 		}
 	}
 
@@ -151,9 +135,11 @@ public abstract class AbstractByteBufferedOutputChannel<T extends Record> extend
 	 * This method blocks until the requested number of buffers is available.
 	 * 
 	 * @throws InterruptedException
-	 *         throws if the thread is interrupted while waiting for the buffers
+	 *         thrown if the thread is interrupted while waiting for the buffers
+	 * @throws IOException
+	 *         thrown if an I/O error occurs while waiting for the buffers
 	 */
-	private void requestWriteBuffersFromBroker() throws InterruptedException {
+	private void requestWriteBuffersFromBroker() throws InterruptedException, IOException {
 
 		final BufferPairResponse bufferPair = this.outputChannelBroker.requestEmptyWriteBuffers();
 		this.compressedDataBuffer = bufferPair.getCompressedDataBuffer();
@@ -170,9 +156,9 @@ public abstract class AbstractByteBufferedOutputChannel<T extends Record> extend
 	 * further processing.
 	 * 
 	 * @throws IOException
-	 *         thrown if an I/O error while releasing the buffers
+	 *         thrown if an I/O error occurs while releasing the buffers
 	 * @throws InterruptedException
-	 *         thrown if the thread is interrupted while waiting for the buffers to be released
+	 *         thrown if the thread is interrupted while releasing the buffers
 	 */
 	private void releaseWriteBuffers() throws IOException, InterruptedException {
 
@@ -180,6 +166,9 @@ public abstract class AbstractByteBufferedOutputChannel<T extends Record> extend
 			this.outputChannelBroker.transferEventToInputChannel(new CompressionEvent(this.compressor
 				.getCurrentInternalCompressionLibraryIndex()));
 		}
+
+		// Keep track of number of bytes transmitted through this channel
+		this.amountOfDataTransmitted += this.uncompressedDataBuffer.size();
 
 		this.outputChannelBroker.releaseWriteBuffers();
 		this.compressedDataBuffer = null;
@@ -194,20 +183,6 @@ public abstract class AbstractByteBufferedOutputChannel<T extends Record> extend
 
 		// Get a write buffer from the broker
 		if (this.uncompressedDataBuffer == null) {
-
-			synchronized (this.synchronisationObject) {
-
-				if (this.ioException != null) {
-					throw this.ioException;
-				}
-
-				if (this.throttelingDuration > 0L) {
-					// Temporarily, stop producing data
-					this.synchronisationObject.wait(this.throttelingDuration);
-					// Reset throttling duration
-					this.throttelingDuration = 0L;
-				}
-			}
 
 			requestWriteBuffersFromBroker();
 		}
@@ -270,6 +245,7 @@ public abstract class AbstractByteBufferedOutputChannel<T extends Record> extend
 	 *        the output channel broker the channel should contact to request and release write buffers
 	 */
 	public void setByteBufferedOutputChannelBroker(ByteBufferedOutputChannelBroker byteBufferedOutputChannelBroker) {
+
 		this.outputChannelBroker = byteBufferedOutputChannelBroker;
 	}
 
@@ -281,19 +257,6 @@ public abstract class AbstractByteBufferedOutputChannel<T extends Record> extend
 
 		if (event instanceof AbstractTaskEvent) {
 			getOutputGate().deliverEvent((AbstractTaskEvent) event);
-		} else if (event instanceof NetworkThrottleEvent) {
-			if (getType() == ChannelType.FILE) {
-				LOG.error("FileChannel " + getID() + " received NetworkThrottleEvent");
-			} else {
-				synchronized (this.synchronisationObject) {
-					final NetworkThrottleEvent nte = (NetworkThrottleEvent) event;
-					this.throttelingDuration = nte.getDuration();
-				}
-			}
-		} else if (event instanceof ByteBufferedChannelCloseEvent) {
-			synchronized (this.synchronisationObject) {
-				this.closeAcknowledgementReceived = true;
-			}
 		} else {
 			LOG.error("Channel " + getID() + " received unknown event " + event);
 		}
@@ -357,33 +320,13 @@ public abstract class AbstractByteBufferedOutputChannel<T extends Record> extend
 	}
 
 	/**
-	 * This method is called by the framework to report
-	 * an {@link IOException} that occurred while trying to process
-	 * one of the buffers issued by this channel.
-	 * 
-	 * @param ioe
-	 *        the {@link IOException} which occurred
-	 */
-	public void reportIOException(IOException ioe) {
-
-		synchronized (this.synchronisationObject) {
-			this.ioException = ioe;
-			// Wake up thread if it has been throttled down
-			this.synchronisationObject.notify();
-		}
-	}
-
-	/**
 	 * {@inheritDoc}
 	 */
 	@Override
-	public void releaseResources() {
+	public void releaseAllResources() {
 
+		// TODO: Reconsider release of broker's resources here
 		this.closeRequested = true;
-
-		synchronized (this.synchronisationObject) {
-			this.closeAcknowledgementReceived = true;
-		}
 
 		this.serializationBuffer.clear();
 
@@ -400,5 +343,14 @@ public abstract class AbstractByteBufferedOutputChannel<T extends Record> extend
 		if (this.compressor != null) {
 			this.compressor.shutdown(getID());
 		}
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public long getAmountOfDataTransmitted() {
+
+		return this.amountOfDataTransmitted;
 	}
 }

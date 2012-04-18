@@ -20,6 +20,8 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -318,6 +320,15 @@ public final class ManagementGraph extends ManagementAttachment implements IORea
 	}
 
 	/**
+	 * Returns an unmodifiable collection of all group vertices with no guarantees on their order.
+	 * 
+	 * @return an unmodifiable collection of all group vertices with no guarantees on their order
+	 */
+	public Collection<ManagementGroupVertex> getGroupVertices() {
+		return Collections.unmodifiableCollection(groupVertices.values());
+	}
+
+	/**
 	 * Returns a list of group vertices sorted in topological order.
 	 * 
 	 * @return a list of group vertices sorted in topological order
@@ -441,9 +452,10 @@ public final class ManagementGraph extends ManagementAttachment implements IORea
 			final ManagementGroupVertex groupVertex = this.getGroupVertexByID(groupVertexID);
 			final String instanceName = StringRecord.readString(in);
 			final String instanceType = StringRecord.readString(in);
+			final String checkpointState = StringRecord.readString(in);
 			final int indexInGroup = in.readInt();
 			final ManagementVertex vertex = new ManagementVertex(groupVertex, vertexID, instanceName, instanceType,
-				indexInGroup);
+				checkpointState, indexInGroup);
 			vertex.read(in);
 		}
 
@@ -456,6 +468,12 @@ public final class ManagementGraph extends ManagementAttachment implements IORea
 				final ManagementGate sourceGate = sourceVertex.getOutputGate(j);
 				int numberOfForwardEdges = in.readInt();
 				for (int k = 0; k < numberOfForwardEdges; k++) {
+					final ManagementEdgeID sourceEdgeID = new ManagementEdgeID();
+					sourceEdgeID.read(in);
+
+					final ManagementEdgeID targetEdgeID = new ManagementEdgeID();
+					targetEdgeID.read(in);
+
 					final ManagementVertexID targetID = new ManagementVertexID();
 					targetID.read(in);
 					final ManagementVertex targetVertex = getVertexByID(targetID);
@@ -467,7 +485,8 @@ public final class ManagementGraph extends ManagementAttachment implements IORea
 
 					final ChannelType channelType = EnumUtils.readEnum(in, ChannelType.class);
 					final CompressionLevel compressionLevel = EnumUtils.readEnum(in, CompressionLevel.class);
-					new ManagementEdge(sourceGate, sourceIndex, targetGate, targetIndex, channelType, compressionLevel);
+					new ManagementEdge(sourceEdgeID, targetEdgeID, sourceGate, sourceIndex, targetGate, targetIndex,
+						channelType, compressionLevel);
 				}
 
 			}
@@ -489,7 +508,7 @@ public final class ManagementGraph extends ManagementAttachment implements IORea
 		// Write number of group vertices and their corresponding IDs
 		out.writeInt(this.groupVertices.size());
 		Iterator<ManagementGroupVertex> it = new ManagementGroupVertexIterator(this, true, -1);
-		
+
 		while (it.hasNext()) {
 
 			final ManagementGroupVertex groupVertex = it.next();
@@ -516,6 +535,7 @@ public final class ManagementGraph extends ManagementAttachment implements IORea
 			managementVertex.getGroupVertex().getID().write(out);
 			StringRecord.writeString(out, managementVertex.getInstanceName());
 			StringRecord.writeString(out, managementVertex.getInstanceType());
+			StringRecord.writeString(out, managementVertex.getCheckpointState());
 			out.writeInt(managementVertex.getIndexInGroup());
 			managementVertex.write(out);
 		}
@@ -531,6 +551,10 @@ public final class ManagementGraph extends ManagementAttachment implements IORea
 				out.writeInt(outputGate.getNumberOfForwardEdges());
 				for (int j = 0; j < outputGate.getNumberOfForwardEdges(); j++) {
 					final ManagementEdge edge = outputGate.getForwardEdge(j);
+
+					edge.getSourceEdgeID().write(out);
+					edge.getTargetEdgeID().write(out);
+
 					// This identifies the target gate
 					edge.getTarget().getVertex().getID().write(out);
 					out.writeInt(edge.getTarget().getIndex());

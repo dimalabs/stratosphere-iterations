@@ -1,3 +1,4 @@
+#!/bin/bash
 ########################################################################################################################
 # 
 #  Copyright (C) 2010 by the Stratosphere project (http://stratosphere.eu)
@@ -12,8 +13,6 @@
 #  specific language governing permissions and limitations under the License.
 # 
 ########################################################################################################################
-
-#!/bin/bash
 
 STARTSTOP=$1
 
@@ -49,6 +48,8 @@ constructTaskManagerClassPath() {
 		elif [[ "$jarfile" =~ 'nephele-s3' ]]; then
 			add=1
 		elif [[ "$jarfile" =~ 'nephele-profiling' ]]; then
+			add=1
+		elif [[ "$jarfile" =~ 'nephele-streaming' ]]; then
 			add=1
 		elif [[ "$jarfile" =~ 'pact-common' ]]; then
 			add=1

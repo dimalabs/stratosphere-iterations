@@ -15,200 +15,250 @@
 
 package eu.stratosphere.pact.test.testPrograms.tpch10;
 
+import java.io.IOException;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.Iterator;
 
-import org.apache.log4j.Logger;
-
-import eu.stratosphere.pact.common.contract.FileDataSinkContract;
-import eu.stratosphere.pact.common.contract.FileDataSourceContract;
+import eu.stratosphere.pact.common.contract.FileDataSink;
+import eu.stratosphere.pact.common.contract.FileDataSource;
 import eu.stratosphere.pact.common.contract.MapContract;
 import eu.stratosphere.pact.common.contract.MatchContract;
 import eu.stratosphere.pact.common.contract.ReduceContract;
 import eu.stratosphere.pact.common.contract.ReduceContract.Combinable;
+import eu.stratosphere.pact.common.io.FileOutputFormat;
 import eu.stratosphere.pact.common.io.TextInputFormat;
-import eu.stratosphere.pact.common.io.TextOutputFormat;
 import eu.stratosphere.pact.common.plan.Plan;
 import eu.stratosphere.pact.common.plan.PlanAssembler;
 import eu.stratosphere.pact.common.plan.PlanAssemblerDescription;
-import eu.stratosphere.pact.common.stub.Collector;
-import eu.stratosphere.pact.common.stub.MapStub;
-import eu.stratosphere.pact.common.stub.MatchStub;
-import eu.stratosphere.pact.common.stub.ReduceStub;
-import eu.stratosphere.pact.common.type.Key;
-import eu.stratosphere.pact.common.type.KeyValuePair;
+import eu.stratosphere.pact.common.stubs.Collector;
+import eu.stratosphere.pact.common.stubs.MapStub;
+import eu.stratosphere.pact.common.stubs.MatchStub;
+import eu.stratosphere.pact.common.stubs.ReduceStub;
+import eu.stratosphere.pact.common.type.PactRecord;
+import eu.stratosphere.pact.common.type.base.PactDouble;
 import eu.stratosphere.pact.common.type.base.PactInteger;
-import eu.stratosphere.pact.example.relational.util.IntTupleDataInFormat;
-import eu.stratosphere.pact.example.relational.util.Tuple;
+import eu.stratosphere.pact.common.type.base.PactString;
+import eu.stratosphere.pact.test.testPrograms.util.IntTupleDataInFormat;
+import eu.stratosphere.pact.test.testPrograms.util.Tuple;
 
 /**
  * @author rico
+ * @author Matthias Ringwald
+ * @author Stephan Ewen
  */
-public class TPCHQuery10 implements PlanAssembler, PlanAssemblerDescription {
-
-	private static Logger LOGGER = Logger.getLogger(TPCHQuery10.class);
-
-	public static class FilterO extends MapStub<PactInteger, Tuple, PactInteger, Tuple> {
-
+public class TPCHQuery10 implements PlanAssembler, PlanAssemblerDescription
+{
+	// --------------------------------------------------------------------------------------------
+	//                         Local Filters and Projections
+	// --------------------------------------------------------------------------------------------
+	
+	/**
+	 * Forwards (0 = orderkey, 1 = custkey).
+	 */
+	public static class FilterO extends MapStub
+	{
 		private static final int YEAR_FILTER = 1990;
-
+		
+		private final PactInteger custKey = new PactInteger();
+		
 		@Override
-		public void map(PactInteger key, Tuple value, Collector<PactInteger, Tuple> out) {
-
-			if (Integer.parseInt(value.getStringValueAt(4).substring(0, 4)) > FilterO.YEAR_FILTER) {
-
+		public void map(PactRecord record, Collector out) throws Exception {
+			
+			Tuple t = record.getField(1, Tuple.class);
+			if (Integer.parseInt(t.getStringValueAt(4).substring(0, 4)) > FilterO.YEAR_FILTER) {
 				// project
-				value.project(2); // o_custkey
+				this.custKey.setValue((int) t.getLongValueAt(1));
+				record.setField(1, this.custKey);
+				out.collect(record);
+			}
+			
+		}
+	}
 
-				out.collect(key, value);
-
+	/**
+	 * Forwards (0 = lineitem, 1 = tuple (extendedprice, discount) )
+	 */
+	public static class FilterLI extends MapStub
+	{
+		private final Tuple tuple = new Tuple();
+		
+		@Override
+		public void map(PactRecord record, Collector out) throws Exception
+		{
+			Tuple t = record.getField(1, this.tuple);
+			if (t.getStringValueAt(8).equals("R")) {
+				t.project(0x60); // l_extendedprice, l_discount
+				record.setField(1, t);
+				out.collect(record);
 			}
 		}
-
 	}
+	
+	/**
+	 * Returns (0 = custkey, 1 = custName, 2 = NULL, 3 = balance, 4 = nationkey, 5 = address, 6 = phone, 7 = comment)
+	 */
+	public static class ProjectC extends MapStub {
 
-	public static class FilterLI extends MapStub<PactInteger, Tuple, PactInteger, Tuple> {
-
+		private final Tuple tuple = new Tuple();
+		
+		private final PactString custName = new PactString();
+		
+		private final PactString balance = new PactString();
+		private final PactInteger nationKey = new PactInteger();
+		private final PactString address = new PactString();
+		private final PactString phone = new PactString();
+		private final PactString comment = new PactString();
+		
 		@Override
-		public void map(PactInteger key, Tuple value, Collector<PactInteger, Tuple> out) {
-			if (value.getStringValueAt(8).equals("R")) {
-				value.project(96); // l_extendedprice, l_discount
-
-				out.collect(key, value);
-			}
+		public void map(PactRecord record, Collector out) throws Exception
+		{
+			final Tuple t = record.getField(1, this.tuple);
+			
+			this.custName.setValue(t.getStringValueAt(1));
+			this.address.setValue(t.getStringValueAt(2));
+			this.nationKey.setValue((int) t.getLongValueAt(3));
+			this.phone.setValue(t.getStringValueAt(4));
+			this.balance.setValue(t.getStringValueAt(5));
+			this.comment.setValue(t.getStringValueAt(7));
+			
+			record.setField(1, this.custName);
+			record.setField(3, this.balance);
+			record.setField(4, this.nationKey);
+			record.setField(5, this.address);
+			record.setField(6, this.phone);
+			record.setField(7, this.comment);
+			
+			out.collect(record);
 		}
-
 	}
-
-	public static class JoinOL extends MatchStub<PactInteger, Tuple, Tuple, PactInteger, Tuple> {
-
+	
+	/**
+	 * Returns (0 = nationkey, 1 = nation_name)
+	 */
+	public static class ProjectN extends MapStub
+	{
+		private final Tuple tuple = new Tuple();
+		private final PactString nationName = new PactString();
+		
 		@Override
-		public void match(PactInteger key, Tuple oValue, Tuple liValue, Collector<PactInteger, Tuple> out) {
-			int newKey = Integer.parseInt(oValue.getStringValueAt(0));
-			out.collect(new PactInteger(newKey), liValue);
+		public void map(PactRecord record, Collector out) throws Exception
+		{
+			final Tuple t = record.getField(1, this.tuple);
+			
+			this.nationName.setValue(t.getStringValueAt(1));
+			record.setField(1, this.nationName);
+			out.collect(record);
 		}
-
 	}
+	
+	// --------------------------------------------------------------------------------------------
+	//                                        Joins
+	// --------------------------------------------------------------------------------------------
 
-	public static class ProjectC extends MapStub<PactInteger, Tuple, PactInteger, Tuple> {
-
+	/**
+	 * Returns (0 = custKey, 1 = tuple (extendedprice, discount) )
+	 */
+	public static class JoinOL extends MatchStub
+	{
 		@Override
-		public void map(PactInteger key, Tuple value, Collector<PactInteger, Tuple> out) {
-			value.project(190); // C_*: name,address,nationkey,phone,acctbal,comment
-			out.collect(key, value);
+		public void match(PactRecord order, PactRecord lineitem, Collector out) throws Exception {
+			lineitem.setField(0, order.getField(1, PactInteger.class));
+			out.collect(lineitem);
 		}
-
 	}
 
-	public static class ProjectN extends MapStub<PactInteger, Tuple, PactInteger, Tuple> {
-
+	/**
+	 * Returns (0 = custkey, 1 = custName, 2 = extPrice * (1-discount), 3 = balance, 4 = nationkey, 5 = address, 6 = phone, 7 = comment)
+	 */
+	public static class JoinCOL extends MatchStub
+	{
+		private final PactDouble d = new PactDouble();
+		
 		@Override
-		public void map(PactInteger key, Tuple value, Collector<PactInteger, Tuple> out) {
-			value.project(2);// n_name
-			out.collect(key, value);
+		public void match(PactRecord custRecord, PactRecord olRecord, Collector out) throws Exception
+		{
+			final Tuple t = olRecord.getField(1, Tuple.class);
+			final double extPrice = Double.parseDouble(t.getStringValueAt(0));
+			final double discount = Double.parseDouble(t.getStringValueAt(1));
+			
+			this.d.setValue(extPrice * (1 - discount));
+			custRecord.setField(2, this.d);
+			out.collect(custRecord);
 		}
 
 	}
-
-	public static class JoinCOL extends MatchStub<PactInteger, Tuple, Tuple, PactInteger, Tuple> {
-
+	
+	/**
+	 * Returns (0 = custkey, 1 = custName, 2 = extPrice * (1-discount), 3 = balance, 4 = nationName, 5 = address, 6 = phone, 7 = comment)
+	 */
+	public static class JoinNCOL extends MatchStub
+	{
 		@Override
-		public void match(PactInteger key, Tuple cValue, Tuple oValue, Collector<PactInteger, Tuple> out) {
-			int newKey = Integer.parseInt(cValue.getStringValueAt(2));
-			cValue.project(59);
-			cValue.addAttribute(key.toString());
-			cValue.concatenate(oValue);
-			out.collect(new PactInteger(newKey), cValue);
-		}
-
-	}
-
-	public static class GroupKey extends Tuple implements Key {
-
-		public GroupKey() {
-			super();
-		}
-
-		@Override
-		public int compareTo(Key o) {
-
-			int custKey = Integer.parseInt(this.getStringValueAt(6));
-			Tuple other = (Tuple) o;
-			int toCompareTo = Integer.parseInt(other.getStringValueAt(6));
-			if (custKey == toCompareTo) {
-
-				for (int i = 1; i < 6; i++) {
-					if (!(this.getStringValueAt(i).equals(other.getStringValueAt(i)))) {
-						return this.getStringValueAt(i).compareTo(other.getStringValueAt(i));
-					}
-				}
-				return 0;
-			} else {
-				return custKey - toCompareTo;
-			}
-		}
-
-	}
-
-	public static class JoinNCOL extends MatchStub<PactInteger, Tuple, Tuple, GroupKey, Tuple> {
-
-		@Override
-		public void match(PactInteger key, Tuple cValue, Tuple nValue, Collector<GroupKey, Tuple> out) {
-			GroupKey oKey = new GroupKey();
-			oKey.concatenate(nValue);
-			oKey.concatenate(cValue);
-			oKey.project(127);
-
-			cValue.project(192);
-
-			out.collect(oKey, cValue);
+		public void match(PactRecord colRecord, PactRecord nation, Collector out) throws Exception {
+			colRecord.setField(4, nation.getField(1, PactString.class));
+			out.collect(colRecord);
 		}
 	}
-
-	public static class TupleOutputFormat extends TextOutputFormat<GroupKey, Tuple> {
-
-		@Override
-		public byte[] writeLine(KeyValuePair<GroupKey, Tuple> pair) {
-			return (pair.getKey().toString() + pair.getValue().toString() + "\n").getBytes();
-		}
-
-	}
-
+	
 	@Combinable
-	public static class Sum extends ReduceStub<GroupKey, Tuple, GroupKey, Tuple> {
+	public static class Sum extends ReduceStub
+	{
+		private final PactDouble d = new PactDouble();
+		
+		@Override
+		public void reduce(Iterator<PactRecord> records, Collector out) throws Exception
+		{
+			PactRecord record = null;
+			double sum = 0;
+			while (records.hasNext()) {
+				record = records.next();
+				sum += record.getField(2, PactDouble.class).getValue();
+			}
+		
+			this.d.setValue(sum);
+			record.setField(2, this.d);
+			out.collect(record);
+		}
+		
+		@Override
+		public void combine(Iterator<PactRecord> records, Collector out) throws Exception {
+			reduce(records,out);
+		}
+	}
 
-		private static final DecimalFormat FORMATTER = new DecimalFormat("#.####");
-		static {
+	public static class TupleOutputFormat extends FileOutputFormat
+	{
+		private final DecimalFormat formatter;
+		private final StringBuilder buffer = new StringBuilder();
+		
+		public TupleOutputFormat() {
 			DecimalFormatSymbols decimalFormatSymbol = new DecimalFormatSymbols();
 			decimalFormatSymbol.setDecimalSeparator('.');
-			FORMATTER.setDecimalFormatSymbols(decimalFormatSymbol);
+			
+			this.formatter = new DecimalFormat("#.####");
+			this.formatter.setDecimalFormatSymbols(decimalFormatSymbol);
 		}
-
+		
 		@Override
-		public void combine(GroupKey key, Iterator<Tuple> values, Collector<GroupKey, Tuple> out) {
-			reduce(key, values, out);
-		}
-
-		@Override
-		public void reduce(GroupKey key, Iterator<Tuple> values, Collector<GroupKey, Tuple> out) {
-			double sum = 0;
-			while (values.hasNext()) {
-				Tuple v = values.next();
-				if (v.getNumberOfColumns() > 1) {
-					long val = Math.round(Double.parseDouble(v.getStringValueAt(0))
-						* (1 - Double.parseDouble(v.getStringValueAt(1))) * 10000);
-					sum += (((double) val) / 10000d);
-
-				} else {
-					sum += Double.parseDouble(v.getStringValueAt(0));
-				}
-			}
-			Tuple summed = new Tuple();
-			summed.addAttribute(FORMATTER.format(sum));
-
-			LOGGER.info("Output: " + key);
-			out.collect(key, summed);
+		public void writeRecord(PactRecord record) throws IOException
+		{
+			this.buffer.setLength(0);
+			this.buffer.append(record.getField(0, PactInteger.class).toString()).append('|');
+			this.buffer.append(record.getField(1, PactString.class).toString()).append('|');
+			
+			this.buffer.append(this.formatter.format(record.getField(2, PactDouble.class).getValue())).append('|');
+			
+			this.buffer.append(record.getField(3, PactString.class).toString()).append('|');
+			this.buffer.append(record.getField(4, PactString.class).toString()).append('|');
+			this.buffer.append(record.getField(5, PactString.class).toString()).append('|');
+			this.buffer.append(record.getField(6, PactString.class).toString()).append('|');
+			this.buffer.append(record.getField(7, PactString.class).toString()).append('|');
+			
+			this.buffer.append('\n');
+			
+			final byte[] bytes = this.buffer.toString().getBytes();
+			this.stream.write(bytes);
 		}
 	}
 
@@ -218,9 +268,9 @@ public class TPCHQuery10 implements PlanAssembler, PlanAssemblerDescription {
 	 * @see eu.stratosphere.pact.common.plan.PlanAssemblerDescription#getDescription()
 	 */
 	@Override
-	public String getDescription() {
-		// TODO Auto-generated method stub
-		return null;
+	public String getDescription()
+	{
+		return "TPC-H Query 10";
 	}
 
 	/*
@@ -229,17 +279,19 @@ public class TPCHQuery10 implements PlanAssembler, PlanAssemblerDescription {
 	 * @see eu.stratosphere.pact.common.plan.PlanAssembler#getPlan(java.lang.String[])
 	 */
 	@Override
-	public Plan getPlan(String... args) throws IllegalArgumentException {
-		int degreeOfParallelism = 1;
-		String ordersPath = "";
-		String lineitemsPath = "";
-		String customersPath = "";
-		String nationsPath = "";
-		String resultPath = "";
+	public Plan getPlan(String... args) throws IllegalArgumentException
+	{
+		final String ordersPath;
+		final String lineitemsPath;
+		final String customersPath;
+		final String nationsPath;
+		final String resultPath;
+		
+		final int degreeOfParallelism;
 
-		if (args.length != 6)
-			LOGGER.warn("number of arguments do not match!");
-		else {
+		if (args.length < 6) {
+			throw new IllegalArgumentException("Invalid number of parameters");
+		} else {
 			degreeOfParallelism = Integer.parseInt(args[0]);
 			ordersPath = args[1];
 			lineitemsPath = args[2];
@@ -247,74 +299,69 @@ public class TPCHQuery10 implements PlanAssembler, PlanAssemblerDescription {
 			nationsPath = args[4];
 			resultPath = args[5];
 		}
-
-		FileDataSourceContract<PactInteger, Tuple> orders = new FileDataSourceContract<PactInteger, Tuple>(
-			IntTupleDataInFormat.class, ordersPath, "Orders");
+		
+		FileDataSource orders = new FileDataSource(IntTupleDataInFormat.class, ordersPath, "Orders");
 		orders.setParameter(TextInputFormat.RECORD_DELIMITER, "\n");
 		orders.setDegreeOfParallelism(degreeOfParallelism);
 		// orders.setOutputContract(UniqueKey.class);
 		// orders.getCompilerHints().setAvgNumValuesPerKey(1);
 
-		FileDataSourceContract<PactInteger, Tuple> lineitems = new FileDataSourceContract<PactInteger, Tuple>(
-				IntTupleDataInFormat.class, lineitemsPath, "LineItems");
+		FileDataSource lineitems = new FileDataSource(IntTupleDataInFormat.class, lineitemsPath, "LineItems");
 		lineitems.setParameter(TextInputFormat.RECORD_DELIMITER, "\n");
 		lineitems.setDegreeOfParallelism(degreeOfParallelism);
 		// lineitems.getCompilerHints().setAvgNumValuesPerKey(4);
 
-		FileDataSourceContract<PactInteger, Tuple> customers = new FileDataSourceContract<PactInteger, Tuple>(
-				IntTupleDataInFormat.class, customersPath, "Customers");
+		FileDataSource customers = new FileDataSource(IntTupleDataInFormat.class, customersPath, "Customers");
 		customers.setParameter(TextInputFormat.RECORD_DELIMITER, "\n");
 		customers.setDegreeOfParallelism(degreeOfParallelism);
 
-		FileDataSourceContract<PactInteger, Tuple> nations = new FileDataSourceContract<PactInteger, Tuple>(
-					IntTupleDataInFormat.class, nationsPath, "Nations");
+		FileDataSource nations = new FileDataSource(IntTupleDataInFormat.class, nationsPath, "Nations");
 		nations.setParameter(TextInputFormat.RECORD_DELIMITER, "\n");
 		nations.setDegreeOfParallelism(degreeOfParallelism);
 
-		MapContract<PactInteger, Tuple, PactInteger, Tuple> mapO = new MapContract<PactInteger, Tuple, PactInteger, Tuple>(
-			FilterO.class, "FilterO");
+		MapContract mapO = new MapContract(FilterO.class, "FilterO");
 		mapO.setDegreeOfParallelism(degreeOfParallelism);
 
-		MapContract<PactInteger, Tuple, PactInteger, Tuple> mapLi = new MapContract<PactInteger, Tuple, PactInteger, Tuple>(
-			FilterLI.class, "FilterLi");
+		MapContract mapLi = new MapContract(FilterLI.class, "FilterLi");
 		mapLi.setDegreeOfParallelism(degreeOfParallelism);
 
-		MapContract<PactInteger, Tuple, PactInteger, Tuple> projectC = new MapContract<PactInteger, Tuple, PactInteger, Tuple>(
-			ProjectC.class, "ProjectC");
+		MapContract projectC = new MapContract(ProjectC.class, "ProjectC");
 		projectC.setDegreeOfParallelism(degreeOfParallelism);
 
-		MapContract<PactInteger, Tuple, PactInteger, Tuple> projectN = new MapContract<PactInteger, Tuple, PactInteger, Tuple>(
-			ProjectN.class, "ProjectN");
+		MapContract projectN = new MapContract(ProjectN.class, "ProjectN");
 		projectN.setDegreeOfParallelism(degreeOfParallelism);
 
-		MatchContract<PactInteger, Tuple, Tuple, PactInteger, Tuple> joinOL = new MatchContract<PactInteger, Tuple, Tuple, PactInteger, Tuple>(
-			JoinOL.class, "JoinOL");
+		MatchContract joinOL = new MatchContract(JoinOL.class, PactInteger.class, 0, 0, "JoinOL");
 		joinOL.setDegreeOfParallelism(degreeOfParallelism);
 
-		MatchContract<PactInteger, Tuple, Tuple, PactInteger, Tuple> joinCOL = new MatchContract<PactInteger, Tuple, Tuple, PactInteger, Tuple>(
-			JoinCOL.class, "JoinCOL");
+		MatchContract joinCOL = new MatchContract(JoinCOL.class, PactInteger.class, 0, 0, "JoinCOL");
 		joinCOL.setDegreeOfParallelism(degreeOfParallelism);
 
-		MatchContract<PactInteger, Tuple, Tuple, GroupKey, Tuple> joinNCOL = new MatchContract<PactInteger, Tuple, Tuple, GroupKey, Tuple>(
-			JoinNCOL.class, "JoinNCOL");
+		MatchContract joinNCOL = new MatchContract(JoinNCOL.class, PactInteger.class, 4, 0, "JoinNCOL");
 		joinNCOL.setDegreeOfParallelism(degreeOfParallelism);
 
-		ReduceContract<GroupKey, Tuple, GroupKey, Tuple> reduce = new ReduceContract<TPCHQuery10.GroupKey, Tuple, TPCHQuery10.GroupKey, Tuple>(
-			Sum.class, "Reduce");
+		@SuppressWarnings("unchecked")
+		ReduceContract reduce = new ReduceContract(Sum.class, 
+			new Class[] {PactInteger.class, PactString.class, PactString.class, PactString.class, PactString.class, PactString.class, PactString.class},
+			new int[] {0, 1, 3, 4, 5, 6, 7}, "Reduce");
 		reduce.setDegreeOfParallelism(degreeOfParallelism);
 
-		FileDataSinkContract<GroupKey, Tuple> result = new FileDataSinkContract<GroupKey, Tuple>(
-				TupleOutputFormat.class, resultPath, "Output");
+		FileDataSink result = new FileDataSink(TupleOutputFormat.class, resultPath, "Output");
 		result.setDegreeOfParallelism(degreeOfParallelism);
 
 		result.setInput(reduce);
+		
 		reduce.setInput(joinNCOL);
+		
 		joinNCOL.setFirstInput(joinCOL);
 		joinNCOL.setSecondInput(projectN);
+		
 		joinCOL.setFirstInput(projectC);
 		joinCOL.setSecondInput(joinOL);
+		
 		joinOL.setFirstInput(mapO);
 		joinOL.setSecondInput(mapLi);
+		
 		projectC.setInput(customers);
 		projectN.setInput(nations);
 		mapLi.setInput(lineitems);

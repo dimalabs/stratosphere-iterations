@@ -28,6 +28,8 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import eu.stratosphere.nephele.io.channels.ChannelID;
+import eu.stratosphere.nephele.taskmanager.transferenvelope.TransferEnvelope;
+import eu.stratosphere.nephele.taskmanager.transferenvelope.DefaultSerializer;
 
 /**
  * This class represents an outgoing TCP connection through which {@link TransferEnvelope} objects can be sent.
@@ -44,8 +46,9 @@ public class OutgoingConnection {
 	 */
 	private static final Log LOG = LogFactory.getLog(OutgoingConnection.class);
 
-	private final ByteBufferedChannelManager byteBufferedChannelManager;
-
+	/**
+	 * The address this outgoing connection is connected to.
+	 */
 	private final InetSocketAddress connectionAddress;
 
 	/**
@@ -59,9 +62,9 @@ public class OutgoingConnection {
 	private final Queue<TransferEnvelope> queuedEnvelopes = new ArrayDeque<TransferEnvelope>();
 
 	/**
-	 * The {@link TransferEnvelopeSerializer} object used to transform the envelopes into a byte stream.
+	 * The {@link DefaultSerializer} object used to transform the envelopes into a byte stream.
 	 */
-	private final TransferEnvelopeSerializer serializer = new TransferEnvelopeSerializer();
+	private final DefaultSerializer serializer = new DefaultSerializer();
 
 	/**
 	 * The {@link TransferEnvelope} that is currently processed.
@@ -109,8 +112,6 @@ public class OutgoingConnection {
 	/**
 	 * Constructs a new outgoing connection object.
 	 * 
-	 * @param byteBufferedChannelManager
-	 *        the byte buffered channel manager which manages the different connections
 	 * @param connectionAddress
 	 *        the address of the destination host this outgoing connection object is supposed to connect to
 	 * @param connectionThread
@@ -118,11 +119,9 @@ public class OutgoingConnection {
 	 * @param numberOfConnectionRetries
 	 *        the number of connection retries allowed before an I/O error is reported
 	 */
-	public OutgoingConnection(ByteBufferedChannelManager byteBufferedChannelManager,
-			InetSocketAddress connectionAddress, OutgoingConnectionThread connectionThread,
+	public OutgoingConnection(InetSocketAddress connectionAddress, OutgoingConnectionThread connectionThread,
 			int numberOfConnectionRetries) {
 
-		this.byteBufferedChannelManager = byteBufferedChannelManager;
 		this.connectionAddress = connectionAddress;
 		this.connectionThread = connectionThread;
 		this.numberOfConnectionRetries = numberOfConnectionRetries;
@@ -141,6 +140,15 @@ public class OutgoingConnection {
 
 		synchronized (this.queuedEnvelopes) {
 
+			checkConnection();
+			this.queuedEnvelopes.add(transferEnvelope);
+		}
+	}
+
+	private void checkConnection() {
+
+		synchronized (this.queuedEnvelopes) {
+
 			if (!this.isConnected) {
 
 				this.retriesLeft = this.numberOfConnectionRetries;
@@ -156,7 +164,6 @@ public class OutgoingConnection {
 				}
 			}
 
-			this.queuedEnvelopes.add(transferEnvelope);
 		}
 	}
 
@@ -223,8 +230,6 @@ public class OutgoingConnection {
 
 			// Notify source of current envelope and release buffer
 			if (this.currentEnvelope != null) {
-				this.byteBufferedChannelManager
-					.reportIOExceptionForOutputChannel(this.currentEnvelope.getSource(), ioe);
 				if (this.currentEnvelope.getBuffer() != null) {
 					this.currentEnvelope.getBuffer().recycleBuffer();
 					this.currentEnvelope = null;
@@ -236,7 +241,6 @@ public class OutgoingConnection {
 			while (iter.hasNext()) {
 				final TransferEnvelope envelope = iter.next();
 				iter.remove();
-				this.byteBufferedChannelManager.reportIOExceptionForOutputChannel(envelope.getSource(), ioe);
 				// Recycle the buffer inside the envelope
 				if (envelope.getBuffer() != null) {
 					envelope.getBuffer().recycleBuffer();
@@ -296,15 +300,13 @@ public class OutgoingConnection {
 				this.isConnected = true;
 				this.isSubscribedToWriteEvent = true;
 			}
-		}
 
-		// We must assume the current envelope is corrupted so we notify the task which created it.
-		if (this.currentEnvelope != null) {
-			this.byteBufferedChannelManager
-				.reportIOExceptionForOutputChannel(this.currentEnvelope.getSource(), ioe);
-			if (this.currentEnvelope.getBuffer() != null) {
-				this.currentEnvelope.getBuffer().recycleBuffer();
-				this.currentEnvelope = null;
+			// We must assume the current envelope is corrupted so we notify the task which created it.
+			if (this.currentEnvelope != null) {
+				if (this.currentEnvelope.getBuffer() != null) {
+					this.currentEnvelope.getBuffer().recycleBuffer();
+					this.currentEnvelope = null;
+				}
 			}
 		}
 	}
@@ -357,12 +359,7 @@ public class OutgoingConnection {
 
 			// Make sure we recycle the attached memory or file buffers correctly
 			if (this.currentEnvelope.getBuffer() != null) {
-				final TransferEnvelopeProcessingLog processingLog = this.currentEnvelope.getProcessingLog();
-				if (processingLog != null) {
-					processingLog.setSentViaNetwork();
-				} else {
-					this.currentEnvelope.getBuffer().recycleBuffer();
-				}
+				this.currentEnvelope.getBuffer().recycleBuffer();
 			}
 
 			synchronized (this.queuedEnvelopes) {
@@ -413,8 +410,6 @@ public class OutgoingConnection {
 				return;
 			}
 
-			LOG.debug("Closing connection to " + this.connectionAddress);
-
 			if (this.selectionKey != null) {
 
 				final SocketChannel socketChannel = (SocketChannel) this.selectionKey.channel();
@@ -429,16 +424,13 @@ public class OutgoingConnection {
 	}
 
 	/**
-	 * Returns the number of queued {@link TransferEnvelope} objects with the given channel ID. The
-	 * flag <code>source</code> states whether the given channel ID refers to the source or the destination channel ID.
+	 * Returns the number of queued {@link TransferEnvelope} objects with the given source channel ID.
 	 * 
-	 * @param channelID
-	 *        the channel ID to count the queued envelopes for
-	 * @param source
-	 *        <code>true</code> to indicate the given channel ID refers to the source, <code>false</code> otherwise
-	 * @return the number of queued transfer envelopes for the given channel ID
+	 * @param sourceChannelID
+	 *        the source channel ID to count the queued envelopes for
+	 * @return the number of queued transfer envelopes with the given source channel ID
 	 */
-	public int getNumberOfQueuedEnvelopesForChannel(ChannelID channelID, boolean source) {
+	public int getNumberOfQueuedEnvelopesFromChannel(final ChannelID sourceChannelID) {
 
 		synchronized (this.queuedEnvelopes) {
 
@@ -447,18 +439,36 @@ public class OutgoingConnection {
 			final Iterator<TransferEnvelope> it = this.queuedEnvelopes.iterator();
 			while (it.hasNext()) {
 				final TransferEnvelope te = it.next();
-				if (source) {
-					if (channelID.equals(te.getSource())) {
-						number++;
-					}
-				} else {
-					if (channelID.equals(te.getTarget())) {
-						number++;
-					}
+				if (sourceChannelID.equals(te.getSource())) {
+					number++;
 				}
 			}
 
 			return number;
+		}
+	}
+
+	/**
+	 * Removes all queued {@link TransferEnvelope} objects from the transmission which match the given source channel
+	 * ID.
+	 * 
+	 * @param sourceChannelID
+	 *        the source channel ID of the transfered transfer envelopes to be dropped
+	 */
+	public void dropAllQueuedEnvelopesFromChannel(final ChannelID sourceChannelID) {
+
+		synchronized (this.queuedEnvelopes) {
+
+			final Iterator<TransferEnvelope> it = this.queuedEnvelopes.iterator();
+			while (it.hasNext()) {
+				final TransferEnvelope te = it.next();
+				if (sourceChannelID.equals(te.getSource())) {
+					it.remove();
+					if (te.getBuffer() != null) {
+						te.getBuffer().recycleBuffer();
+					}
+				}
+			}
 		}
 	}
 

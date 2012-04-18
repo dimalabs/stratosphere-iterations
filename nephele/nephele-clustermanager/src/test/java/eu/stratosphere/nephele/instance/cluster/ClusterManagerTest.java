@@ -18,7 +18,6 @@ package eu.stratosphere.nephele.instance.cluster;
 import java.io.File;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -38,6 +37,7 @@ import eu.stratosphere.nephele.instance.HardwareDescription;
 import eu.stratosphere.nephele.instance.HardwareDescriptionFactory;
 import eu.stratosphere.nephele.instance.InstanceConnectionInfo;
 import eu.stratosphere.nephele.instance.InstanceException;
+import eu.stratosphere.nephele.instance.InstanceRequestMap;
 import eu.stratosphere.nephele.instance.InstanceType;
 import eu.stratosphere.nephele.instance.InstanceTypeDescription;
 import eu.stratosphere.nephele.instance.cluster.ClusterManager;
@@ -159,8 +159,9 @@ public class ClusterManagerTest {
 				2L * 1024L * 1024L * 1024L,
 				2L * 1024L * 1024L * 1024L);
 
-			InstanceConnectionInfo ici = new InstanceConnectionInfo(InetAddress.getByName("192.168.198.1"), ipcPort,
-				dataPort);
+			String ipAddress = "192.168.198.1";
+			InstanceConnectionInfo ici = new InstanceConnectionInfo(InetAddress.getByName(ipAddress), ipAddress, null,
+				ipcPort, dataPort);
 
 			// Although the hardware description indicates an instance of type "small", the cluster manager is supposed
 			// to take the user-defined instance type "high"
@@ -191,7 +192,9 @@ public class ClusterManagerTest {
 			// its hardware description
 			hardwareDescription = HardwareDescriptionFactory.construct(3, 2L * 1024L * 1024L * 1024L,
 				1024L * 1024L * 1024L);
-			ici = new InstanceConnectionInfo(InetAddress.getByName("192.168.198.3"), ipcPort, dataPort);
+
+			ipAddress = "192.168.198.3";
+			ici = new InstanceConnectionInfo(InetAddress.getByName(ipAddress), ipAddress, null, ipcPort, dataPort);
 			cm.reportHeartBeat(ici, hardwareDescription);
 
 			instanceTypeDescriptions = cm.getMapOfAvailableInstanceTypes();
@@ -244,8 +247,9 @@ public class ClusterManagerTest {
 
 		try {
 
+			final String ipAddress = "192.168.198.1";
 			final InstanceConnectionInfo instanceConnectionInfo = new InstanceConnectionInfo(
-				InetAddress.getByName("192.168.198.1"), 1234, 1235);
+				InetAddress.getByName(ipAddress), ipAddress, null, 1234, 1235);
 			final HardwareDescription hardwareDescription = HardwareDescriptionFactory.construct(8,
 				8L * 1024L * 1024L * 1024L, 8L * 1024L * 1024L * 1024L);
 			cm.reportHeartBeat(instanceConnectionInfo, hardwareDescription);
@@ -253,13 +257,14 @@ public class ClusterManagerTest {
 			// now we should be able to request two instances of type small and one of type medium
 			final JobID jobID = new JobID();
 			final Configuration conf = new Configuration();
-			
-			Map<InstanceType, Integer> instanceMap = new HashMap<InstanceType, Integer>();
-			instanceMap.put(cm.getInstanceTypeByName(SMALL_INSTANCE_TYPE_NAME), 2);
-			instanceMap.put(cm.getInstanceTypeByName(MEDIUM_INSTANCE_TYPE_NAME), 1);
+
+			final InstanceRequestMap instanceRequestMap = new InstanceRequestMap();
+
+			instanceRequestMap.setNumberOfInstances(cm.getInstanceTypeByName(SMALL_INSTANCE_TYPE_NAME), 2);
+			instanceRequestMap.setNumberOfInstances(cm.getInstanceTypeByName(MEDIUM_INSTANCE_TYPE_NAME), 1);
 
 			try {
-				cm.requestInstance(jobID, conf, instanceMap, null);
+				cm.requestInstance(jobID, conf, instanceRequestMap, null);
 			} catch (InstanceException ie) {
 				fail(ie.getMessage());
 			}
@@ -286,8 +291,8 @@ public class ClusterManagerTest {
 
 			// Try to allocate more resources which must result in an error
 			try {
-				Map<InstanceType, Integer> instancem = new HashMap<InstanceType, Integer>();
-				instancem.put(cm.getInstanceTypeByName(MEDIUM_INSTANCE_TYPE_NAME), 1);
+				InstanceRequestMap instancem = new InstanceRequestMap();
+				instancem.setNumberOfInstances(cm.getInstanceTypeByName(MEDIUM_INSTANCE_TYPE_NAME), 1);
 				cm.requestInstance(jobID, conf, instancem, null);
 
 				fail("ClusterManager allowed to request more instances than actually available");
@@ -309,8 +314,8 @@ public class ClusterManagerTest {
 
 			// Now further allocations should be possible
 			try {
-				Map<InstanceType, Integer> instancem = new HashMap<InstanceType, Integer>();
-				instancem.put(cm.getInstanceTypeByName(LARGE_INSTANCE_TYPE_NAME), 1);
+				InstanceRequestMap instancem = new InstanceRequestMap();
+				instancem.setNumberOfInstances(cm.getInstanceTypeByName(LARGE_INSTANCE_TYPE_NAME), 1);
 				cm.requestInstance(jobID, conf, instancem, null);
 			} catch (InstanceException ie) {
 				fail(ie.getMessage());
@@ -339,8 +344,9 @@ public class ClusterManagerTest {
 
 		try {
 
+			final String ipAddress = "192.168.198.3";
 			final InstanceConnectionInfo instanceConnectionInfo = new InstanceConnectionInfo(
-				InetAddress.getByName("192.168.198.3"), 1234, 1235);
+				InetAddress.getByName(ipAddress), ipAddress, null, 1234, 1235);
 			final HardwareDescription hardwareDescription = HardwareDescriptionFactory.construct(8,
 				8L * 1024L * 1024L * 1024L, 8L * 1024L * 1024L * 1024L);
 			cm.reportHeartBeat(instanceConnectionInfo, hardwareDescription);
@@ -350,8 +356,8 @@ public class ClusterManagerTest {
 
 			try {
 
-				Map<InstanceType, Integer> instancem = new HashMap<InstanceType, Integer>();
-				instancem.put(cm.getInstanceTypeByName(LARGE_INSTANCE_TYPE_NAME), 1);
+				InstanceRequestMap instancem = new InstanceRequestMap();
+				instancem.setNumberOfInstances(cm.getInstanceTypeByName(LARGE_INSTANCE_TYPE_NAME), 1);
 				cm.requestInstance(jobID, conf, instancem, null);
 
 			} catch (InstanceException ie) {

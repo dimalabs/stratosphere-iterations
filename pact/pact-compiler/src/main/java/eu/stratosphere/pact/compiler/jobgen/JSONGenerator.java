@@ -18,17 +18,19 @@ package eu.stratosphere.pact.compiler.jobgen;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.List;
+import java.util.Map.Entry;
 
 import eu.stratosphere.pact.common.contract.CompilerHints;
-import eu.stratosphere.pact.common.contract.FileDataSinkContract;
-import eu.stratosphere.pact.common.contract.FileDataSourceContract;
 import eu.stratosphere.pact.common.plan.Visitor;
+import eu.stratosphere.pact.common.util.FieldSet;
 import eu.stratosphere.pact.compiler.CompilerException;
 import eu.stratosphere.pact.compiler.GlobalProperties;
 import eu.stratosphere.pact.compiler.LocalProperties;
-import eu.stratosphere.pact.compiler.OutputContract;
+import eu.stratosphere.pact.compiler.PartitionProperty;
+//import eu.stratosphere.pact.compiler.OutputContract;
 import eu.stratosphere.pact.compiler.plan.OptimizedPlan;
 import eu.stratosphere.pact.compiler.plan.OptimizerNode;
 import eu.stratosphere.pact.compiler.plan.PactConnection;
@@ -92,33 +94,33 @@ public class JSONGenerator implements Visitor<OptimizerNode> {
 		plan.accept(this);
 
 		// JSON Footer
-		jsonString.deleteCharAt(jsonString.lastIndexOf(","));
-		jsonString.append("\t]\n}");
+		this.jsonString.deleteCharAt(this.jsonString.lastIndexOf(","));
+		this.jsonString.append("\t]\n}");
 
 		// return JSON string
-		return jsonString.toString();
+		return this.jsonString.toString();
 	}
 
 	@Override
 	public boolean preVisit(OptimizerNode visitable) {
 
 		// visit each node and assign a unique id
-		if (!nodeIds.containsKey(visitable)) {
-			nodeIds.put(visitable, nodeCnt++);
+		if (!this.nodeIds.containsKey(visitable)) {
+			this.nodeIds.put(visitable, this.nodeCnt++);
 			return true;
-		} else {
-			return false;
 		}
+		
+		return false;
 	}
 
 	@Override
 	public void postVisit(OptimizerNode visitable) {
 
 		// start a new node
-		jsonString.append("\t{\n");
+		this.jsonString.append("\t{\n");
 
 		// output node id
-		jsonString.append("\t\t\"id\": " + nodeIds.get(visitable));
+		this.jsonString.append("\t\t\"id\": " + this.nodeIds.get(visitable));
 
 		// output node type
 		String type;
@@ -133,115 +135,118 @@ public class JSONGenerator implements Visitor<OptimizerNode> {
 			type = "pact";
 			break;
 		}
-		jsonString.append(",\n\t\t\"type\": \"" + type + "\"");
-
-		// output node pact type
-		if (type.equals("pact")) {
-			jsonString.append(",\n\t\t\"pact\": \"" + visitable.getName() + "\"");
-		}
+		this.jsonString.append(",\n\t\t\"type\": \"" + type + "\"");
 
 		// output node contents
 		String contents;
 		switch (visitable.getPactType()) {
 		case DataSink:
-			contents = ((FileDataSinkContract<?, ?>) visitable.getPactContract()).getFilePath();
+			contents = visitable.getPactContract().toString();
 			break;
 		case DataSource:
-			contents = ((FileDataSourceContract<?, ?>) visitable.getPactContract()).getFilePath();
+			contents = visitable.getPactContract().toString();
 			break;
 		default:
+			jsonString.append(",\n\t\t\"pact\": \"" + visitable.getName() + "\"");
 			contents = visitable.getPactContract().getName();
 			break;
 		}
-		jsonString.append(",\n\t\t\"contents\": \"" + contents + "\"");
+		this.jsonString.append(",\n\t\t\"contents\": \"" + contents + "\"");
 
 		// output contract
-		OutputContract outContr = visitable.getOutputContract();
-		if (outContr != null && outContr != OutputContract.None) {
-			jsonString.append(",\n\t\t\"outputcontract\": \"" + outContr.name() + "\"");
-		}
+//		OutputContract outContr = visitable.getOutputContract();
+//		if (outContr != null && outContr != OutputContract.None) {
+//			jsonString.append(",\n\t\t\"outputcontract\": \"" + outContr.name() + "\"");
+//		}
 
 		// degree of parallelism
-		jsonString.append(",\n\t\t\"parallelism\": \""
+		this.jsonString.append(",\n\t\t\"parallelism\": \""
 			+ (visitable.getDegreeOfParallelism() >= 1 ? visitable.getDegreeOfParallelism() : "default") + "\"");
 
 		// output node predecessors
-		List<PactConnection> connList = visitable.getIncomingConnections();
-		String child1name = null, child2name = null;
+		List<List<PactConnection>> connLists = visitable.getIncomingConnections();
+		String child1name = "", child2name = "";
 
-		if (connList != null && connList.size() > 0) {
+		if (connLists != null && connLists.size() > 0) {
 			// start predecessor list
-			jsonString.append(",\n\t\t\"predecessors\": [");
+			this.jsonString.append(",\n\t\t\"predecessors\": [");
 			int connCnt = 0;
-			for (PactConnection conn : connList) {
-
-				jsonString.append(connCnt == 0 ? "\n" : ",\n");
-				if (connCnt == 0) {
-					child1name = conn.getSourcePact().getPactContract().getName();
-				} else if (connCnt == 1) {
-					child2name = conn.getSourcePact().getPactContract().getName();
+			int inputCnt = 0;
+			for(List<PactConnection> oneList : connLists) {
+				
+				for (PactConnection conn : oneList) {
+	
+					this.jsonString.append(inputCnt == 0 ? "\n" : ",\n");
+					if (connCnt == 0) {
+						child1name += child1name.length() > 0 ? ", " : ""; 
+						child1name += conn.getSourcePact().getPactContract().getName();
+					} else if (connCnt == 1) {
+						child2name += child2name.length() > 0 ? ", " : ""; 
+						child2name = conn.getSourcePact().getPactContract().getName();
+					}
+	
+					// output predecessor id
+					this.jsonString.append("\t\t\t{\"id\": " + this.nodeIds.get(conn.getSourcePact()));
+	
+					// output connection side
+					if (connLists.size() == 2) {
+						this.jsonString.append(", \"side\": \"" + (connCnt == 0 ? "first" : "second") + "\"");
+					}
+					// output shipping strategy and channel type
+					String shipStrategy = null;
+					String channelType = null;
+					switch (conn.getShipStrategy()) {
+					case NONE:
+						// nothing
+						break;
+					case FORWARD:
+						shipStrategy = "Local Forward";
+						channelType = "memory";
+						break;
+					case BROADCAST:
+						shipStrategy = "Broadcast";
+						channelType = "network";
+						break;
+					case PARTITION_HASH:
+						shipStrategy = "Partition";
+						channelType = "network";
+						break;
+					case PARTITION_RANGE:
+						shipStrategy = "Partition (range)";
+						channelType = "network";
+						break;
+					case PARTITION_LOCAL_HASH:
+						shipStrategy = "Partition local";
+						channelType = "memory";
+					case SFR:
+						shipStrategy = "SFR";
+						channelType = "network";
+						break;
+					default:
+						throw new CompilerException("Unknown ship strategy '" + conn.getShipStrategy().name()
+							+ "' in JSON generator.");
+					}
+	
+					if (shipStrategy != null) {
+						this.jsonString.append(", \"shippingStrategy\": \"" + shipStrategy + "\"");
+					}
+					if (channelType != null) {
+						this.jsonString.append(", \"channelType\": \"" + channelType + "\"");
+					}
+	
+					if (conn.getTempMode() != TempMode.NONE) {
+						String tempMode = conn.getTempMode().toString();
+						this.jsonString.append(", \"tempMode\": \"" + tempMode + "\"");
+					}
+	
+					this.jsonString.append('}');
+					
+					inputCnt++;
 				}
-
-				// output predecessor id
-				jsonString.append("\t\t\t{\"id\": " + nodeIds.get(conn.getSourcePact()));
-
-				// output connection side
-				if (connList.size() == 2) {
-					jsonString.append(", \"side\": \"" + (connCnt == 0 ? "first" : "second") + "\"");
-				}
-				// output shipping strategy and channel type
-				String shipStrategy = null;
-				String channelType = null;
-				switch (conn.getShipStrategy()) {
-				case NONE:
-					// nothing
-					break;
-				case FORWARD:
-					shipStrategy = "Local Forward";
-					channelType = "memory";
-					break;
-				case BROADCAST:
-					shipStrategy = "Broadcast";
-					channelType = "network";
-					break;
-				case PARTITION_HASH:
-					shipStrategy = "Partition";
-					channelType = "network";
-					break;
-				case PARTITION_RANGE:
-					shipStrategy = "Partition (range)";
-					channelType = "network";
-					break;
-				case PARTITION_LOCAL_HASH:
-					shipStrategy = "Partition local";
-					channelType = "memory";
-				case SFR:
-					shipStrategy = "SFR";
-					channelType = "network";
-					break;
-				default:
-					throw new CompilerException("Unknown ship strategy '" + conn.getShipStrategy().name()
-						+ "' in JSON generator.");
-				}
-
-				if (shipStrategy != null) {
-					jsonString.append(", \"shippingStrategy\": \"" + shipStrategy + "\"");
-				}
-				if (channelType != null) {
-					jsonString.append(", \"channelType\": \"" + channelType + "\"");
-				}
-
-				if (conn.getTempMode() != TempMode.NONE) {
-					String tempMode = conn.getTempMode().toString();
-					jsonString.append(", \"tempMode\": \"" + tempMode + "\"");
-				}
-
-				jsonString.append('}');
-
 				connCnt++;
 			}
 			// finish predecessors
-			jsonString.append("\t\t]");
+			this.jsonString.append("\t\t]");
 		}
 
 		// local strategy
@@ -305,9 +310,9 @@ public class JSONGenerator implements Visitor<OptimizerNode> {
 			}
 
 			if (locString != null) {
-				jsonString.append(",\n\t\t\"local_strategy\": \"");
-				jsonString.append(locString);
-				jsonString.append("\"");
+				this.jsonString.append(",\n\t\t\"local_strategy\": \"");
+				this.jsonString.append(locString);
+				this.jsonString.append("\"");
 			}
 		}
 
@@ -315,57 +320,89 @@ public class JSONGenerator implements Visitor<OptimizerNode> {
 			// output node global properties
 			GlobalProperties gp = visitable.getGlobalProperties();
 
-			jsonString.append(",\n\t\t\"global_properties\": [\n");
+			this.jsonString.append(",\n\t\t\"global_properties\": [\n");
 
-			addProperty(jsonString, "Key-Partitioning", gp.getPartitioning().name(), true);
-			addProperty(jsonString, "Key-Order", gp.getKeyOrder().name(), false);
-			addProperty(jsonString, "Key-Uniqueness", gp.isKeyUnique() ? "unique" : "not unique", false);
+			addProperty(jsonString, "Partitioning", gp.getPartitioning().name(), true);
+			if (gp.getPartitioning() != PartitionProperty.NONE) {
+				addProperty(jsonString, "Partitioned on", Arrays.toString(gp.getPartitionedFields()), false);
+			}
+			if (gp.getOrdering() != null) {
+				addProperty(jsonString, "Order", gp.getOrdering().toString(), false);	
+			}
+			else {
+				addProperty(jsonString, "Order", "(none)", false);
+			}
+			if (visitable.getUniqueFields() == null || visitable.getUniqueFields().size() == 0) {
+				addProperty(jsonString, "Uniqueness", "not unique", false);
+			}
+			else {
+				addProperty(jsonString, "Uniqueness", visitable.getUniqueFields().toString(), false);	
+			}
 
-			jsonString.append("\n\t\t]");
+			this.jsonString.append("\n\t\t]");
 		}
 
 		{
 			// output node local properties
 			LocalProperties lp = visitable.getLocalProperties();
 
-			jsonString.append(",\n\t\t\"local_properties\": [\n");
+			this.jsonString.append(",\n\t\t\"local_properties\": [\n");
 
-			addProperty(jsonString, "Key-Order", lp.getKeyOrder().name(), true);
-			addProperty(jsonString, "Key-Uniqueness", lp.isKeyUnique() ? "unique" : "not unique", false);
-			addProperty(jsonString, "Key-Grouping", lp.areKeysGrouped() ? "grouped" : "not grouped", false);
+			if (lp.getOrdering() != null) {
+				addProperty(jsonString, "Order", lp.getOrdering().toString(), true);	
+			}
+			else {
+				addProperty(jsonString, "Order", "(none)", true);
+			}
+			if (visitable.getUniqueFields() == null || visitable.getUniqueFields().size() == 0) {
+				addProperty(jsonString, "Uniqueness", "not unique", false);
+			}
+			else {
+				addProperty(jsonString, "Uniqueness", visitable.getUniqueFields().toString(), false);	
+			}
+			addProperty(jsonString, "Grouping", lp.isGrouped() ? "grouped": "not grouped", false);
+			if (lp.isGrouped()) {
+				addProperty(jsonString, "Grouped on", lp.getGroupedFields().toString(), false);	
+			}
 
-			jsonString.append("\n\t\t]");
+			this.jsonString.append("\n\t\t]");
 		}
 
 		// output node size estimates
-		jsonString.append(",\n\t\t\"properties\": [\n");
+		this.jsonString.append(",\n\t\t\"properties\": [\n");
 
-		addProperty(jsonString, "Est. Cardinality", visitable.getEstimatedNumRecords() == -1 ? "(unknown)"
+		addProperty(this.jsonString, "Est. Cardinality", visitable.getEstimatedNumRecords() == -1 ? "(unknown)"
 			: formatNumber(visitable.getEstimatedNumRecords()), true);
-		addProperty(jsonString, "Est. Key-Cardinality", visitable.getEstimatedKeyCardinality() == -1 ? "(unknown)"
-			: formatNumber(visitable.getEstimatedKeyCardinality()), false);
+		String estCardinality = "(unknown)";
+		if (visitable.getEstimatedCardinalities().size() > 0) {
+			estCardinality = "";
+			for (Entry<FieldSet, Long> entry : visitable.getEstimatedCardinalities().entrySet()) {
+				estCardinality += "[" + entry.getKey().toString() + "->" + entry.getValue() + "]"; 
+			}
+		}
+		addProperty(jsonString, "Est. Cardinality/fields", estCardinality, false);	
 		addProperty(jsonString, "Est. Output Size", visitable.getEstimatedOutputSize() == -1 ? "(unknown)"
 			: formatNumber(visitable.getEstimatedOutputSize(), "B"), false);
 
-		jsonString.append("\t\t]");
+		this.jsonString.append("\t\t]");
 
 		// output node cost
 		if (visitable.getNodeCosts() != null) {
-			jsonString.append(",\n\t\t\"costs\": [\n");
+			this.jsonString.append(",\n\t\t\"costs\": [\n");
 
-			addProperty(jsonString, "Network", visitable.getNodeCosts().getNetworkCost() == -1 ? "(unknown)"
+			addProperty(this.jsonString, "Network", visitable.getNodeCosts().getNetworkCost() == -1 ? "(unknown)"
 				: formatNumber(visitable.getNodeCosts().getNetworkCost(), "B"), true);
-			addProperty(jsonString, "Disk I/O", visitable.getNodeCosts().getSecondaryStorageCost() == -1 ? "(unknown)"
+			addProperty(this.jsonString, "Disk I/O", visitable.getNodeCosts().getSecondaryStorageCost() == -1 ? "(unknown)"
 				: formatNumber(visitable.getNodeCosts().getSecondaryStorageCost(), "B"), false);
 
-			addProperty(jsonString, "Cumulative Network",
+			addProperty(this.jsonString, "Cumulative Network",
 				visitable.getCumulativeCosts().getNetworkCost() == -1 ? "(unknown)" : formatNumber(visitable
 					.getCumulativeCosts().getNetworkCost(), "B"), false);
-			addProperty(jsonString, "Cumulative Disk I/O",
+			addProperty(this.jsonString, "Cumulative Disk I/O",
 				visitable.getCumulativeCosts().getSecondaryStorageCost() == -1 ? "(unknown)" : formatNumber(visitable
 					.getCumulativeCosts().getSecondaryStorageCost(), "B"), false);
 
-			jsonString.append("\n\t\t]");
+			this.jsonString.append("\n\t\t]");
 		}
 
 		// output the node compiler hints
@@ -373,22 +410,35 @@ public class JSONGenerator implements Visitor<OptimizerNode> {
 			CompilerHints hints = visitable.getPactContract().getCompilerHints();
 			CompilerHints defaults = new CompilerHints();
 
-			jsonString.append(",\n\t\t\"compiler_hints\": [\n");
+			this.jsonString.append(",\n\t\t\"compiler_hints\": [\n");
 
-			addProperty(jsonString, "Key-Cardinality",
-				hints.getKeyCardinality() == defaults.getKeyCardinality() ? "(none)" : formatNumber(hints
-					.getKeyCardinality()), true);
-			addProperty(jsonString, "Avg. Records/StubCall", String.valueOf(hints.getAvgRecordsEmittedPerStubCall()), false);
-			addProperty(jsonString, "Avg. Values/Key", hints.getAvgNumValuesPerKey() == defaults
-				.getAvgNumValuesPerKey() ? "(none)" : String.valueOf(hints.getAvgNumValuesPerKey()), false);
+			String hintCardinality = "(none)";
+			if (hints.getDistinctCounts().size() > 0) {
+				hintCardinality = "";
+				for (Entry<FieldSet, Long> entry : visitable.getEstimatedCardinalities().entrySet()) {
+					hintCardinality += "[" + entry.getKey().toString() + "->" + entry.getValue() + "]"; 
+				}
+			}
+			addProperty(jsonString, "Cardinality", hintCardinality, true);
+			addProperty(jsonString, "Avg. Records/StubCall", hints.getAvgRecordsEmittedPerStubCall() == defaults.
+					getAvgRecordsEmittedPerStubCall() ? "(none)" : String.valueOf(hints.getAvgRecordsEmittedPerStubCall()), false);
+			
+			String valuesKey = "(none)";
+			if (hints.getAvgNumRecordsPerDistinctFields().size() > 0) {
+				valuesKey = "";
+				for (Entry<FieldSet, Float> entry : hints.getAvgNumRecordsPerDistinctFields().entrySet()) {
+					valuesKey += "[" + entry.getKey().toString() + "->" + entry.getValue() + "]"; 
+				}
+			}
+			addProperty(jsonString, "Avg. Values/Distinct fields", valuesKey, false);
 			addProperty(jsonString, "Avg. Width (bytes)", hints.getAvgBytesPerRecord() == defaults
 				.getAvgBytesPerRecord() ? "(none)" : String.valueOf(hints.getAvgBytesPerRecord()), false);
 
-			jsonString.append("\t\t]");
+			this.jsonString.append("\t\t]");
 		}
 
 		// finish node
-		jsonString.append("\n\t},\n");
+		this.jsonString.append("\n\t},\n");
 	}
 
 	private void addProperty(StringBuffer jsonString, String name, String value, boolean first) {

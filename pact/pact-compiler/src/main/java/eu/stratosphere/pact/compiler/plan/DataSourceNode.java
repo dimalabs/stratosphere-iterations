@@ -15,23 +15,25 @@
 
 package eu.stratosphere.pact.compiler.plan;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import eu.stratosphere.pact.common.contract.CompilerHints;
 import eu.stratosphere.pact.common.contract.Contract;
 import eu.stratosphere.pact.common.contract.GenericDataSource;
 import eu.stratosphere.pact.common.io.InputFormat;
+import eu.stratosphere.pact.common.io.OutputSchemaProvider;
 import eu.stratosphere.pact.common.io.statistics.BaseStatistics;
 import eu.stratosphere.pact.common.plan.Visitor;
+import eu.stratosphere.pact.common.util.FieldSet;
 import eu.stratosphere.pact.compiler.Costs;
 import eu.stratosphere.pact.compiler.DataStatistics;
 import eu.stratosphere.pact.compiler.GlobalProperties;
 import eu.stratosphere.pact.compiler.LocalProperties;
-import eu.stratosphere.pact.compiler.OutputContract;
 import eu.stratosphere.pact.compiler.PactCompiler;
-import eu.stratosphere.pact.compiler.PartitionProperty;
 import eu.stratosphere.pact.compiler.costs.CostEstimator;
 import eu.stratosphere.pact.runtime.task.util.TaskConfig.LocalStrategy;
 
@@ -42,7 +44,7 @@ import eu.stratosphere.pact.runtime.task.util.TaskConfig.LocalStrategy;
  */
 public class DataSourceNode extends OptimizerNode
 {
-	private List<DataSourceNode> cachedPlans; // the cache in case there are multiple outputs;
+	private List<OptimizerNode> cachedPlans; // the cache in case there are multiple outputs;
 
 	/**
 	 * Creates a new DataSourceNode for the given contract.
@@ -50,7 +52,7 @@ public class DataSourceNode extends OptimizerNode
 	 * @param pactContract
 	 *        The data source contract object.
 	 */
-	public DataSourceNode(GenericDataSource<?, ?> pactContract) {
+	public DataSourceNode(GenericDataSource<?> pactContract) {
 		super(pactContract);
 		setLocalStrategy(LocalStrategy.NONE);
 	}
@@ -74,8 +76,9 @@ public class DataSourceNode extends OptimizerNode
 	 * 
 	 * @return The contract.
 	 */
-	public GenericDataSource<?, ?> getPactContract() {
-		return (GenericDataSource<?, ?>) super.getPactContract();
+	@Override
+	public GenericDataSource<?> getPactContract() {
+		return (GenericDataSource<?>) super.getPactContract();
 	}
 
 	/*
@@ -101,8 +104,8 @@ public class DataSourceNode extends OptimizerNode
 	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#getIncomingConnections()
 	 */
 	@Override
-	public List<PactConnection> getIncomingConnections() {
-		return Collections.<PactConnection> emptyList();
+	public List<List<PactConnection>> getIncomingConnections() {
+		return Collections.<List<PactConnection>>emptyList();
 	}
 
 	/*
@@ -111,7 +114,7 @@ public class DataSourceNode extends OptimizerNode
 	 */
 	@Override
 	public void setInputs(Map<Contract, OptimizerNode> contractToNode) {
-		// no inputs, so do nothing.
+		throw new UnsupportedOperationException("A DataSourceNode does not have any input.");
 	}
 
 	/**
@@ -119,30 +122,30 @@ public class DataSourceNode extends OptimizerNode
 	 * based on the file size and the compiler hints. The compiler hints are instantiated with
 	 * conservative default values which are used if no other values are provided.
 	 */
+	@Override
 	public void computeOutputEstimates(DataStatistics statistics)
 	{
 		CompilerHints hints = getPactContract().getCompilerHints();
 		
 		// for unique keys, we can have only one value per key
-		OutputContract oc = getOutputContract();
-		if (oc == OutputContract.UniqueKey) {
-			hints.setAvgNumValuesPerKey(1.0f);
-		}
+//		OutputContract oc = getOutputContract();
+//		if (oc == OutputContract.UniqueKey) {
+//			hints.setAvgNumValuesPerKey(1.0f);
+//		}
 		
 		// initialize basic estimates to unknown
 		this.estimatedOutputSize = -1;
 		this.estimatedNumRecords = -1;
-		this.estimatedKeyCardinality = -1;
 
 		// see, if we have a statistics object that can tell us a bit about the file
 		if (statistics != null)
 		{
 			// instantiate the input format, as this is needed by the statistics 
-			InputFormat<?, ?, ?> format = null;
+			InputFormat<?> format = null;
 			String inFormatDescription = "<unknown>";
 			
 			try {
-				Class<? extends InputFormat<?, ?, ?>> formatClass = getPactContract().getFormatClass();
+				Class<? extends InputFormat<?>> formatClass = getPactContract().getFormatClass();
 				format = formatClass.newInstance();
 				format.configure(getPactContract().getParameters());
 			}
@@ -201,21 +204,40 @@ public class DataSourceNode extends OptimizerNode
 		// or we assume for robustness reasons that every record has a unique key. 
 		// Key cardinality overestimation results in more robust plans
 		
-		if (hints.getKeyCardinality() != -1) {
-			this.estimatedKeyCardinality = hints.getKeyCardinality();
-		} else if (this.estimatedNumRecords != -1 && hints.getAvgNumValuesPerKey() != -1) {
-			this.estimatedKeyCardinality = (this.estimatedNumRecords / hints.getAvgNumValuesPerKey()) >= 1 ?
-					(long) (this.estimatedNumRecords / hints.getAvgNumValuesPerKey()) : 1;
-		} else {
-			this.estimatedKeyCardinality = this.estimatedNumRecords;
+		this.estimatedCardinality.putAll(hints.getDistinctCounts());
+		
+		if(this.estimatedNumRecords != -1) {
+			for (Entry<FieldSet, Float> avgNumValues : hints.getAvgNumRecordsPerDistinctFields().entrySet()) {
+				if (estimatedCardinality.get(avgNumValues.getKey()) == null) {
+					long estimatedCard = (this.estimatedNumRecords / avgNumValues.getValue() >= 1) ? 
+							(long) (this.estimatedNumRecords / avgNumValues.getValue()) : 1;
+					estimatedCardinality.put(avgNumValues.getKey(), estimatedCard);
+				}
+			}
 		}
-
-		// if we have the key cardinality and an average number of values per key, we can estimate the number
-		// of rows
-		if (this.estimatedNumRecords == -1 && this.estimatedKeyCardinality != -1 && hints.getAvgNumValuesPerKey() >= 1.0f) {
-			this.estimatedNumRecords = (this.estimatedKeyCardinality * hints.getAvgNumValuesPerKey()) >= 1 ? 
-				(long) (this.estimatedKeyCardinality * hints.getAvgNumValuesPerKey()) : 1;
+		else {
+			// if we have the key cardinality and an average number of values per key, we can estimate the number
+			// of rows
+			this.estimatedNumRecords = 0;
+			int count = 0;
+			
+			for (Entry<FieldSet, Long> cardinality : hints.getDistinctCounts().entrySet()) {
+				float avgNumValues = hints.getAvgNumRecordsPerDistinctFields(cardinality.getKey());
+				if (avgNumValues != -1) {
+					this.estimatedNumRecords += cardinality.getValue() * avgNumValues;
+					count++;
+				}
+			}
+			
+			if (count > 0) {
+				this.estimatedNumRecords = (this.estimatedNumRecords /count) >= 1 ?
+						(this.estimatedNumRecords /count) : 1;
+			}
+			else {
+				this.estimatedNumRecords = -1;
+			}
 		}
+		
 		
 		// Estimate output size
 		if (this.estimatedOutputSize == -1 && this.estimatedNumRecords != -1 && hints.getAvgBytesPerRecord() >= 1.0f) {
@@ -247,22 +269,22 @@ public class DataSourceNode extends OptimizerNode
 	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#computeAlternativePlans()
 	 */
 	@Override
-	public List<DataSourceNode> getAlternativePlans(CostEstimator estimator) {
-		if (cachedPlans != null) {
-			return cachedPlans;
+	public List<OptimizerNode> getAlternativePlans(CostEstimator estimator) {
+		if (this.cachedPlans != null) {
+			return this.cachedPlans;
 		}
 
 		GlobalProperties gp = new GlobalProperties();
 		LocalProperties lp = new LocalProperties();
 
 		// first, compute the properties of the output
-		if (getOutputContract() == OutputContract.UniqueKey) {
-			gp.setKeyUnique(true);
-			gp.setPartitioning(PartitionProperty.ANY);
-
-			lp.setKeyUnique(true);
-			lp.setKeysGrouped(true);
-		}
+//		if (getOutputContract() == OutputContract.UniqueKey) {
+//			gp.setKeyUnique(true);
+//			gp.setPartitioning(PartitionProperty.ANY);
+//
+//			lp.setKeyUnique(true);
+//			lp.setKeysGrouped(true);
+//		}
 
 		DataSourceNode candidate = new DataSourceNode(this, gp, lp);
 
@@ -270,7 +292,8 @@ public class DataSourceNode extends OptimizerNode
 		candidate.setCosts(new Costs(0, this.estimatedOutputSize));
 
 		// since there is only a single plan for the data-source, return a list with that element only
-		List<DataSourceNode> plans = Collections.singletonList(candidate);
+		List<OptimizerNode> plans = new ArrayList<OptimizerNode>(1);
+		plans.add(candidate);
 
 		if (isBranching()) {
 			this.cachedPlans = plans;
@@ -289,5 +312,110 @@ public class DataSourceNode extends OptimizerNode
 		if (visitor.preVisit(this)) {
 			visitor.postVisit(this);
 		}
+	}
+
+	
+	public boolean isFieldKept(int input, int fieldNumber) {
+		return false;
+	}
+	
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#readCopyProjectionAnnotations()
+	 */
+	@Override
+	protected void readCopyProjectionAnnotations() {
+		// DO NOTHING		
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#readReadsAnnotation()
+	 */
+	@Override
+	protected void readReadsAnnotation() {
+		// DO NOTHING
+	}
+	
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#deriveOutputSchema()
+	 */
+	@SuppressWarnings("unchecked")
+	@Override
+	public void deriveOutputSchema() {
+		
+		this.outputSchema = this.computeOutputSchema(Collections.EMPTY_LIST);
+	}
+	
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#computeOutputSchema(java.util.List)
+	 */
+	@SuppressWarnings("unchecked")
+	@Override
+	public FieldSet computeOutputSchema(List<FieldSet> inputSchemas) {
+		
+		if(inputSchemas.size() > 0)
+			throw new IllegalArgumentException("DataSourceNode do not have input nodes");
+		
+		// get the input format class
+		Class<InputFormat<?>> clazz = (Class<InputFormat<?>>)((GenericDataSource<? extends InputFormat<?>>)getPactContract()).getFormatClass();
+		
+		InputFormat<?> inputFormat;
+		try {
+			inputFormat = clazz.newInstance();
+			
+			if(inputFormat instanceof OutputSchemaProvider) {
+				
+				inputFormat.configure(getPactContract().getParameters());
+				return new FieldSet(((OutputSchemaProvider) inputFormat).getOutputSchema());
+			} else {
+				return null;
+			}
+			
+		} catch (InstantiationException e) {
+			e.printStackTrace();
+		} catch (IllegalAccessException e) {
+			e.printStackTrace();
+		}
+		return null;
+		
+	}
+	
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#getReadSet(int)
+	 */
+	@Override
+	public FieldSet getReadSet(int input) {
+		return null;
+	}
+	
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#getWriteSet(int)
+	 */
+	@Override
+	public FieldSet getWriteSet(int input) {
+		return null;
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#getWriteSet(int, java.util.List)
+	 */
+	@Override
+	public FieldSet getWriteSet(int input, List<FieldSet> inputSchemas) {
+		return null;
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * @see eu.stratosphere.pact.compiler.plan.OptimizerNode#isValidInputSchema(int, int[])
+	 */
+	@Override
+	public boolean isValidInputSchema(int input, FieldSet inputSchema) {
+		return false;
 	}
 }
