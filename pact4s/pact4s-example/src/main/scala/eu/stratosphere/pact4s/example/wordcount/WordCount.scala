@@ -5,33 +5,29 @@ import scala.math.Ordered._
 
 import eu.stratosphere.pact4s.common._
 
-class WordCount(args: String*) extends PACTProgram {
+class WordCount(args: String*) extends PactProgram {
 
-  val input = new DataSource(params.input, params.delimeter, readLine)
-  val output = new DataSink(params.output, params.delimeter, formatOutput)
+  val input = new DataSource(params.input, readLine)
+  val output = new DataSink(params.output, formatOutput)
 
-  val words = input flatMap { (_: Unit, line: String) => line.toLowerCase().split("""\W+""").toSeq map { _ --> 1 } }
-  val counts = words combine { (word: String, values: Iterable[Int]) => values.sum } map { (word: String, count: Int) => count }
+  val words = input flatMap { line => line.toLowerCase().split("""\W+""") map { (_, 1) } }
+  val counts = words groupBy { case (word, _) => word } combine { values => (values.head._1, values map { _._2 } sum) }
 
   override def outputs = output <~ counts
 
   override def name = "Word Count"
   override def description = "Parameters: [noSubStasks] [input] [output]"
+  override def defaultParallelism = params.numSubTasks
 
   val params = new {
-    val delimeter = "\n"
-    val numSubTasks = if (args.length > 0) args(0).toInt else 1
-    val input = if (args.length > 1) args(1) else ""
-    val output = if (args.length > 2) args(2) else ""
+    val numSubTasks = args(0).toInt
+    val input = args(1)
+    val output = args(2)
   }
 
-  override def getHints(item: Hintable) = item match {
-    case input() => Degree(params.numSubTasks)
-    case words() => Degree(params.numSubTasks)
-    case counts() => Degree(params.numSubTasks)
-    case output() => Degree(params.numSubTasks)
-  }
+  def readLine(line: String): String = line
 
-  def readLine(line: String): Unit --> String = () --> line
-  def formatOutput(word: String, count: Int): String = "%s %d".format(word, count)
+  def formatOutput(wordWithCount: (String, Int)): String = wordWithCount match {
+    case (word, count) => "%s %d".format(word, count)
+  }
 }

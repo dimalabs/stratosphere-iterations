@@ -3,66 +3,57 @@ package eu.stratosphere.pact4s.example.graph
 import scala.math._
 import eu.stratosphere.pact4s.common._
 
-class ConnectedComponents(args: String*) extends PACTProgram {
+class ConnectedComponents(args: String*) extends PactProgram {
 
-  val vertices = new DataSource(params.verticesInput, params.delimeter, parseVertex)
-  val directedEdges = new DataSource(params.edgesInput, params.delimeter, parseEdge)
-  val output = new DataSink(params.output, params.delimeter, formatOutput)
+  val vertices = new DataSource(params.verticesInput, parseVertex)
+  val directedEdges = new DataSource(params.edgesInput, parseEdge)
+  val output = new DataSink(params.output, formatOutput)
 
-  val undirectedEdges = directedEdges flatMap { (from: Int, to: Int) => Seq(from --> to, to --> from) }
-  val components = fixpointIncremental(step, more)(vertices, vertices)
+  val undirectedEdges = directedEdges flatMap { case (from, to) => Seq(from -> to, to -> from) }
+  val components = vertices untilEmpty vertices iterate propagateComponent
 
   override def outputs = output <~ components
 
-  def more(s: DataStream[Int, Int], ws: DataStream[Int, Int]) = ws.nonEmpty
+  def propagateComponent(s: DataStream[(Int, Int)], ws: DataStream[(Int, Int)]) = {
 
-  def step(s: DataStream[Int, Int], ws: DataStream[Int, Int]) = {
+    val allNeighbors = ws join undirectedEdges on { case (v, _) => v } isEqualTo { case (from, _) => from } map { case ((_, c), (_, to)) => to -> c }
+    val minNeighbors = allNeighbors groupBy { case (to, _) => to } combine { cs => (cs.head._1, cs map { case (_, c) => c } min) }
 
-    val n = ws join undirectedEdges map { (from: Int, c: Int, to: Int) => to --> c }
-
-    val nc = s cogroup n map { (v: Int, oldC: Iterable[Int], newCs: Iterable[Int]) =>
-      oldC.toSeq match {
-        case Seq(oldC) => {
-          val newC = min(oldC, newCs.min)
-          v --> (newC, newC != oldC)
-        }
-      }
+    // updated solution elements == new workset
+    val s1 = minNeighbors join s on { _._1 } isEqualTo { _._1 } flatMap {
+      case ((v, cNew), (_, cOld)) if cNew < cOld => Some((v, cNew))
+      case _ => None
     }
 
-    val s1 = nc map { (v: Int, c: (Int, Boolean)) => c._1 }
-    val ws1 = nc filter { (v: Int, c: (Int, Boolean)) => c._2 } map { (v: Int, c: (Int, Boolean)) => c._1 }
-
-    (s1, ws1)
+    (s1, s1)
   }
 
   override def name = "Connected Components"
   override def description = "Parameters: [noSubStasks] [vertices] [edges] [output]"
+  override def defaultParallelism = params.numSubTasks
+  
+  vertices.hints = UniqueKey +: RecordSize(8)
+  directedEdges.hints = RecordSize(8)
+  undirectedEdges.hints = RecordSize(8) +: Selectivity(2.0f)
+  output.hints = UniqueKey +: RecordSize(8)
 
   val params = new {
-    val delimeter = "\n"
-    val numSubTasks = if (args.length > 0) args(0).toInt else 1
-    val verticesInput = if (args.length > 1) args(1) else ""
-    val edgesInput = if (args.length > 2) args(2) else ""
-    val output = if (args.length > 3) args(3) else ""
+    val numSubTasks = args(0).toInt
+    val verticesInput = args(1)
+    val edgesInput = args(2)
+    val output = args(3)
   }
 
-  override def getHints(item: Hintable) = item match {
-    case vertices() => Degree(params.numSubTasks) +: UniqueKey +: ValuesPerKey(1) +: RecordSize(8)
-    case directedEdges() => Degree(params.numSubTasks) +: RecordSize(8)
-    case undirectedEdges() => Degree(params.numSubTasks) +: RecordSize(8) +: Selectivity(2.0f)
-    case output() => Degree(params.numSubTasks) +: UniqueKey +: ValuesPerKey(1) +: RecordSize(8)
-  }
-
-  def parseVertex(line: String): Int --> Int = {
+  def parseVertex(line: String): (Int, Int) = {
     val v = line.toInt
-    v --> v
+    v -> v
   }
 
   val EdgeInputPattern = """(\d+)|(\d+)""".r
 
-  def parseEdge(line: String): Int --> Int = line match {
-    case EdgeInputPattern(from, to) => from.toInt --> to.toInt
+  def parseEdge(line: String): (Int, Int) = line match {
+    case EdgeInputPattern(from, to) => from.toInt -> to.toInt
   }
 
-  def formatOutput(vertex: Int, component: Int): String = "%d|%d".format(vertex, component)
+  def formatOutput(value: (Int, Int)): String = "%d|%d".format(value._1, value._2)
 }

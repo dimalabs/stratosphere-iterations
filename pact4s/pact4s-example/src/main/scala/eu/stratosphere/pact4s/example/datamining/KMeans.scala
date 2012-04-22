@@ -3,59 +3,59 @@ package eu.stratosphere.pact4s.example.datamining
 import scala.math._
 import eu.stratosphere.pact4s.common._
 
-class KMeansScalaDSL(args: String*) extends PACTProgram {
+class KMeansScalaDSL(args: String*) extends PactProgram {
 
-  val dataPoints = new DataSource(params.dataPointInput, params.delimeter, parseInput)
-  val clusterPoints = new DataSource(params.clusterInput, params.delimeter, parseInput)
-  val newClusterPoints = new DataSink(params.output, params.delimeter, formatOutput)
+  val dataPoints = new DataSource(params.dataPointInput, parseInput)
+  val clusterPoints = new DataSource(params.clusterInput, parseInput)
+  val newClusterPoints = new DataSink(params.output, formatOutput)
 
-  val distances = dataPoints cross clusterPoints map computeDistance _
-  val nearestCenters = distances combine { (_: Int, ds: Iterable[Distance]) => ds.minBy(_.distance) } map asPointSum _
-  val newCenters = nearestCenters combine sumPointSums map { (cid: Int, pSum: PointSum) => pSum.toPoint() }
+  val distances = dataPoints cross clusterPoints map computeDistance
+  val nearestCenters = distances groupBy { case (pid, _) => pid } combine { ds => ds.minBy(_._2.distance) } map asPointSum
+  val newCenters = nearestCenters groupBy { case (cid, _) => cid } combine sumPointSums map { case (cid: Int, pSum: PointSum) => cid -> pSum.toPoint() }
 
   override def outputs = newClusterPoints <~ newCenters
 
-  def computeDistance(pid: Int, dataPoint: Point, cid: Int, clusterPoint: Point): Distance = {
-    val distToCluster = dataPoint.computeEuclidianDistance(clusterPoint)
-    Distance(dataPoint, cid, distToCluster)
+  def computeDistance(p: (Int, Point), c: (Int, Point)): (Int, Distance) = (p, c) match {
+    case ((pid, dataPoint), (cid, clusterPoint)) => {
+      val distToCluster = dataPoint.computeEuclidianDistance(clusterPoint)
+      pid -> Distance(dataPoint, cid, distToCluster)
+    }
   }
 
-  def asPointSum(pid: Int, distance: Distance): Int --> PointSum = distance match {
-    case Distance(dataPoint, clusterId, _) => clusterId --> PointSum(1, dataPoint)
+  def asPointSum(value: (Int, Distance)): (Int, PointSum) = value match {
+    case (_, Distance(dataPoint, clusterId, _)) => clusterId -> PointSum(1, dataPoint)
   }
 
-  def sumPointSums(cid: Int, dataPoints: Iterable[PointSum]): PointSum = {
-    dataPoints.fold(PointSum(0, Point(0, 0, 0)))(_ + _)
-  }
-
-  val PointInputPattern = """(\d+)|(\d+\.\d+)|(\d+\.\d+)|(\d+\.\d+)|""".r
-
-  def parseInput(line: String): Int --> Point = line match {
-    case PointInputPattern(id, x, y, z) => id.toInt --> Point(x.toDouble, y.toDouble, z.toDouble)
-  }
-
-  def formatOutput(cid: Int, dataPoint: Point): String = dataPoint match {
-    case Point(x, y, z) => "%d|%.2f|%.2f|%.2f|".format(cid, x, y, z)
+  def sumPointSums(dataPoints: Iterable[(Int, PointSum)]): (Int, PointSum) = {
+    val points = dataPoints map { _._2 }
+    dataPoints.head._1 -> points.fold(PointSum(0, Point(0, 0, 0)))(_ + _)
   }
 
   override def name = "KMeans Iteration"
   override def description = "Parameters: [noSubStasks] [dataPoints] [clusterCenters] [output]"
+  override def defaultParallelism = params.numSubTasks
+
+  dataPoints.hints = UniqueKey
+  clusterPoints.hints = UniqueKey +: Degree(1)
+  distances.hints = RecordSize(48)
+  nearestCenters.hints = RecordSize(48)
+  newCenters.hints = RecordSize(36)
 
   val params = new {
-    val delimeter = "\n"
-    val numSubTasks = if (args.length > 0) args(0).toInt else 1
-    val dataPointInput = if (args.length > 1) args(1) else ""
-    val clusterInput = if (args.length > 2) args(2) else ""
-    val output = if (args.length > 3) args(3) else ""
+    val numSubTasks = args(0).toInt
+    val dataPointInput = args(1)
+    val clusterInput = args(2)
+    val output = args(3)
   }
 
-  override def getHints(item: Hintable) = item match {
-    case dataPoints() => UniqueKey +: Degree(params.numSubTasks)
-    case clusterPoints() => UniqueKey +: Degree(1)
-    case newClusterPoints() => Degree(params.numSubTasks)
-    case distances() => Degree(params.numSubTasks) +: RecordSize(48)
-    case nearestCenters() => Degree(params.numSubTasks) +: RecordSize(48)
-    case newCenters() => Degree(params.numSubTasks) +: RecordSize(36)
+  val PointInputPattern = """(\d+)|(\d+\.\d+)|(\d+\.\d+)|(\d+\.\d+)|""".r
+
+  def parseInput(line: String): (Int, Point) = line match {
+    case PointInputPattern(id, x, y, z) => id.toInt -> Point(x.toDouble, y.toDouble, z.toDouble)
+  }
+
+  def formatOutput(value: (Int, Point)): String = value match {
+    case (cid, Point(x, y, z)) => "%d|%.2f|%.2f|%.2f|".format(cid, x, y, z)
   }
 }
 

@@ -1,29 +1,23 @@
 package eu.stratosphere.pact4s.example.wordcount
 
 import scala.collection.JavaConversions._
-import scala.math._
 
-import java.io.DataInput
-import java.io.DataOutput
-import java.io.IOException
 import java.util.Iterator
 
-import eu.stratosphere.pact.common.contract.FileDataSinkContract
-import eu.stratosphere.pact.common.contract.FileDataSourceContract
-import eu.stratosphere.pact.common.contract.OutputContract
+import eu.stratosphere.pact.common.contract.FileDataSink
+import eu.stratosphere.pact.common.contract.FileDataSource
 import eu.stratosphere.pact.common.contract.MapContract
 import eu.stratosphere.pact.common.contract.ReduceContract
-import eu.stratosphere.pact.common.io.TextInputFormat
-import eu.stratosphere.pact.common.io.TextOutputFormat
+import eu.stratosphere.pact.common.io.DelimitedInputFormat;
+import eu.stratosphere.pact.common.io.DelimitedOutputFormat;
 import eu.stratosphere.pact.common.plan.Plan
 import eu.stratosphere.pact.common.plan.PlanAssembler
 import eu.stratosphere.pact.common.plan.PlanAssemblerDescription
-import eu.stratosphere.pact.common.stub.Collector
-import eu.stratosphere.pact.common.stub.MapStub
-import eu.stratosphere.pact.common.stub.ReduceStub
-import eu.stratosphere.pact.common.`type`.KeyValuePair
+import eu.stratosphere.pact.common.stubs.Collector
+import eu.stratosphere.pact.common.stubs.MapStub
+import eu.stratosphere.pact.common.stubs.ReduceStub
+import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.pact.common.`type`.base.PactInteger
-import eu.stratosphere.pact.common.`type`.base.PactNull
 import eu.stratosphere.pact.common.`type`.base.PactString
 
 class WordCountScalaPlain extends PlanAssembler with PlanAssemblerDescription {
@@ -35,23 +29,15 @@ class WordCountScalaPlain extends PlanAssembler with PlanAssemblerDescription {
     val dataInput = if (args.length > 1) args(1) else ""
     val output = if (args.length > 2) args(2) else ""
 
-    val data = new FileDataSourceContract(classOf[LineInFormat], dataInput, "Input Lines")
-    data.setDegreeOfParallelism(numSubTasks)
+    val data = new FileDataSource(classOf[LineInFormat], dataInput, "Input Lines")
+    val mapper = new MapContract(classOf[TokenizeLine], data, "Tokenize Lines");
+    val reducer = new ReduceContract(classOf[CountWords], classOf[PactString], 0, mapper, "Count Words");
+    val out = new FileDataSink(classOf[WordCountOutFormat], output, reducer, "Word Counts");
 
-    val mapper = new MapContract(classOf[TokenizeLine], "Tokenize Lines");
-    mapper.setDegreeOfParallelism(numSubTasks)
+    val plan = new Plan(out, "WordCount Example")
+    plan.setDefaultParallelism(numSubTasks)
 
-    val reducer = new ReduceContract(classOf[CountWords], "Count Words");
-    reducer.setDegreeOfParallelism(numSubTasks)
-
-    val out = new FileDataSinkContract(classOf[WordCountOutFormat], output, "Word Counts");
-    out.setDegreeOfParallelism(numSubTasks)
-
-    out.setInput(reducer);
-    reducer.setInput(mapper);
-    mapper.setInput(data);
-
-    new Plan(out, "WordCount Example")
+    plan
   }
 
   override def getDescription() = "Parameters: [noSubStasks] [input] [output]"
@@ -59,46 +45,67 @@ class WordCountScalaPlain extends PlanAssembler with PlanAssemblerDescription {
 
 object WordCountScalaPlain {
 
-  class TokenizeLine extends MapStub[PactNull, PactString, PactString, PactInteger] {
+  class TokenizeLine extends MapStub {
 
-    override def map(key: PactNull, value: PactString, out: Collector[PactString, PactInteger]) = {
+    // String -> [(String, Int)]
+    override def map(lineRecord: PactRecord, out: Collector) = {
+      val res = new PactRecord(2)
+      val line = lineRecord.getField(0, classOf[PactString]).getValue()
 
-      for (word <- value.toString().toLowerCase().split("""\W+""")) {
-        out.collect(new PactString(word), new PactInteger(1))
+      for (word <- line.toString().toLowerCase().split("""\W+""")) {
+        res.setField(0, word)
+        res.setField(1, 1)
+        out.collect(res)
       }
     }
   }
 
-  @OutputContract.SameKey
   @ReduceContract.Combinable
-  class CountWords extends ReduceStub[PactString, PactInteger, PactString, PactInteger] {
+  class CountWords extends ReduceStub {
 
-    override def reduce(key: PactString, values: Iterator[PactInteger], out: Collector[PactString, PactInteger]) = {
-      val sum = values.map(_.getValue()).sum
-      out.collect(key, new PactInteger(sum))
+    // [(String, Int)] -> (String, Int)
+    override def reduce(counts: Iterator[PactRecord], out: Collector) = {
+      val res = counts.next()
+      val sum = counts map { _.getField(1, classOf[PactInteger]).getValue() } sum
+
+      res.setField(1, sum)
+      out.collect(res)
     }
 
-    override def combine(key: PactString, values: Iterator[PactInteger], out: Collector[PactString, PactInteger]) = {
-      reduce(key, values, out)
+    // [(String, Int)] -> (String, Int)
+    override def combine(counts: Iterator[PactRecord], out: Collector) = {
+      reduce(counts, out)
     }
   }
 
-  class LineInFormat extends TextInputFormat[PactNull, PactString] {
+  class LineInFormat extends DelimitedInputFormat {
 
-    override def readLine(pair: KeyValuePair[PactNull, PactString], line: Array[Byte]): Boolean = {
-      pair.setKey(new PactNull())
-      pair.setValue(new PactString(new String(line)))
+    override def readRecord(record: PactRecord, line: Array[Byte], numBytes: Int): Boolean = {
+      record.setNumFields(1)
+      record.setField(0, new PactString(new String(line)))
       true
     }
   }
 
-  class WordCountOutFormat extends TextOutputFormat[PactString, PactInteger] {
+  class WordCountOutFormat extends DelimitedOutputFormat {
 
-    override def writeLine(pair: KeyValuePair[PactString, PactInteger]): Array[Byte] = {
-      val key = pair.getKey().getValue()
-      val value = pair.getValue().getValue()
+    override def serializeRecord(record: PactRecord, target: Array[Byte]): Int = {
+      val word = record.getField(0, classOf[PactString]).getValue()
+      val count = record.getField(1, classOf[PactInteger]).getValue()
 
-      "%s %d\n".format(key, value).getBytes()
+      val byteString = "%s %d".format(word, count).getBytes()
+
+      if (byteString.length <= target.length) {
+        System.arraycopy(byteString, 0, target, 0, byteString.length);
+        byteString.length;
+      } else {
+        -byteString.length;
+      }
     }
   }
+
+  implicit def int2PactInteger(x: Int): PactInteger = new PactInteger(x)
+  implicit def pactInteger2Int(x: PactInteger): Int = x.getValue()
+  implicit def string2PactString(x: String): PactString = new PactString(x)
+  implicit def pactString2String(x: PactString): String = x.getValue()
 }

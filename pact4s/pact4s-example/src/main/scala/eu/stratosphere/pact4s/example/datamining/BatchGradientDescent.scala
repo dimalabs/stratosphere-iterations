@@ -1,75 +1,96 @@
 package eu.stratosphere.pact4s.example.datamining
 
 import scala.math._
-
 import eu.stratosphere.pact4s.common._
 
-abstract class BatchGradientDescent(args: String*) extends PACTProgram {
+abstract class BatchGradientDescent(args: String*) extends PactProgram {
 
-  def gradient(w: Array[Double])(e: Array[Double]): Array[Double]
+  def computeGradient(ex: Array[Double], w: Array[Double]): (Double, Array[Double])
 
-  val examples = new DataSource(params.examples, params.delimeter, readVector)
-  val weights = new DataSource(params.weights, params.delimeter, readVector)
-  val output = new DataSink(params.output, params.delimeter, formatOutput)
+  val examples = new DataSource(params.examples, readVector)
+  val weights = new DataSource(params.weights, readVector)
+  val output = new DataSink(params.output, formatOutput)
+  
+  val etaWeights = weights map { case (id, w) => (id, w, params.eta) }
 
-  // Warning: this isn't really a fixpoint calculation...
-  // If the gradient descent doesn't converge, this won't terminate!
-  val newWeights = fixpointIncremental(step, more)(weights, weights)
-
+  val newWeights = weights untilEmpty etaWeights iterate gradientDescent
+  
   override def outputs = output <~ newWeights
+  
+  def gradientDescent(s: DataStream[(Int, Array[Double])], ws: DataStream[(Int, Array[Double], Double)]) = {
 
-  def more(s: DataStream[Int, Array[Double]], ws: DataStream[Int, Array[Double]]) = ws.nonEmpty
+    val lossesAndGradients = ws cross examples map { case ((id, w, _), (_, ex)) => ValueAndGradient(id, computeGradient(ex, w)) }
+    val lossAndGradientSums = lossesAndGradients groupBy { _.id } combine sumLossesAndGradients
+    val newWeights = ws join lossAndGradientSums on { _._1 } isEqualTo { _.id } map updateWeight
 
-  def step(s: DataStream[Int, Array[Double]], ws: DataStream[Int, Array[Double]]) = {
+    // updated solution elements
+    val s1 = newWeights map { case (wId, _, wNew, _) => (wId, wNew) }
 
-    val gradients = ws cross examples map { (wId: Int, w: Array[Double], eId: Int, e: Array[Double]) => gradient(w)(e) }
-    val gradientSums = gradients combine { (wId: Int, ws: Iterable[Array[Double]]) => ws reduce add }
-    val diffs = ws join gradientSums map { (wId: Int, wOld: Array[Double], wSum: Array[Double]) => (wOld, sub(wOld, mul(params.learningRate, wSum))) }
+    // new workset
+    val ws1 = newWeights filter { case (_, delta, _, _) => delta > params.eps } map { case (wId, _, wNew, etaNew) => (wId, wNew, etaNew) }
 
-    val s1 = s cogroup diffs flatMap { (wId: Int, wOld: Iterable[Array[Double]], wNew: Iterable[(Array[Double], Array[Double])]) =>
-      wNew.toSeq match {
-        case Seq() => wOld
-        case Seq((_, w)) => Seq(w)
-      }
-    }
-
-    val ws1 = (diffs filter { (wId: Int, w: (Array[Double], Array[Double])) => abs(norm(w._1) - norm(w._2)) > params.eps }). 
-    		         map { (wId: Int, w: (Array[Double], Array[Double])) => w._2 }
-    
     (s1, ws1)
   }
+  
+  def sumLossesAndGradients(values: Iterable[ValueAndGradient]) = {
+    val id = values.head.id
+    val lossSum = values map { _.value } sum
+    val gradSum = values map { _.gradient } reduce (_ + _)
+    ValueAndGradient(id, lossSum, gradSum)
+  }
+  
+  def updateWeight(prev: (Int, Array[Double], Double), vg: ValueAndGradient) = prev match {
+    case (id, wOld, eta) => vg match {
+      case ValueAndGradient(_, lossSum, gradSum) => {
+        val delta = lossSum + params.lambda * wOld.norm
+        val wNew = (wOld + (gradSum * params.eta)) * (1 - eta * params.lambda)
+        (id, delta, wNew, eta * 0.9)
+      }
+    }
+  }
 
-  def add(v1: Array[Double], v2: Array[Double]): Array[Double] = (v1 zip v2) map { case (x1, x2) => x1 + x2 }
-  def sub(v1: Array[Double], v2: Array[Double]): Array[Double] = (v1 zip v2) map { case (x1, x2) => x1 - x2 }
-  def mul(x: Double, v: Array[Double]): Array[Double] = v map { x * _ }
-  def norm(v: Array[Double]): Double = sqrt(v map { x => x * x } reduce { _ + _ })
+  override def description = "Parameters: [noSubStasks] [eps] [eta] [lambda] [examples] [weights] [output]"
+  override def defaultParallelism = params.numSubTasks
 
-  override def description = "Parameters: [noSubStasks] [eps] [learningRate] [examples] [weights] [output]"
+  examples.hints = UniqueKey
+  weights.hints = UniqueKey
+  output.hints = UniqueKey
 
   val params = new {
-    val delimeter = "\n"
-    val numSubTasks = if (args.length > 0) args(0).toInt else 1
-    val eps = if (args.length > 1) args(1).toDouble else 1
-    val learningRate = if (args.length > 2) args(2).toDouble else 1
-    val examples = if (args.length > 3) args(3) else ""
-    val weights = if (args.length > 4) args(4) else ""
-    val output = if (args.length > 5) args(5) else ""
+    val numSubTasks = args(0).toInt
+    val eps = args(1).toDouble
+    val eta = args(2).toDouble
+    val lambda = args(3).toDouble
+    val examples = args(4)
+    val weights = args(5)
+    val output = args(6)
+  }
+  
+  class WeightVector(vector: Array[Double]) {
+    def +(that: Array[Double]): Array[Double] = (vector zip that) map { case (x1, x2) => x1 + x2 }
+    def -(that: Array[Double]): Array[Double] = (vector zip that) map { case (x1, x2) => x1 - x2 }
+    def *(x: Double): Array[Double] = vector map { x * _ }
+    def norm: Double = sqrt(vector map { x => x * x } reduce { _ + _ })
+  }
+  
+  implicit def array2WeightVector(vector: Array[Double]): WeightVector = new WeightVector(vector)
+  
+  case class ValueAndGradient(id: Int, value: Double, gradient: Array[Double])
+  
+  object ValueAndGradient {
+    def apply(id: Int, vg: (Double, Array[Double])) = new ValueAndGradient(id, vg._1, vg._2)
   }
 
-  override def getHints(item: Hintable) = item match {
-    case examples() => Degree(params.numSubTasks) +: UniqueKey
-    case weights() => Degree(params.numSubTasks) +: UniqueKey
-    case output() => Degree(params.numSubTasks) +: UniqueKey
-  }
-
-  def readVector(line: String): Int --> Array[Double] = {
+  def readVector(line: String): (Int, Array[Double]) = {
 
     val items = line.split(',')
     val id = items(0).toInt
     val vector = items.drop(1) map { _.toDouble }
 
-    id --> vector
+    id -> vector
   }
 
-  def formatOutput(id: Int, vector: Array[Double]) = "%s,%s".format(id, vector.mkString(","))
+  def formatOutput(value: (Int, Array[Double])) = value match {
+    case (id, vector) => "%s,%s".format(id, vector.mkString(","))
+  }
 }
