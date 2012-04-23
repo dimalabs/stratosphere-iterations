@@ -2,9 +2,12 @@ package eu.stratosphere.pact4s.common.streams
 
 import scala.collection.GenTraversableOnce
 
-trait JoinableStream[LeftIn] { self: WrappedDataStream[LeftIn] =>
+import eu.stratosphere.pact4s.common.PactReadWriteSet
+import eu.stratosphere.pact4s.common.PactSerializerFactory
 
-  val leftInput = this.inner
+trait JoinableStream[LeftIn] { this: WrappedDataStream[LeftIn] =>
+
+  private val leftInput = this.inner
 
   def join[RightIn](rightInput: DataStream[RightIn]) = new {
 
@@ -12,26 +15,28 @@ trait JoinableStream[LeftIn] { self: WrappedDataStream[LeftIn] =>
 
       def isEqualTo(rightKeySelector: RightIn => Key) = new {
 
-        def map[Out](mapper: (LeftIn, RightIn) => Out) = new JoinStream(leftInput, rightInput, leftKeySelector, rightKeySelector, mapper)
+        def map[Out](mapper: (LeftIn, RightIn) => Out)(implicit serEv: PactSerializerFactory[Out], rwEv: PactReadWriteSet) = new JoinStream(leftInput, rightInput, leftKeySelector, rightKeySelector, mapper)
 
-        def flatMap[Out](mapper: (LeftIn, RightIn) => GenTraversableOnce[Out]) = new FlatJoinStream(leftInput, rightInput, leftKeySelector, rightKeySelector, mapper)
+        def flatMap[Out](mapper: (LeftIn, RightIn) => GenTraversableOnce[Out])(implicit serEv: PactSerializerFactory[Out], rwEv: PactReadWriteSet) = new FlatJoinStream(leftInput, rightInput, leftKeySelector, rightKeySelector, mapper)
       }
     }
   }
 }
 
-case class JoinStream[Key <% Comparable[Key], LeftIn, RightIn, Out](
+case class JoinStream[Key, LeftIn, RightIn, Out](
   leftInput: DataStream[LeftIn],
   rightInput: DataStream[RightIn],
   leftKeySelector: LeftIn => Key,
   rightKeySelector: RightIn => Key,
   mapper: (LeftIn, RightIn) => Out)
+  (implicit keyEv: Key => Comparable[Key], serEv: PactSerializerFactory[Out], rwEv: PactReadWriteSet)
   extends DataStream[Out]
 
-case class FlatJoinStream[Key <% Comparable[Key], LeftIn, RightIn, Out](
+case class FlatJoinStream[Key, LeftIn, RightIn, Out](
   leftInput: DataStream[LeftIn],
   rightInput: DataStream[RightIn],
   leftKeySelector: LeftIn => Key,
   rightKeySelector: RightIn => Key,
   mapper: (LeftIn, RightIn) => GenTraversableOnce[Out])
+  (implicit keyEv: Key => Comparable[Key], serEv: PactSerializerFactory[Out], rwEv: PactReadWriteSet)
   extends DataStream[Out]

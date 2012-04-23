@@ -24,7 +24,7 @@ abstract class PactProgram {
 
   implicit def planOutput2Seq(p: PlanOutput): Seq[PlanOutput] = Seq(p)
 
-  case class DataSource[S, T](url: String, parser: S => T) extends DataStream[T]
+  case class DataSource[S, T](url: String, parser: S => T)(implicit serEv: PactSerializerFactory[T], rwEv: PactReadWriteSet) extends DataStream[T]
   case class DataSink[T, S](url: String, formatter: T => S) extends Hintable
 }
 

@@ -3,7 +3,7 @@ package eu.stratosphere.pact4s.example.datamining
 import scala.math._
 import eu.stratosphere.pact4s.common._
 
-class KMeansScalaDSL(args: String*) extends PactProgram {
+class KMeans(args: String*) extends PactProgram with KMeansGeneratedImplicits {
 
   val dataPoints = new DataSource(params.dataPointInput, parseInput)
   val clusterPoints = new DataSource(params.clusterInput, parseInput)
@@ -73,4 +73,262 @@ case class PointSum(count: Int, pointSum: Point) {
   }
 
   def toPoint() = Point(pointSum.x / count, pointSum.y / count, pointSum.z / count)
+}
+
+trait KMeansGeneratedImplicits { this: KMeans =>
+
+  import eu.stratosphere.pact.common.`type`._
+  import eu.stratosphere.pact.common.`type`.base._
+
+  implicit val intPointSerializer: PactSerializerFactory[(Int, Point)] = new PactSerializerFactory[(Int, Point)] {
+
+    override val fieldCount = 4
+
+    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+
+      private val ix0 = indexMap(0)
+      private val ix1 = indexMap(1)
+      private val ix2 = indexMap(2)
+      private val ix3 = indexMap(3)
+
+      private val w0 = new PactInteger()
+      private val w1 = new PactDouble()
+      private val w2 = new PactDouble()
+      private val w3 = new PactDouble()
+
+      override def serialize(item: (Int, Point), record: PactRecord) = {
+        val (v0, Point(v1, v2, v3)) = item
+
+        if (ix0 >= 0) {
+          w0.setValue(v0)
+          record.setField(ix0, w0)
+        }
+
+        if (ix1 >= 0) {
+          w1.setValue(v1)
+          record.setField(ix1, w1)
+        }
+
+        if (ix2 >= 0) {
+          w2.setValue(v2)
+          record.setField(ix2, w2)
+        }
+
+        if (ix3 >= 0) {
+          w3.setValue(v3)
+          record.setField(ix3, w3)
+        }
+      }
+
+      override def deserialize(record: PactRecord): (Int, Point) = {
+        var v0: Int = 0
+        var v1: Double = 0
+        var v2: Double = 0
+        var v3: Double = 0
+
+        if (ix0 >= 0) {
+          record.getFieldInto(ix0, w0)
+          v0 = w0.getValue()
+        }
+
+        if (ix1 >= 0) {
+          record.getFieldInto(ix1, w1)
+          v1 = w1.getValue()
+        }
+
+        if (ix2 >= 0) {
+          record.getFieldInto(ix2, w2)
+          v2 = w2.getValue()
+        }
+
+        if (ix3 >= 0) {
+          record.getFieldInto(ix3, w3)
+          v3 = w3.getValue()
+        }
+
+        (v0, Point(v1, v2, v3))
+      }
+    }
+  }
+
+  implicit val intDistanceSerializer: PactSerializerFactory[(Int, Distance)] = new PactSerializerFactory[(Int, Distance)] {
+
+    override val fieldCount = 6
+
+    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+
+      private val ix0 = indexMap(0)
+      private val ix1 = indexMap(1)
+      private val ix2 = indexMap(2)
+      private val ix3 = indexMap(3)
+      private val ix4 = indexMap(4)
+      private val ix5 = indexMap(5)
+
+      private val w0 = new PactInteger()
+      private val w1 = new PactDouble()
+      private val w2 = new PactDouble()
+      private val w3 = new PactDouble()
+      private val w4 = new PactInteger()
+      private val w5 = new PactDouble()
+
+      override def serialize(item: (Int, Distance), record: PactRecord) = {
+        val (v0, Distance(Point(v1, v2, v3), v4, v5)) = item
+
+        if (ix0 >= 0) {
+          w0.setValue(v0)
+          record.setField(ix0, w0)
+        }
+
+        if (ix1 >= 0) {
+          w1.setValue(v1)
+          record.setField(ix1, w1)
+        }
+
+        if (ix2 >= 0) {
+          w2.setValue(v2)
+          record.setField(ix2, w2)
+        }
+
+        if (ix3 >= 0) {
+          w3.setValue(v3)
+          record.setField(ix3, w3)
+        }
+
+        if (ix4 >= 0) {
+          w4.setValue(v4)
+          record.setField(ix4, w4)
+        }
+
+        if (ix5 >= 0) {
+          w5.setValue(v5)
+          record.setField(ix5, w5)
+        }
+      }
+
+      override def deserialize(record: PactRecord): (Int, Distance) = {
+        var v0: Int = 0
+        var v1: Double = 0
+        var v2: Double = 0
+        var v3: Double = 0
+        var v4: Int = 0
+        var v5: Double = 0
+
+        if (ix0 >= 0) {
+          record.getFieldInto(ix0, w0)
+          v0 = w0.getValue()
+        }
+
+        if (ix1 >= 0) {
+          record.getFieldInto(ix1, w1)
+          v1 = w1.getValue()
+        }
+
+        if (ix2 >= 0) {
+          record.getFieldInto(ix2, w2)
+          v2 = w2.getValue()
+        }
+
+        if (ix3 >= 0) {
+          record.getFieldInto(ix3, w3)
+          v3 = w3.getValue()
+        }
+
+        if (ix4 >= 0) {
+          record.getFieldInto(ix4, w4)
+          v4 = w4.getValue()
+        }
+
+        if (ix5 >= 0) {
+          record.getFieldInto(ix5, w5)
+          v5 = w5.getValue()
+        }
+
+        (v0, Distance(Point(v1, v2, v3), v4, v5))
+      }
+    }
+  }
+
+  implicit val intPointSumSerializer: PactSerializerFactory[(Int, PointSum)] = new PactSerializerFactory[(Int, PointSum)] {
+
+    override val fieldCount = 5
+
+    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+
+      private val ix0 = indexMap(0)
+      private val ix1 = indexMap(1)
+      private val ix2 = indexMap(2)
+      private val ix3 = indexMap(3)
+      private val ix4 = indexMap(4)
+
+      private val w0 = new PactInteger()
+      private val w1 = new PactInteger()
+      private val w2 = new PactDouble()
+      private val w3 = new PactDouble()
+      private val w4 = new PactDouble()
+
+      override def serialize(item: (Int, PointSum), record: PactRecord) = {
+        val (v0, PointSum(v1, Point(v2, v3, v4))) = item
+
+        if (ix0 >= 0) {
+          w0.setValue(v0)
+          record.setField(ix0, w0)
+        }
+
+        if (ix1 >= 0) {
+          w1.setValue(v1)
+          record.setField(ix1, w1)
+        }
+
+        if (ix2 >= 0) {
+          w2.setValue(v2)
+          record.setField(ix2, w2)
+        }
+
+        if (ix3 >= 0) {
+          w3.setValue(v3)
+          record.setField(ix3, w3)
+        }
+
+        if (ix4 >= 0) {
+          w4.setValue(v4)
+          record.setField(ix4, w4)
+        }
+      }
+
+      override def deserialize(record: PactRecord): (Int, PointSum) = {
+        var v0: Int = 0
+        var v1: Int = 0
+        var v2: Double = 0
+        var v3: Double = 0
+        var v4: Double = 0
+
+        if (ix0 >= 0) {
+          record.getFieldInto(ix0, w0)
+          v0 = w0.getValue()
+        }
+
+        if (ix1 >= 0) {
+          record.getFieldInto(ix1, w1)
+          v1 = w1.getValue()
+        }
+
+        if (ix2 >= 0) {
+          record.getFieldInto(ix2, w2)
+          v2 = w2.getValue()
+        }
+
+        if (ix3 >= 0) {
+          record.getFieldInto(ix3, w3)
+          v3 = w3.getValue()
+        }
+
+        if (ix4 >= 0) {
+          record.getFieldInto(ix4, w4)
+          v4 = w4.getValue()
+        }
+
+        (v0, PointSum(v1, Point(v2, v3, v4)))
+      }
+    }
+  }
 }

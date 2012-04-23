@@ -3,7 +3,7 @@ package eu.stratosphere.pact4s.example.graph
 import scala.math._
 import eu.stratosphere.pact4s.common._
 
-class ConnectedComponents(args: String*) extends PactProgram {
+class ConnectedComponents(args: String*) extends PactProgram with ConnectedComponentsGeneratedImplicits {
 
   val vertices = new DataSource(params.verticesInput, parseVertex)
   val directedEdges = new DataSource(params.edgesInput, parseEdge)
@@ -31,7 +31,7 @@ class ConnectedComponents(args: String*) extends PactProgram {
   override def name = "Connected Components"
   override def description = "Parameters: [noSubStasks] [vertices] [edges] [output]"
   override def defaultParallelism = params.numSubTasks
-  
+
   vertices.hints = UniqueKey +: RecordSize(8)
   directedEdges.hints = RecordSize(8)
   undirectedEdges.hints = RecordSize(8) +: Selectivity(2.0f)
@@ -56,4 +56,55 @@ class ConnectedComponents(args: String*) extends PactProgram {
   }
 
   def formatOutput(value: (Int, Int)): String = "%d|%d".format(value._1, value._2)
+}
+
+trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>
+
+  import eu.stratosphere.pact.common.`type`._
+  import eu.stratosphere.pact.common.`type`.base._
+
+  implicit val intIntSerializer: PactSerializerFactory[(Int, Int)] = new PactSerializerFactory[(Int, Int)] {
+
+    override val fieldCount = 2
+
+    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+
+      private val ix0 = indexMap(0)
+      private val ix1 = indexMap(1)
+
+      private val w0 = new PactInteger()
+      private val w1 = new PactInteger()
+
+      override def serialize(item: (Int, Int), record: PactRecord) = {
+        val (v0, v1) = item
+
+        if (ix0 >= 0) {
+          w0.setValue(v0)
+          record.setField(ix0, w0)
+        }
+
+        if (ix1 >= 0) {
+          w1.setValue(v1)
+          record.setField(ix1, w1)
+        }
+      }
+
+      override def deserialize(record: PactRecord): (Int, Int) = {
+        var v0: Int = 0
+        var v1: Int = 0
+
+        if (ix0 >= 0) {
+          record.getFieldInto(ix0, w0)
+          v0 = w0.getValue()
+        }
+
+        if (ix1 >= 0) {
+          record.getFieldInto(ix1, w1)
+          v1 = w1.getValue()
+        }
+
+        (v0, v1)
+      }
+    }
+  }
 }

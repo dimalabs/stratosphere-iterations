@@ -5,7 +5,7 @@ import scala.math.Ordered._
 
 import eu.stratosphere.pact4s.common._
 
-class TransitiveClosureNaive(args: String*) extends PactProgram {
+class TransitiveClosureNaive(args: String*) extends PactProgram with TransitiveClosureNaiveGeneratedImplicits {
 
   val vertices = new DataSource(params.verticesInput, parseVertex)
   val edges = new DataSource(params.edgesInput, parseEdge)
@@ -61,5 +61,70 @@ class TransitiveClosureNaive(args: String*) extends PactProgram {
 
   def formatOutput(path: Path): String = path match {
     case Path(from, to, dist) => "%d|%d|%d".format(from, to, dist)
+  }
+}
+
+trait TransitiveClosureNaiveGeneratedImplicits { this: TransitiveClosureNaive =>
+
+  import eu.stratosphere.pact.common.`type`._
+  import eu.stratosphere.pact.common.`type`.base._
+
+  implicit val pathSerializer: PactSerializerFactory[Path] = new PactSerializerFactory[Path] {
+
+    override val fieldCount = 3
+
+    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+
+      private val ix0 = indexMap(0)
+      private val ix1 = indexMap(1)
+      private val ix2 = indexMap(2)
+
+      private val w0 = new PactInteger()
+      private val w1 = new PactInteger()
+      private val w2 = new PactInteger()
+
+      override def serialize(item: Path, record: PactRecord) = {
+        val Path(v0, v1, v2) = item
+
+        if (ix0 >= 0) {
+          w0.setValue(v0)
+          record.setField(ix0, w0)
+        }
+
+        if (ix1 >= 0) {
+          w1.setValue(v1)
+          record.setField(ix1, w1)
+        }
+
+        if (ix2 >= 0) {
+          w2.setValue(v2)
+          record.setField(ix2, w2)
+        }
+      }
+
+      override def deserialize(record: PactRecord): Path = {
+
+        var v0: Int = 0
+        var v1: Int = 0
+        var v2: Int = 0
+
+        if (ix0 >= 0) {
+          record.getFieldInto(ix0, w0)
+          v0 = w0.getValue()
+        }
+
+        if (ix1 >= 0) {
+          record.getFieldInto(ix1, w1)
+          v1 = w1.getValue()
+        }
+
+        if (ix2 >= 0) {
+          record.getFieldInto(ix2, w2)
+          v2 = w2.getValue()
+        }
+
+        Path(v0, v1, v2)
+      }
+    }
   }
 }
