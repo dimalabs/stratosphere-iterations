@@ -3,6 +3,7 @@ package eu.stratosphere.pact4s.example.datamining
 import scala.math._
 
 import eu.stratosphere.pact4s.common._
+import eu.stratosphere.pact4s.common.operators._
 
 abstract class BatchGradientDescent(args: String*) extends PactProgram with BatchGradientDescentGeneratedImplicits {
 

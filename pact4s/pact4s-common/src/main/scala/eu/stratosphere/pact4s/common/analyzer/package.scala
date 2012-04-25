@@ -2,6 +2,10 @@ package eu.stratosphere.pact4s.common
 
 package object analyzer {
 
+  type UDF1Builder[T1, R] = { type UDF[_] = UDF1[T1 => R] }
+  type UDF2Builder[T1, T2, R] = { type UDF[_] = UDF2[(T1, T2) => R] }
+  type KeyBuilder[T1, R] = { type Selector[_] = KeySelector[T1 => R] }
+
   class UDTAnalysisFailedException extends RuntimeException("UDT analysis failed. This should never happen.")
   class UDFAnalysisFailedException extends RuntimeException("UDF analysis failed. This should never happen.")
   class KeySelectorAnalysisFailedException extends RuntimeException("Key selector analysis failed. This should never happen.")

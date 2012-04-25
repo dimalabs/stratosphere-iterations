@@ -4,6 +4,7 @@ import scala.math._
 import scala.math.Ordered._
 
 import eu.stratosphere.pact4s.common._
+import eu.stratosphere.pact4s.common.operators._
 
 class TransitiveClosureNaive(args: String*) extends PactProgram with TransitiveClosureNaiveGeneratedImplicits {
 

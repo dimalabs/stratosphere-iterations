@@ -5,6 +5,7 @@ import eu.stratosphere.pact.common.contract.Contract
 trait Hintable {
 
   var hints: Seq[CompilerHint] = null
+
   def getHints = hints
 
   def getHint[T <: CompilerHint : Manifest] = getHints find {
@@ -20,6 +21,10 @@ trait Hintable {
 
 abstract class CompilerHint {
   def applyToContract(contract: Contract)
+}
+
+object CompilerHint {
+    implicit def hint2SeqHint(h: CompilerHint): Seq[CompilerHint] = Seq(h)
 }
 
 case class Degree(degreeOfParallelism: Int) extends CompilerHint {

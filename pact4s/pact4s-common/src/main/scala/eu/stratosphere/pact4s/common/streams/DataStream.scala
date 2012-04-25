@@ -2,7 +2,6 @@ package eu.stratosphere.pact4s.common.streams
 
 import eu.stratosphere.pact4s.common.Hintable
 import eu.stratosphere.pact4s.common.analyzer.UDT
-import eu.stratosphere.pact4s.common.contracts.Pact4sContract
 
 import eu.stratosphere.pact.common.contract.Contract
 
