@@ -8,7 +8,10 @@ trait ReducibleStream[In] { this: WrappedDataStream[In] =>
 
   def groupBy[Key, GroupByKeySelector: KeyBuilder[In, Key]#Selector](keySelector: In => Key) = new {
 
-    def reduce[Out: UDT, F: UDF1Builder[Iterable[In], Out]#UDF](reducer: Iterable[In] => Out) = new ReduceStream(input, keySelector, None, reducer)
+    def reduce[Out: UDT, F: UDF1Builder[Iterable[In], Out]#UDF](reducer: Iterable[In] => Out) = {
+      implicit val emptyCombinerUDF = new AnalyzedUDF1[Iterable[In], In](0, 0)
+      new ReduceStream(input, keySelector, None, reducer)
+    }
 
     def combine[F: UDF1Builder[Iterable[In], In]#UDF](combiner: Iterable[In] => In) = new CombineStream(input, keySelector, combiner)
   }
@@ -34,7 +37,7 @@ class CombineStream[Key, In: UDT, GroupByKeySelector: KeyBuilder[In, Key]#Select
   extends ReduceStream[Key, In, In, GroupByKeySelector, F, F](input, keySelector, Some(combiner), combiner) {
 
   private val outer = this
-  def reduce[Out: UDT, F: UDF1Builder[In, Out]#UDF](reducer: Iterable[In] => Out) = new ReduceStream(input, keySelector, Some(combiner), reducer) {
+  def reduce[Out: UDT, F: UDF1Builder[Iterable[In], Out]#UDF](reducer: Iterable[In] => Out) = new ReduceStream(input, keySelector, Some(combiner), reducer) {
     override def getHints = if (this.hints == null) outer.hints else this.hints
   }
 
