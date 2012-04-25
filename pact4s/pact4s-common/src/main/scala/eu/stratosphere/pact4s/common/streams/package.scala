@@ -4,6 +4,8 @@ import eu.stratosphere.pact4s.common.analyzer._
 
 package object streams {
 
+  type ForEachAble[A] = { def foreach[U](f: A => U): Unit }
+  
   implicit def dataStream2CoGroupableStream[T: UDT](input: DataStream[T]) = new WrappedDataStream(input) with CoGroupableStream[T]
   implicit def dataStream2CrossableStream[T: UDT](input: DataStream[T]) = new WrappedDataStream(input) with CrossableStream[T]
   implicit def dataStream2JoinableStream[T: UDT](input: DataStream[T]) = new WrappedDataStream(input) with JoinableStream[T]

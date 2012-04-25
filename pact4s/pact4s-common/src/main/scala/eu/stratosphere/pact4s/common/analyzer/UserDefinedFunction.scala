@@ -5,7 +5,6 @@ trait UDF1Builder[T1, R] {
 }
 
 trait UDF1[F <: _ => _] {
-  
   var readFields: Array[Int] = null
   var writeFields: Array[Int] = null
   var copyFields: Map[Int, Int] = null

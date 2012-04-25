@@ -4,10 +4,12 @@ import eu.stratosphere.pact4s.common.Hintable
 import eu.stratosphere.pact4s.common.analyzer.UDT
 import eu.stratosphere.pact4s.common.contracts.Pact4sContract
 
+import eu.stratosphere.pact.common.contract.Contract
+
 abstract class DataStream[T: UDT] extends Hintable {
   val udt = implicitly[UDT[T]]
 
-  def getContract: Pact4sContract
+  def getContract: Contract
 }
 
 case class WrappedDataStream[T](inner: DataStream[T])

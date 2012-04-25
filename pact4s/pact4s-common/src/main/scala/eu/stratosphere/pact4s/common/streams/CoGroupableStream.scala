@@ -1,7 +1,5 @@
 package eu.stratosphere.pact4s.common.streams
 
-import scala.collection.GenTraversableOnce
-
 import eu.stratosphere.pact4s.common.analyzer._
 
 trait CoGroupableStream[LeftIn] { this: WrappedDataStream[LeftIn] =>
@@ -16,7 +14,7 @@ trait CoGroupableStream[LeftIn] { this: WrappedDataStream[LeftIn] =>
 
         def map[Out: UDT, F: UDF2Builder[Iterable[LeftIn], Iterable[RightIn], Out]#UDF](mapper: (Iterable[LeftIn], Iterable[RightIn]) => Out) = new CoGroupStream(leftInput, rightInput, leftKeySelector, rightKeySelector, mapper)
 
-        def flatMap[Out: UDT, F: UDF2Builder[Iterable[LeftIn], Iterable[RightIn], GenTraversableOnce[Out]]#UDF](mapper: (Iterable[LeftIn], Iterable[RightIn]) => GenTraversableOnce[Out]) = new FlatCoGroupStream(leftInput, rightInput, leftKeySelector, rightKeySelector, mapper)
+        def flatMap[Out: UDT, F: UDF2Builder[Iterable[LeftIn], Iterable[RightIn], ForEachAble[Out]]#UDF](mapper: (Iterable[LeftIn], Iterable[RightIn]) => ForEachAble[Out]) = new FlatCoGroupStream(leftInput, rightInput, leftKeySelector, rightKeySelector, mapper)
       }
     }
   }
@@ -33,12 +31,12 @@ case class CoGroupStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelect
   override def getContract = throw new UnsupportedOperationException("Not implemented yet")
 }
 
-case class FlatCoGroupStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector, RightKeySelector: KeyBuilder[RightIn, Key]#Selector, F: UDF2Builder[Iterable[LeftIn], Iterable[RightIn], GenTraversableOnce[Out]]#UDF](
+case class FlatCoGroupStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector, RightKeySelector: KeyBuilder[RightIn, Key]#Selector, F: UDF2Builder[Iterable[LeftIn], Iterable[RightIn], ForEachAble[Out]]#UDF](
   leftInput: DataStream[LeftIn],
   rightInput: DataStream[RightIn],
   leftKeySelector: LeftIn => Key,
   rightKeySelector: RightIn => Key,
-  mapper: (Iterable[LeftIn], Iterable[RightIn]) => GenTraversableOnce[Out])
+  mapper: (Iterable[LeftIn], Iterable[RightIn]) => ForEachAble[Out])
   extends DataStream[Out] {
   
   override def getContract = throw new UnsupportedOperationException("Not implemented yet")
