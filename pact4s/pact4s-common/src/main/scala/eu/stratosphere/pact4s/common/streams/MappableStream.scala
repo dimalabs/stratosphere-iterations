@@ -24,7 +24,7 @@ case class MapStream[In: UDT, Out: UDT, F: UDF1Builder[In, Out]#UDF](
   extends DataStream[Out] {
 
   val udf = implicitly[UDF1[In => Out]]
-  override def getContract = Pact4sMapContract.createInstance(this)
+  override def getContract = new Pact4sMapContract(this)
 }
 
 case class FlatMapStream[In: UDT, Out: UDT, F: UDF1Builder[In, GenTraversableOnce[Out]]#UDF](
@@ -33,6 +33,6 @@ case class FlatMapStream[In: UDT, Out: UDT, F: UDF1Builder[In, GenTraversableOnc
   extends DataStream[Out] {
 
   val udf = implicitly[UDF1[In => GenTraversableOnce[Out]]]
-  override def getContract = Pact4sFlatMapContract.createInstance(this)
+  override def getContract = new Pact4sFlatMapContract(this)
 }
 

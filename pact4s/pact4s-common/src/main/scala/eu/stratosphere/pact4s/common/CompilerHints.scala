@@ -7,9 +7,8 @@ trait Hintable {
   var hints: Seq[CompilerHint] = null
   def getHints = hints
 
-  def getHint[T <: CompilerHint] = getHints find {
-    case hint: T => true
-    case _ => false
+  def getHint[T <: CompilerHint : Manifest] = getHints find {
+    hint => manifest[T].erasure.isAssignableFrom(hint.getClass)
   }
 
   def getPactNameOrElse(default: String) = getHint[PactName] map { case PactName(pactName) => pactName } getOrElse default

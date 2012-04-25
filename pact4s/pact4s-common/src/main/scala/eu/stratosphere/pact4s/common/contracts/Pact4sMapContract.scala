@@ -17,29 +17,20 @@ import eu.stratosphere.pact.common.contract.Contract
 import eu.stratosphere.pact.common.contract.MapContract
 import eu.stratosphere.pact.common.`type`.PactRecord
 
-object Pact4sMapContract {
-  def createInstance[In: UDT, Out: UDT, F: UDF1Builder[In, Out]#UDF](stream: MapStream[In, Out, F]) = {
-    val contract = new Pact4sMapContract(stream.input.getContract, stream.getPactNameOrElse("<Unnamed Mapper>"), stream.input.udt, stream.udt, stream.udf, stream.mapper)
-    stream.applyHintsToContract(contract)
-    contract
-  }
-}
+class Pact4sMapContract(val stream: MapStream[_, _, _])
+  extends MapContract(classOf[Pact4sMapStub], stream.input.getContract, stream.getPactNameOrElse("<Unnamed Mapper>")) with Pact4sContract {
 
-class Pact4sMapContract(
-  input: Pact4sContract,
-  pactName: String,
-  val inputType: UDT[_],
-  val outputType: UDT[_],
-  val descriptor: UDF1[_],
-  val mapper: Function1[_, _])
-  extends MapContract(classOf[Pact4sMapStub], input, pactName) with Pact4sContract {
-
+  val inputType = stream.input.udt
+  val outputType = stream.udt
+  val descriptor = stream.udf
+  val mapper = stream.mapper
+  
+  stream.applyHintsToContract(this)
+  
   override def persistConfiguration() = {
     this.setParameter("deserializer", inputType.createSerializer(descriptor.readFields))
     this.setParameter("serializer", outputType.createSerializer(descriptor.writeFields))
     this.setParameter("mapper", mapper)
-
-    input.persistConfiguration()
   }
 }
 
@@ -65,29 +56,20 @@ class Pact4sMapStub extends MapStub {
   }
 }
 
-object Pact4sFlatMapContract {
-  def createInstance[In: UDT, Out: UDT, F: UDF1Builder[In, GenTraversableOnce[Out]]#UDF](stream: FlatMapStream[In, Out, F]) = {
-    val contract = new Pact4sFlatMapContract(stream.input.getContract, stream.getPactNameOrElse("<Unnamed Mapper>"), stream.input.udt, stream.udt, stream.udf, stream.mapper)
-    stream.applyHintsToContract(contract)
-    contract
-  }
-}
+class Pact4sFlatMapContract(val stream: FlatMapStream[_, _, _])
+  extends MapContract(classOf[Pact4sFlatMapStub], stream.input.getContract, stream.getPactNameOrElse("<Unnamed Mapper>")) with Pact4sContract {
 
-class Pact4sFlatMapContract(
-  input: Pact4sContract,
-  pactName: String,
-  val inputType: UDT[_],
-  val outputType: UDT[_],
-  val descriptor: UDF1[_],
-  val mapper: Function1[_, GenTraversableOnce[_]])
-  extends MapContract(classOf[Pact4sFlatMapStub], input, pactName) with Pact4sContract {
+  val inputType = stream.input.udt
+  val outputType = stream.udt
+  val descriptor = stream.udf
+  val mapper = stream.mapper
+
+  stream.applyHintsToContract(this)
 
   override def persistConfiguration() = {
     this.setParameter("deserializer", inputType.createSerializer(descriptor.readFields))
     this.setParameter("serializer", outputType.createSerializer(descriptor.writeFields))
     this.setParameter("mapper", mapper)
-
-    input.persistConfiguration()
   }
 }
 
