@@ -15,7 +15,7 @@ trait MappableStream[In] { this: WrappedDataStream[In] =>
 
   def flatMap[Out: UDT, F: UDF1Builder[In, GenTraversableOnce[Out]]#UDF](mapper: In => GenTraversableOnce[Out]) = new FlatMapStream(input, mapper)
 
-  def filter(predicate: In => Boolean) = input flatMap { x => if (predicate(x)) Some(x) else None }
+  def filter[F: UDF1Builder[In, Boolean]#UDF](predicate: In => Boolean) = input flatMap { x => if (predicate(x)) Some(x) else None }
 }
 
 case class MapStream[In: UDT, Out: UDT, F: UDF1Builder[In, Out]#UDF](
