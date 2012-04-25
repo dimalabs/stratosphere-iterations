@@ -34,14 +34,16 @@ class WordCount(args: String*) extends PactProgram with WordCountGeneratedImplic
 
 trait WordCountGeneratedImplicits {
 
+  import eu.stratosphere.pact4s.common.analyzer._
+
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
-  implicit val stringSerializer: PactSerializerFactory[String] = new PactSerializerFactory[String] {
+  implicit val stringSerializer: UDT[String] = new UDT[String] {
 
     override val fieldCount = 1
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[String] {
 
       private val ix0 = indexMap(0)
 
@@ -68,11 +70,11 @@ trait WordCountGeneratedImplicits {
     }
   }
 
-  implicit val stringIntSerializer: PactSerializerFactory[(String, Int)] = new PactSerializerFactory[(String, Int)] {
+  implicit val stringIntSerializer: UDT[(String, Int)] = new UDT[(String, Int)] {
 
     override val fieldCount = 2
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(String, Int)] {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)

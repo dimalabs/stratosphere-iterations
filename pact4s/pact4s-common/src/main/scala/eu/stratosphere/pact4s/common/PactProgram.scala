@@ -1,5 +1,7 @@
 package eu.stratosphere.pact4s.common
 
+import eu.stratosphere.pact4s.common.analyzer._
+
 abstract class PactProgram {
 
   type DataStream[T] = eu.stratosphere.pact4s.common.streams.DataStream[T]
@@ -24,7 +26,11 @@ abstract class PactProgram {
 
   implicit def planOutput2Seq(p: PlanOutput): Seq[PlanOutput] = Seq(p)
 
-  case class DataSource[S, T](url: String, parser: S => T)(implicit serEv: PactSerializerFactory[T], rwEv: PactReadWriteSet) extends DataStream[T]
+  case class DataSource[S, T: UDT, F: UDF1Builder[S, T]#UDF](url: String, parser: S => T) extends DataStream[T] {
+    val udf = implicitly[UDF1[S => T]]
+    def getContract = throw new UnsupportedOperationException("Not implemented yet")
+  }
+  
   case class DataSink[T, S](url: String, formatter: T => S) extends Hintable
 }
 

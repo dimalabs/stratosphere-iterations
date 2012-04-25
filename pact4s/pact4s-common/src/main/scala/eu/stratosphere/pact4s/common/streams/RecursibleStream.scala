@@ -1,29 +1,32 @@
 package eu.stratosphere.pact4s.common.streams
 
-import eu.stratosphere.pact4s.common.PactReadWriteSet
-import eu.stratosphere.pact4s.common.PactSerializerFactory
+import eu.stratosphere.pact4s.common.analyzer._
 
 trait RecursibleStream[SolutionItem] { this: WrappedDataStream[SolutionItem] =>
 
   private val initialSolution = this.inner
 
-  def iterate(step: DataStream[SolutionItem] => DataStream[SolutionItem])(implicit serEvS: PactSerializerFactory[SolutionItem], rwEv: PactReadWriteSet) = new KleeneStream(initialSolution, step)
+  def iterate(step: DataStream[SolutionItem] => DataStream[SolutionItem]) = new KleeneStream(initialSolution, step)
 
-  def untilEmpty[WorksetItem](initialWorkset: DataStream[WorksetItem])(implicit serEvW: PactSerializerFactory[WorksetItem]) = new {
+  def untilEmpty[WorksetItem: UDT](initialWorkset: DataStream[WorksetItem]) = new {
 
-    def iterate(step: (DataStream[SolutionItem], DataStream[WorksetItem]) => (DataStream[SolutionItem], DataStream[WorksetItem]))(implicit serEvS: PactSerializerFactory[SolutionItem], rwEv: PactReadWriteSet) = new IncrementalStream(initialSolution, initialWorkset, step)
+    def iterate(step: (DataStream[SolutionItem], DataStream[WorksetItem]) => (DataStream[SolutionItem], DataStream[WorksetItem])) = new IncrementalStream(initialSolution, initialWorkset, step)
   }
 }
 
-case class KleeneStream[SolutionItem](
+case class KleeneStream[SolutionItem: UDT](
   initialSolution: DataStream[SolutionItem],
   step: DataStream[SolutionItem] => DataStream[SolutionItem])
-  (implicit serEvS: PactSerializerFactory[SolutionItem], rwEv: PactReadWriteSet)
-  extends DataStream[SolutionItem]
+  extends DataStream[SolutionItem] {
+  
+  override def getContract = throw new UnsupportedOperationException("Not implemented yet")
+}
 
-case class IncrementalStream[SolutionItem, WorksetItem](
+case class IncrementalStream[SolutionItem: UDT, WorksetItem: UDT](
   initialSolution: DataStream[SolutionItem],
   initialWorkset: DataStream[WorksetItem],
   step: (DataStream[SolutionItem], DataStream[WorksetItem]) => (DataStream[SolutionItem], DataStream[WorksetItem]))
-  (implicit serEvS: PactSerializerFactory[SolutionItem], serEvW: PactSerializerFactory[WorksetItem], rwEv: PactReadWriteSet)
-  extends DataStream[SolutionItem]
+  extends DataStream[SolutionItem] {
+  
+  override def getContract = throw new UnsupportedOperationException("Not implemented yet")
+}

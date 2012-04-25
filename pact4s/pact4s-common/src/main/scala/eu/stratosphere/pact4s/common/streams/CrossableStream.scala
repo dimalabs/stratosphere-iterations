@@ -2,8 +2,7 @@ package eu.stratosphere.pact4s.common.streams
 
 import scala.collection.GenTraversableOnce
 
-import eu.stratosphere.pact4s.common.PactReadWriteSet
-import eu.stratosphere.pact4s.common.PactSerializerFactory
+import eu.stratosphere.pact4s.common.analyzer._
 
 trait CrossableStream[LeftIn] { this: WrappedDataStream[LeftIn] =>
 
@@ -11,22 +10,26 @@ trait CrossableStream[LeftIn] { this: WrappedDataStream[LeftIn] =>
 
   def cross[RightIn](rightInput: DataStream[RightIn]) = new {
 
-    def map[Out](mapper: (LeftIn, RightIn) => Out)(implicit serEv: PactSerializerFactory[Out], rwEv: PactReadWriteSet) = new CrossStream(leftInput, rightInput, mapper)
+    def map[Out: UDT, F: UDF2Builder[LeftIn, RightIn, Out]#UDF](mapper: (LeftIn, RightIn) => Out) = new CrossStream(leftInput, rightInput, mapper)
 
-    def flatMap[Out](mapper: (LeftIn, RightIn) => GenTraversableOnce[Out])(implicit serEv: PactSerializerFactory[Out], rwEv: PactReadWriteSet) = new FlatCrossStream(leftInput, rightInput, mapper)
+    def flatMap[Out: UDT, F: UDF2Builder[LeftIn, RightIn, GenTraversableOnce[Out]]#UDF](mapper: (LeftIn, RightIn) => GenTraversableOnce[Out]) = new FlatCrossStream(leftInput, rightInput, mapper)
   }
 }
 
-case class CrossStream[LeftIn, RightIn, Out](
+case class CrossStream[LeftIn: UDT, RightIn: UDT, Out: UDT, F: UDF2Builder[LeftIn, RightIn, Out]#UDF](
   leftInput: DataStream[LeftIn],
   rightInput: DataStream[RightIn],
   mapper: (LeftIn, RightIn) => Out)
-  (implicit serEv: PactSerializerFactory[Out], rwEv: PactReadWriteSet)
-  extends DataStream[Out]
+  extends DataStream[Out] {
+  
+  override def getContract = throw new UnsupportedOperationException("Not implemented yet")
+}
 
-case class FlatCrossStream[LeftIn, RightIn, Out](
+case class FlatCrossStream[LeftIn: UDT, RightIn: UDT, Out: UDT, F: UDF2Builder[LeftIn, RightIn, GenTraversableOnce[Out]]#UDF](
   leftInput: DataStream[LeftIn],
   rightInput: DataStream[RightIn],
   mapper: (LeftIn, RightIn) => GenTraversableOnce[Out])
-  (implicit serEv: PactSerializerFactory[Out], rwEv: PactReadWriteSet)
-  extends DataStream[Out]
+  extends DataStream[Out] {
+  
+  override def getContract = throw new UnsupportedOperationException("Not implemented yet")
+}

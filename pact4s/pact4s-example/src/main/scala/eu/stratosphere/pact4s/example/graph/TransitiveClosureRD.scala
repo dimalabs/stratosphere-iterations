@@ -45,9 +45,9 @@ class TransitiveClosureRD(args: String*) extends PactProgram with TransitiveClos
   override def description = "Parameters: [noSubStasks] [vertices] [edges] [output]"
   override def defaultParallelism = params.numSubTasks
 
-  vertices.hints = UniqueKey +: RecordSize(16)
+  vertices.hints = RecordSize(16)
   edges.hints = RecordSize(16)
-  output.hints = UniqueKey +: RecordSize(16)
+  output.hints = RecordSize(16)
 
   val params = new {
     val numSubTasks = args(0).toInt
@@ -76,14 +76,16 @@ class TransitiveClosureRD(args: String*) extends PactProgram with TransitiveClos
 
 trait TransitiveClosureRDGeneratedImplicits { this: TransitiveClosureRD =>
 
+  import eu.stratosphere.pact4s.common.analyzer._
+
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
-  implicit val pathSerializer: PactSerializerFactory[Path] = new PactSerializerFactory[Path] {
+  implicit val pathSerializer: UDT[Path] = new UDT[Path] {
 
     override val fieldCount = 3
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[Path] {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)

@@ -2,41 +2,44 @@ package eu.stratosphere.pact4s.common.streams
 
 import scala.collection.GenTraversableOnce
 
-import eu.stratosphere.pact4s.common.PactReadWriteSet
-import eu.stratosphere.pact4s.common.PactSerializerFactory
+import eu.stratosphere.pact4s.common.analyzer._
 
 trait JoinableStream[LeftIn] { this: WrappedDataStream[LeftIn] =>
 
   private val leftInput = this.inner
 
-  def join[RightIn](rightInput: DataStream[RightIn]) = new {
+  def join[RightIn: UDT](rightInput: DataStream[RightIn]) = new {
 
-    def on[Key <% Comparable[Key]](leftKeySelector: LeftIn => Key) = new {
+    def on[Key, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector](leftKeySelector: LeftIn => Key) = new {
 
-      def isEqualTo(rightKeySelector: RightIn => Key) = new {
+      def isEqualTo[RightKeySelector: KeyBuilder[RightIn, Key]#Selector](rightKeySelector: RightIn => Key) = new {
 
-        def map[Out](mapper: (LeftIn, RightIn) => Out)(implicit serEv: PactSerializerFactory[Out], rwEv: PactReadWriteSet) = new JoinStream(leftInput, rightInput, leftKeySelector, rightKeySelector, mapper)
+        def map[Out: UDT, F: UDF2Builder[LeftIn, RightIn, Out]#UDF](mapper: (LeftIn, RightIn) => Out) = new JoinStream(leftInput, rightInput, leftKeySelector, rightKeySelector, mapper)
 
-        def flatMap[Out](mapper: (LeftIn, RightIn) => GenTraversableOnce[Out])(implicit serEv: PactSerializerFactory[Out], rwEv: PactReadWriteSet) = new FlatJoinStream(leftInput, rightInput, leftKeySelector, rightKeySelector, mapper)
+        def flatMap[Out: UDT, F: UDF2Builder[LeftIn, RightIn, GenTraversableOnce[Out]]#UDF](mapper: (LeftIn, RightIn) => GenTraversableOnce[Out]) = new FlatJoinStream(leftInput, rightInput, leftKeySelector, rightKeySelector, mapper)
       }
     }
   }
 }
 
-case class JoinStream[Key, LeftIn, RightIn, Out](
+case class JoinStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector, RightKeySelector: KeyBuilder[RightIn, Key]#Selector, F: UDF2Builder[LeftIn, RightIn, Out]#UDF](
   leftInput: DataStream[LeftIn],
   rightInput: DataStream[RightIn],
   leftKeySelector: LeftIn => Key,
   rightKeySelector: RightIn => Key,
   mapper: (LeftIn, RightIn) => Out)
-  (implicit keyEv: Key => Comparable[Key], serEv: PactSerializerFactory[Out], rwEv: PactReadWriteSet)
-  extends DataStream[Out]
+  extends DataStream[Out] {
+  
+  override def getContract = throw new UnsupportedOperationException("Not implemented yet")
+}
 
-case class FlatJoinStream[Key, LeftIn, RightIn, Out](
+case class FlatJoinStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector, RightKeySelector: KeyBuilder[RightIn, Key]#Selector, F: UDF2Builder[LeftIn, RightIn, GenTraversableOnce[Out]]#UDF](
   leftInput: DataStream[LeftIn],
   rightInput: DataStream[RightIn],
   leftKeySelector: LeftIn => Key,
   rightKeySelector: RightIn => Key,
   mapper: (LeftIn, RightIn) => GenTraversableOnce[Out])
-  (implicit keyEv: Key => Comparable[Key], serEv: PactSerializerFactory[Out], rwEv: PactReadWriteSet)
-  extends DataStream[Out]
+  extends DataStream[Out] {
+  
+  override def getContract = throw new UnsupportedOperationException("Not implemented yet")
+}

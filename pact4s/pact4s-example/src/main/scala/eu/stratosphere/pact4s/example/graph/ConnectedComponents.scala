@@ -1,6 +1,7 @@
 package eu.stratosphere.pact4s.example.graph
 
 import scala.math._
+
 import eu.stratosphere.pact4s.common._
 
 class ConnectedComponents(args: String*) extends PactProgram with ConnectedComponentsGeneratedImplicits {
@@ -32,10 +33,10 @@ class ConnectedComponents(args: String*) extends PactProgram with ConnectedCompo
   override def description = "Parameters: [noSubStasks] [vertices] [edges] [output]"
   override def defaultParallelism = params.numSubTasks
 
-  vertices.hints = UniqueKey +: RecordSize(8)
+  vertices.hints = RecordSize(8)
   directedEdges.hints = RecordSize(8)
   undirectedEdges.hints = RecordSize(8) +: Selectivity(2.0f)
-  output.hints = UniqueKey +: RecordSize(8)
+  output.hints = RecordSize(8)
 
   val params = new {
     val numSubTasks = args(0).toInt
@@ -60,14 +61,16 @@ class ConnectedComponents(args: String*) extends PactProgram with ConnectedCompo
 
 trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>
 
+  import eu.stratosphere.pact4s.common.analyzer._
+
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
-  implicit val intIntSerializer: PactSerializerFactory[(Int, Int)] = new PactSerializerFactory[(Int, Int)] {
+  implicit val intIntUDT: UDT[(Int, Int)] = new UDT[(Int, Int)] {
 
     override val fieldCount = 2
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Int)] {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)

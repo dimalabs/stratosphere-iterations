@@ -1,6 +1,7 @@
 package eu.stratosphere.pact4s.example.datamining
 
 import scala.math._
+
 import eu.stratosphere.pact4s.common._
 
 abstract class BatchGradientDescent(args: String*) extends PactProgram with BatchGradientDescentGeneratedImplicits {
@@ -52,10 +53,6 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
   override def description = "Parameters: [noSubStasks] [eps] [eta] [lambda] [examples] [weights] [output]"
   override def defaultParallelism = params.numSubTasks
 
-  examples.hints = UniqueKey
-  weights.hints = UniqueKey
-  output.hints = UniqueKey
-
   val params = new {
     val numSubTasks = args(0).toInt
     val eps = args(1).toDouble
@@ -99,14 +96,16 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
 
   import scala.collection.JavaConversions._
 
+  import eu.stratosphere.pact4s.common.analyzer._
+
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
-  implicit val intArrayDoubleSerializer: PactSerializerFactory[(Int, Array[Double])] = new PactSerializerFactory[(Int, Array[Double])] {
+  implicit val intArrayDoubleUDT: UDT[(Int, Array[Double])] = new UDT[(Int, Array[Double])] {
 
     override val fieldCount = 2
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Array[Double])] {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)
@@ -148,11 +147,11 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
     }
   }
 
-  implicit val intArrayDoubleDoubleSerializer: PactSerializerFactory[(Int, Array[Double], Double)] = new PactSerializerFactory[(Int, Array[Double], Double)] {
+  implicit val intArrayDoubleDoubleUDT: UDT[(Int, Array[Double], Double)] = new UDT[(Int, Array[Double], Double)] {
 
     override val fieldCount = 3
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Array[Double], Double)] {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)
@@ -207,11 +206,11 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
     }
   }
 
-  implicit val intDoubleArrayDoubleDoubleSerializer: PactSerializerFactory[(Int, Double, Array[Double], Double)] = new PactSerializerFactory[(Int, Double, Array[Double], Double)] {
+  implicit val intDoubleArrayDoubleDoubleUDT: UDT[(Int, Double, Array[Double], Double)] = new UDT[(Int, Double, Array[Double], Double)] {
 
     override val fieldCount = 4
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Double, Array[Double], Double)] {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)
@@ -279,11 +278,11 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
     }
   }
 
-  implicit val valueAndGradientSerializer: PactSerializerFactory[ValueAndGradient] = new PactSerializerFactory[ValueAndGradient] {
+  implicit val valueAndGradientUDT: UDT[ValueAndGradient] = new UDT[ValueAndGradient] {
 
     override val fieldCount = 3
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[ValueAndGradient] {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)

@@ -1,6 +1,7 @@
 package eu.stratosphere.pact4s.example.datamining
 
 import scala.math._
+
 import eu.stratosphere.pact4s.common._
 
 class KMeans(args: String*) extends PactProgram with KMeansGeneratedImplicits {
@@ -35,8 +36,7 @@ class KMeans(args: String*) extends PactProgram with KMeansGeneratedImplicits {
   override def description = "Parameters: [noSubStasks] [dataPoints] [clusterCenters] [output]"
   override def defaultParallelism = params.numSubTasks
 
-  dataPoints.hints = UniqueKey
-  clusterPoints.hints = UniqueKey +: Degree(1)
+  clusterPoints.hints = Degree(1)
   distances.hints = RecordSize(48)
   nearestCenters.hints = RecordSize(48)
   newCenters.hints = RecordSize(36)
@@ -77,14 +77,16 @@ case class PointSum(count: Int, pointSum: Point) {
 
 trait KMeansGeneratedImplicits { this: KMeans =>
 
+  import eu.stratosphere.pact4s.common.analyzer._
+
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
-  implicit val intPointSerializer: PactSerializerFactory[(Int, Point)] = new PactSerializerFactory[(Int, Point)] {
+  implicit val intPointSerializer: UDT[(Int, Point)] = new UDT[(Int, Point)] {
 
     override val fieldCount = 4
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Point)] {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)
@@ -151,11 +153,11 @@ trait KMeansGeneratedImplicits { this: KMeans =>
     }
   }
 
-  implicit val intDistanceSerializer: PactSerializerFactory[(Int, Distance)] = new PactSerializerFactory[(Int, Distance)] {
+  implicit val intDistanceSerializer: UDT[(Int, Distance)] = new UDT[(Int, Distance)] {
 
     override val fieldCount = 6
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Distance)] {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)
@@ -248,11 +250,11 @@ trait KMeansGeneratedImplicits { this: KMeans =>
     }
   }
 
-  implicit val intPointSumSerializer: PactSerializerFactory[(Int, PointSum)] = new PactSerializerFactory[(Int, PointSum)] {
+  implicit val intPointSumSerializer: UDT[(Int, PointSum)] = new UDT[(Int, PointSum)] {
 
     override val fieldCount = 5
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, PointSum)] {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)

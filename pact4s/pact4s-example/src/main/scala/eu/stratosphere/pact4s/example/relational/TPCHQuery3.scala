@@ -36,11 +36,9 @@ class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImpl
   override def description = "Parameters: [noSubStasks] [orders] [lineItems] [output]"
   override def defaultParallelism = params.numSubTasks
 
-  orders.hints = UniqueKey
-  lineItems.hints = ValuesPerKey(4)
-  filteredOrders.hints = RecordSize(32) +: Selectivity(0.05f) +: ValuesPerKey(1)
-  prioritizedItems.hints = RecordSize(64) +: ValuesPerKey(4)
-  prioritizedOrders.hints = RecordSize(64) +: Selectivity(1f) +: ValuesPerKey(1)
+  filteredOrders.hints = RecordSize(32) +: Selectivity(0.05f)
+  prioritizedItems.hints = RecordSize(64)
+  prioritizedOrders.hints = RecordSize(64) +: Selectivity(1f)
 
   val params = new {
     val status = 'F'
@@ -75,14 +73,16 @@ class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImpl
 
 trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
 
+  import eu.stratosphere.pact4s.common.analyzer._
+
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
-  implicit val orderSerializer: PactSerializerFactory[Order] = new PactSerializerFactory[Order] {
+  implicit val orderSerializer: UDT[Order] = new UDT[Order] {
 
     override val fieldCount = 7
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[Order] {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)
@@ -188,11 +188,11 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
     }
   }
 
-  implicit val lineItemSerializer: PactSerializerFactory[LineItem] = new PactSerializerFactory[LineItem] {
+  implicit val lineItemSerializer: UDT[LineItem] = new UDT[LineItem] {
 
     override val fieldCount = 2
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[LineItem] {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)
@@ -233,11 +233,11 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
     }
   }
 
-  implicit val prioritizedOrderSerializer: PactSerializerFactory[PrioritizedOrder] = new PactSerializerFactory[PrioritizedOrder] {
+  implicit val prioritizedOrderSerializer: UDT[PrioritizedOrder] = new UDT[PrioritizedOrder] {
 
     override val fieldCount = 3
 
-    override def createInstance(indexMap: Array[Int]) = new PactSerializer {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[PrioritizedOrder] {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)

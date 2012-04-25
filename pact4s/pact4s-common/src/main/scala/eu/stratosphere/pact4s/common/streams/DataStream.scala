@@ -1,12 +1,13 @@
 package eu.stratosphere.pact4s.common.streams
 
 import eu.stratosphere.pact4s.common.Hintable
-import eu.stratosphere.pact4s.common.PactReadWriteSet
-import eu.stratosphere.pact4s.common.PactSerializerFactory
+import eu.stratosphere.pact4s.common.analyzer.UDT
+import eu.stratosphere.pact4s.common.contracts.Pact4sContract
 
-abstract class DataStream[T](implicit serEv: PactSerializerFactory[T], rwEv: PactReadWriteSet) extends Hintable {
-  val serializerFactory = implicitly[PactSerializerFactory[T]]
-  val readWriteSet = implicitly[PactReadWriteSet]
+abstract class DataStream[T: UDT] extends Hintable {
+  val udt = implicitly[UDT[T]]
+
+  def getContract: Pact4sContract
 }
 
 case class WrappedDataStream[T](inner: DataStream[T])
