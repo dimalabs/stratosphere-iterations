@@ -5,11 +5,8 @@ import java.io.ByteArrayOutputStream
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 
-import eu.stratosphere.pact.common.contract.Contract
 import eu.stratosphere.nephele.configuration.Configuration
-
-case class WrappedContract(contract: Contract)
-case class WrappedConfiguration(config: Configuration)
+import eu.stratosphere.pact.common.contract.Contract
 
 trait ConfigurableContract { this: WrappedContract =>
 

@@ -2,6 +2,7 @@ package eu.stratosphere.pact4s.common.operators
 
 import eu.stratosphere.pact4s.common.streams._
 import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.util.ForEachAble
 
 trait CoGroupOperator[LeftIn] { this: WrappedDataStream[LeftIn] =>
 

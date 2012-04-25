@@ -1,6 +1,7 @@
 package eu.stratosphere.pact4s.common.streams
 
 import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.util.ForEachAble
 
 case class CrossStream[LeftIn: UDT, RightIn: UDT, Out: UDT, F: UDF2Builder[LeftIn, RightIn, Out]#UDF](
   leftInput: DataStream[LeftIn],

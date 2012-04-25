@@ -1,6 +1,7 @@
 package eu.stratosphere.pact4s.common.streams
 
 import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.util.ForEachAble
 
 case class JoinStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector, RightKeySelector: KeyBuilder[RightIn, Key]#Selector, F: UDF2Builder[LeftIn, RightIn, Out]#UDF](
   leftInput: DataStream[LeftIn],

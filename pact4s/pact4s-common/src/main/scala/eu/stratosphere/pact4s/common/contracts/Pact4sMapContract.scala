@@ -1,5 +1,6 @@
 package eu.stratosphere.pact4s.common.contracts
 
+import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.streams._
 import eu.stratosphere.pact4s.common.util._

@@ -10,5 +10,3 @@ abstract class DataStream[T: UDT] extends Hintable {
 
   def getContract: Contract
 }
-
-case class WrappedDataStream[T](inner: DataStream[T])

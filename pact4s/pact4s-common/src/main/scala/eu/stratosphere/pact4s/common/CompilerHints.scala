@@ -24,7 +24,7 @@ abstract class CompilerHint {
 }
 
 object CompilerHint {
-    implicit def hint2SeqHint(h: CompilerHint): Seq[CompilerHint] = Seq(h)
+  implicit def hint2SeqHint(h: CompilerHint): Seq[CompilerHint] = Seq(h)
 }
 
 case class Degree(degreeOfParallelism: Int) extends CompilerHint {

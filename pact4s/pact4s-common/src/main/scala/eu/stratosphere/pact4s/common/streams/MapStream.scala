@@ -1,6 +1,7 @@
 package eu.stratosphere.pact4s.common.streams
 
 import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.util.ForEachAble
 
 import eu.stratosphere.pact4s.common.contracts.Pact4sFlatMapContract
 import eu.stratosphere.pact4s.common.contracts.Pact4sMapContract
