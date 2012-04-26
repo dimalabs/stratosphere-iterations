@@ -7,7 +7,7 @@ case class KleeneStream[SolutionItem: UDT](
   step: DataStream[SolutionItem] => DataStream[SolutionItem])
   extends DataStream[SolutionItem] {
   
-  override def getContract = throw new UnsupportedOperationException("Not implemented yet")
+  override def contract = throw new UnsupportedOperationException("Not implemented yet")
 }
 
 case class IncrementalStream[SolutionItem: UDT, WorksetItem: UDT](
@@ -16,5 +16,5 @@ case class IncrementalStream[SolutionItem: UDT, WorksetItem: UDT](
   step: (DataStream[SolutionItem], DataStream[WorksetItem]) => (DataStream[SolutionItem], DataStream[WorksetItem]))
   extends DataStream[SolutionItem] {
   
-  override def getContract = throw new UnsupportedOperationException("Not implemented yet")
+  override def contract = throw new UnsupportedOperationException("Not implemented yet")
 }

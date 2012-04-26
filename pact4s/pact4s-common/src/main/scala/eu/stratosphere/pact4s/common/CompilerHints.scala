@@ -12,9 +12,9 @@ trait Hintable {
     hint => manifest[T].erasure.isAssignableFrom(hint.getClass)
   }
 
-  def getPactNameOrElse(default: String) = getHint[PactName] map { case PactName(pactName) => pactName } getOrElse default
+  def getPactName = getHint[PactName] map { case PactName(pactName) => pactName }
 
-  def applyHintsToContract(contract: Contract) = {
+  def applyHints(contract: Contract) = {
     for (hint <- getHints) hint.applyToContract(contract)
   }
 }

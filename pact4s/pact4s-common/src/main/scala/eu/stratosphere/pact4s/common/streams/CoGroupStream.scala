@@ -11,7 +11,7 @@ case class CoGroupStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelect
   mapper: (Iterable[LeftIn], Iterable[RightIn]) => Out)
   extends DataStream[Out] {
 
-  override def getContract = throw new UnsupportedOperationException("Not implemented yet")
+  override def contract = throw new UnsupportedOperationException("Not implemented yet")
 }
 
 case class FlatCoGroupStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector, RightKeySelector: KeyBuilder[RightIn, Key]#Selector, F: UDF2Builder[Iterable[LeftIn], Iterable[RightIn], ForEachAble[Out]]#UDF](
@@ -22,5 +22,5 @@ case class FlatCoGroupStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySe
   mapper: (Iterable[LeftIn], Iterable[RightIn]) => ForEachAble[Out])
   extends DataStream[Out] {
 
-  override def getContract = throw new UnsupportedOperationException("Not implemented yet")
+  override def contract = throw new UnsupportedOperationException("Not implemented yet")
 }

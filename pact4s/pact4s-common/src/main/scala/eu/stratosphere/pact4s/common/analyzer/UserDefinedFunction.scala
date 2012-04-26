@@ -1,12 +1,12 @@
 package eu.stratosphere.pact4s.common.analyzer
 
-trait UDF1[F <: _ => _] {
+trait UDF1[+F <: _ => _] {
   var readFields: Array[Int] = null
   var writeFields: Array[Int] = null
   var copyFields: Map[Int, Int] = null
 }
 
-trait UDF2[F <: (_, _) => _] {
+trait UDF2[+F <: (_, _) => _] {
   var leftReadFields: Array[Int] = null
   var leftCopyFields: Map[Int, Int] = null
 

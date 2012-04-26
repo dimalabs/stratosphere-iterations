@@ -12,7 +12,7 @@ case class ReduceStream[Key, In: UDT, Out: UDT, GroupByKeySelector: KeyBuilder[I
   val combinerUDF = implicitly[UDF1[Iterable[In] => In]]
   val reducerUDF = implicitly[UDF1[Iterable[In] => Out]]
   
-  override def getContract = throw new UnsupportedOperationException("Not implemented yet")
+  override def contract = throw new UnsupportedOperationException("Not implemented yet")
 }
 
 class CombineStream[Key, In: UDT, GroupByKeySelector: KeyBuilder[In, Key]#Selector, F: UDF1Builder[Iterable[In], In]#UDF](
@@ -26,6 +26,6 @@ class CombineStream[Key, In: UDT, GroupByKeySelector: KeyBuilder[In, Key]#Select
     override def getHints = if (this.hints == null) outer.hints else this.hints
   }
 
-  override def getContract = throw new UnsupportedOperationException("Not implemented yet")
+  override def contract = throw new UnsupportedOperationException("Not implemented yet")
 }
 

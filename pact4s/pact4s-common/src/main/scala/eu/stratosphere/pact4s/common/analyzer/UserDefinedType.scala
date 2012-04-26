@@ -14,3 +14,7 @@ abstract class UDTSerializer[T] {
   def serialize(item: T, record: PactRecord)
   def deserialize(record: PactRecord): T
 }
+
+object UDTSerializer {
+  implicit def toAny(s: UDTSerializer[_]) = s.asInstanceOf[UDTSerializer[Any]]
+}
