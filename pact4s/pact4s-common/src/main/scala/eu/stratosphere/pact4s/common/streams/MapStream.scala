@@ -13,19 +13,14 @@ case class MapStream[In: UDT, Out: UDT, F: UDF1Builder[In, Out]#UDF](
 
   override def contract = {
 
-    val inputType = implicitly[UDT[In]]
-    val outputType = implicitly[UDT[Out]]
-    val descriptor = implicitly[UDF1[In => Out]]
+    val inputUDT = implicitly[UDT[In]]
+    val outputUDT = implicitly[UDT[Out]]
+    val mapUDF = implicitly[UDF1[In => Out]]
     val name = getPactName getOrElse "<Unnamed Mapper>"
 
-    new MapContract(classOf[Map4sStub], input.getContract, name) with ParameterizedContract[MapParameters] {
+    new MapContract(classOf[Map4sStub[In, Out]], input.getContract, name) with ParameterizedContract[MapParameters[In, Out]] {
 
-      def getStubParameters = {
-        val deserializer = inputType.createSerializer(descriptor.readFields)
-        val serializer = outputType.createSerializer(descriptor.writeFields)
-
-        new MapParameters(deserializer, serializer, mapFunction.asInstanceOf[Any => Any])
-      }
+      override val stubParameters = new MapParameters(inputUDT, outputUDT, mapUDF, mapFunction)
     }
   }
 }
@@ -37,19 +32,14 @@ case class FlatMapStream[In: UDT, Out: UDT, F: UDF1Builder[In, Iterator[Out]]#UD
 
   override def contract = {
 
-    val inputType = implicitly[UDT[In]]
-    val outputType = implicitly[UDT[Out]]
-    val descriptor = implicitly[UDF1[In => Iterator[Out]]]
+    val inputUDT = implicitly[UDT[In]]
+    val outputUDT = implicitly[UDT[Out]]
+    val mapUDF = implicitly[UDF1[In => Iterator[Out]]]
     val name = getPactName getOrElse "<Unnamed Mapper>"
 
-    new MapContract(classOf[FlatMap4sStub], input.getContract, name) with ParameterizedContract[FlatMapParameters] {
+    new MapContract(classOf[FlatMap4sStub[In, Out]], input.getContract, name) with ParameterizedContract[FlatMapParameters[In, Out]] {
 
-      def getStubParameters = {
-        val deserializer = inputType.createSerializer(descriptor.readFields)
-        val serializer = outputType.createSerializer(descriptor.writeFields)
-
-        new FlatMapParameters(deserializer, serializer, mapFunction.asInstanceOf[Any => Iterator[Any]])
-      }
+      override val stubParameters = new FlatMapParameters(inputUDT, outputUDT, mapUDF, mapFunction)
     }
   }
 }

@@ -14,21 +14,15 @@ case class CrossStream[LeftIn: UDT, RightIn: UDT, Out: UDT, F: UDF2Builder[LeftI
 
   override def contract = {
 
-    val leftInputType = implicitly[UDT[LeftIn]]
-    val rightInputType = implicitly[UDT[RightIn]]
-    val outputType = implicitly[UDT[Out]]
-    val descriptor = implicitly[UDF2[(LeftIn, RightIn) => Out]]
-    val name = getPactName getOrElse "<Unnamed Crosser>"
+    val leftUDT = implicitly[UDT[LeftIn]]
+    val rightUDT = implicitly[UDT[RightIn]]
+    val outputUDT = implicitly[UDT[Out]]
+    val mapUDF = implicitly[UDF2[(LeftIn, RightIn) => Out]]
+    val name = getPactName getOrElse "<Unnamed Mapper>"
 
-    new CrossContract(classOf[Cross4sStub], leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[CrossParameters] {
+    new CrossContract(classOf[Cross4sStub[LeftIn, RightIn, Out]], leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[CrossParameters[LeftIn, RightIn, Out]] {
 
-      def getStubParameters = {
-        val leftDeserializer = leftInputType.createSerializer(descriptor.leftReadFields)
-        val rightDeserializer = rightInputType.createSerializer(descriptor.rightReadFields)
-        val serializer = outputType.createSerializer(descriptor.writeFields)
-
-        new CrossParameters(leftDeserializer, rightDeserializer, serializer, mapFunction.asInstanceOf[(Any, Any) => Any])
-      }
+      override val stubParameters = new CrossParameters(leftUDT, rightUDT, outputUDT, mapUDF, mapFunction)
     }
   }
 }
@@ -41,21 +35,15 @@ case class FlatCrossStream[LeftIn: UDT, RightIn: UDT, Out: UDT, F: UDF2Builder[L
 
   override def contract = {
 
-    val leftInputType = implicitly[UDT[LeftIn]]
-    val rightInputType = implicitly[UDT[RightIn]]
-    val outputType = implicitly[UDT[Out]]
-    val descriptor = implicitly[UDF2[(LeftIn, RightIn) => Iterator[Out]]]
-    val name = getPactName getOrElse "<Unnamed Crosser>"
+    val leftUDT = implicitly[UDT[LeftIn]]
+    val rightUDT = implicitly[UDT[RightIn]]
+    val outputUDT = implicitly[UDT[Out]]
+    val mapUDF = implicitly[UDF2[(LeftIn, RightIn) => Iterator[Out]]]
+    val name = getPactName getOrElse "<Unnamed Mapper>"
 
-    new CrossContract(classOf[FlatCross4sStub], leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[FlatCrossParameters] {
+    new CrossContract(classOf[FlatCross4sStub[LeftIn, RightIn, Out]], leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[FlatCrossParameters[LeftIn, RightIn, Out]] {
 
-      def getStubParameters = {
-        val leftDeserializer = leftInputType.createSerializer(descriptor.leftReadFields)
-        val rightDeserializer = rightInputType.createSerializer(descriptor.rightReadFields)
-        val serializer = outputType.createSerializer(descriptor.writeFields)
-
-        new FlatCrossParameters(leftDeserializer, rightDeserializer, serializer, mapFunction.asInstanceOf[(Any, Any) => Iterator[Any]])
-      }
+      override val stubParameters = new FlatCrossParameters(leftUDT, rightUDT, outputUDT, mapUDF, mapFunction)
     }
   }
 }

@@ -6,7 +6,7 @@ import eu.stratosphere.pact4s.common.analyzer.UDTSerializer
 
 import eu.stratosphere.pact.common.`type`.PactRecord
 
-protected class DeserializingIterator(deserializer: UDTSerializer[Any]) extends Iterator[Any] {
+protected class DeserializingIterator[T](deserializer: UDTSerializer[T]) extends Iterator[T] {
 
   private var source: JIterator[PactRecord] = null
   private var firstRecord: PactRecord = null

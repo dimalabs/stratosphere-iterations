@@ -7,14 +7,9 @@ import eu.stratosphere.nephele.configuration.Configuration
 
 trait ParameterizedStub[T <: StubParameters] { this: Stub =>
 
-  private var parameters: T = _
-
-  def getParameters = parameters
-
-  def initialize() = {}
+  def initialize(parameters: T) = {}
 
   override def open(config: Configuration) {
-    parameters = StubParameters.getValue[T](config)
-    initialize()
+    initialize(StubParameters.getValue[T](config))
   }
 }

@@ -16,27 +16,19 @@ case class ReduceStream[Key, In: UDT, Out: UDT, GroupByKeySelector: KeyBuilder[I
 
   override def contract = {
 
-    val stub = combineFunction map { _ => classOf[CombinableReduce4sStub] } getOrElse classOf[Reduce4sStub]
-    val inputType = implicitly[UDT[In]]
-    val outputType = implicitly[UDT[Out]]
-    val keyTypes = new Array[Class[_ <: PactKey]](0)
+    val stub = combineFunction map { _ => classOf[CombinableReduce4sStub[Key, In, Out]] } getOrElse classOf[Reduce4sStub[Key, In, Out]]
+    val inputUDT = implicitly[UDT[In]]
+    val outputUDT = implicitly[UDT[Out]]
     val keySelector = implicitly[KeySelector[In => Key]]
-    val combinerDescriptor = implicitly[UDF1[In => Out]]
-    val reducerDescriptor = implicitly[UDF1[Iterator[In] => Out]]
+    val combinerUDF = combineFunction map { _ => implicitly[UDF1[Iterator[In] => In]] }
+    val reducerUDF = implicitly[UDF1[Iterator[In] => Out]]
     val name = getPactName getOrElse "<Unnamed Reducer>"
 
-    new ReduceContract(stub, keyTypes, keySelector.readFields, input.getContract, name) with ParameterizedContract[ReduceParameters] {
+    val keyTypes = new Array[Class[_ <: PactKey]](0)
 
-      def getStubParameters = {
-        val combinerSerializer = combineFunction map { _ => inputType.createSerializer(combinerDescriptor.readFields).asInstanceOf[UDTSerializer[Any]] }
-        val deserializer = inputType.createSerializer(reducerDescriptor.readFields)
-        val serializer = outputType.createSerializer(reducerDescriptor.writeFields)
-        val copyKeys = keySelector.readFields
-        val combineFunctionAny = combineFunction map { _.asInstanceOf[Iterator[Any] => Any] }
-        val reduceFunctionAny = reduceFunction.asInstanceOf[Iterator[Any] => Any]
+    new ReduceContract(stub, keyTypes, keySelector.readFields, input.getContract, name) with ParameterizedContract[ReduceParameters[Key, In, Out]] {
 
-        new ReduceParameters(combinerSerializer, deserializer, serializer, copyKeys, combineFunctionAny, reduceFunctionAny)
-      }
+      override val stubParameters = new ReduceParameters(inputUDT, outputUDT, keySelector, combinerUDF, combineFunction, reducerUDF, reduceFunction)
     }
   }
 }

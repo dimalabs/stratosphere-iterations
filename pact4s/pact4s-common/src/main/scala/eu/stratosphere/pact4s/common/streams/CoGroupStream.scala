@@ -7,7 +7,7 @@ import eu.stratosphere.pact4s.common.stubs.parameters._
 import eu.stratosphere.pact.common.contract._
 import eu.stratosphere.pact.common.`type`.{ Key => PactKey }
 
-case class CoGroupStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector, RightKeySelector: KeyBuilder[RightIn, Key]#Selector, F: UDF2Builder[Iterator[LeftIn], Iterator[RightIn], Out]#UDF](
+case class CoGroupStream[Key, LeftIn: UDT, RightIn: UDT, Out: UDT, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector, RightKeySelector: KeyBuilder[RightIn, Key]#Selector, F: UDF2Builder[Iterator[LeftIn], Iterator[RightIn], Out]#UDF](
   leftInput: DataStream[LeftIn],
   rightInput: DataStream[RightIn],
   leftKeySelector: LeftIn => Key,
@@ -16,31 +16,24 @@ case class CoGroupStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelect
   extends DataStream[Out] {
 
   override def contract = {
-    val leftInputType = implicitly[UDT[LeftIn]]
-    val rightInputType = implicitly[UDT[RightIn]]
-    val outputType = implicitly[UDT[Out]]
-    val keyTypes = new Array[Class[_ <: PactKey]](0)
+    val leftUDT = implicitly[UDT[LeftIn]]
+    val rightUDT = implicitly[UDT[RightIn]]
+    val outputUDT = implicitly[UDT[Out]]
     val leftKeySelector = implicitly[KeySelector[LeftIn => Key]]
     val rightKeySelector = implicitly[KeySelector[RightIn => Key]]
-    val descriptor = implicitly[UDF2[(Iterator[LeftIn], Iterator[RightIn]) => Out]]
+    val mapUDF = implicitly[UDF2[(Iterator[LeftIn], Iterator[RightIn]) => Out]]
     val name = getPactName getOrElse "<Unnamed CoGrouper>"
 
-    new CoGroupContract(classOf[CoGroup4sStub], keyTypes, leftKeySelector.readFields, rightKeySelector.readFields, leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[CoGroupParameters] {
+    val keyTypes = new Array[Class[_ <: PactKey]](0)
 
-      def getStubParameters = {
-        val leftDeserializer = leftInputType.createSerializer(descriptor.leftReadFields)
-        val rightDeserializer = rightInputType.createSerializer(descriptor.rightReadFields)
-        val serializer = outputType.createSerializer(descriptor.writeFields)
-        val leftCopyKeys = leftKeySelector.readFields
-        val rightCopyKeys = rightKeySelector.readFields
+    new CoGroupContract(classOf[CoGroup4sStub[Key, LeftIn, RightIn, Out]], keyTypes, leftKeySelector.readFields, rightKeySelector.readFields, leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[CoGroupParameters[Key, LeftIn, RightIn, Out]] {
 
-        new CoGroupParameters(leftDeserializer, rightDeserializer, serializer, leftCopyKeys, rightCopyKeys, mapFunction.asInstanceOf[(Iterator[Any], Iterator[Any]) => Any])
-      }
+      override val stubParameters = new CoGroupParameters(leftUDT, leftKeySelector, rightUDT, rightKeySelector, outputUDT, mapUDF, mapFunction)
     }
   }
 }
 
-case class FlatCoGroupStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector, RightKeySelector: KeyBuilder[RightIn, Key]#Selector, F: UDF2Builder[Iterator[LeftIn], Iterator[RightIn], Iterator[Out]]#UDF](
+case class FlatCoGroupStream[Key, LeftIn: UDT, RightIn: UDT, Out: UDT, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector, RightKeySelector: KeyBuilder[RightIn, Key]#Selector, F: UDF2Builder[Iterator[LeftIn], Iterator[RightIn], Iterator[Out]]#UDF](
   leftInput: DataStream[LeftIn],
   rightInput: DataStream[RightIn],
   leftKeySelector: LeftIn => Key,
@@ -49,26 +42,20 @@ case class FlatCoGroupStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySe
   extends DataStream[Out] {
 
   override def contract = {
-    val leftInputType = implicitly[UDT[LeftIn]]
-    val rightInputType = implicitly[UDT[RightIn]]
-    val outputType = implicitly[UDT[Out]]
-    val keyTypes = new Array[Class[_ <: PactKey]](0)
+    val leftUDT = implicitly[UDT[LeftIn]]
+    val rightUDT = implicitly[UDT[RightIn]]
+    val outputUDT = implicitly[UDT[Out]]
     val leftKeySelector = implicitly[KeySelector[LeftIn => Key]]
     val rightKeySelector = implicitly[KeySelector[RightIn => Key]]
-    val descriptor = implicitly[UDF2[(Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]]
+    val mapUDF = implicitly[UDF2[(Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]]
     val name = getPactName getOrElse "<Unnamed CoGrouper>"
 
-    new CoGroupContract(classOf[FlatCoGroup4sStub], keyTypes, leftKeySelector.readFields, rightKeySelector.readFields, leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[FlatCoGroupParameters] {
+    val keyTypes = new Array[Class[_ <: PactKey]](0)
 
-      def getStubParameters = {
-        val leftDeserializer = leftInputType.createSerializer(descriptor.leftReadFields)
-        val rightDeserializer = rightInputType.createSerializer(descriptor.rightReadFields)
-        val serializer = outputType.createSerializer(descriptor.writeFields)
-        val leftCopyKeys = leftKeySelector.readFields
-        val rightCopyKeys = rightKeySelector.readFields
+    new CoGroupContract(classOf[FlatCoGroup4sStub[Key, LeftIn, RightIn, Out]], keyTypes, leftKeySelector.readFields, rightKeySelector.readFields, leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[FlatCoGroupParameters[Key, LeftIn, RightIn, Out]] {
 
-        new FlatCoGroupParameters(leftDeserializer, rightDeserializer, serializer, leftCopyKeys, rightCopyKeys, mapFunction.asInstanceOf[(Iterator[Any], Iterator[Any]) => Iterator[Any]])
-      }
+      override val stubParameters = new FlatCoGroupParameters(leftUDT, leftKeySelector, rightUDT, rightKeySelector, outputUDT, mapUDF, mapFunction)
     }
   }
 }
+

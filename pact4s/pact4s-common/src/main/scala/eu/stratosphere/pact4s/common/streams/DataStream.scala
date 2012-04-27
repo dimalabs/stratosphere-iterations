@@ -27,9 +27,9 @@ object FinalizableContract {
 
 trait ParameterizedContract[T <: StubParameters] extends FinalizableContract { this: Contract =>
 
-  def getStubParameters: T
+  val stubParameters: T
 
   override def persistConfiguration() {
-    StubParameters.setValue(this, getStubParameters)
+    StubParameters.setValue(this, stubParameters)
   }
 }

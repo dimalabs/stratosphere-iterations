@@ -10,7 +10,7 @@ trait ReduceOperator[In] { this: WrappedDataStream[In] =>
   def groupBy[Key, GroupByKeySelector: KeyBuilder[In, Key]#Selector](keySelector: In => Key) = new {
 
     def reduce[Out: UDT, F: UDF1Builder[Iterator[In], Out]#UDF](reduceFunction: Iterator[In] => Out) = {
-      implicit val emptyCombinerUDF = new AnalyzedUDF1[Iterable[In], In](0, 0)
+      implicit val dummyCombinerUDF = new AnalyzedUDF1[Iterable[In], In](0, 0)
       new ReduceStream(input, keySelector, None, reduceFunction)
     }
 

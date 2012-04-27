@@ -2,11 +2,12 @@ package eu.stratosphere.pact4s.common.stubs.parameters
 
 import eu.stratosphere.pact4s.common.analyzer._
 
-case class ReduceParameters(
-  val combinerSerializer: Option[UDTSerializer[Any]],
-  val deserializer: UDTSerializer[Any],
-  val serializer: UDTSerializer[Any],
-  val copyKeys: Array[Int],
-  val combineFunction: Option[Iterator[Any] => Any],
-  val reduceFunction: Iterator[Any] => Any)
+case class ReduceParameters[Key, In, Out](
+  val inputUDT: UDT[In],
+  val outputUDT: UDT[Out],
+  val keySelector: KeySelector[In => Key],
+  val combineUDF: Option[UDF1[Iterator[In] => In]],
+  val combineFunction: Option[Iterator[In] => In],
+  val reduceUDF: UDF1[Iterator[In] => Out],
+  val reduceFunction: Iterator[In] => Out)
   extends StubParameters

@@ -2,20 +2,22 @@ package eu.stratosphere.pact4s.common.stubs.parameters
 
 import eu.stratosphere.pact4s.common.analyzer._
 
-case class JoinParameters(
-  val leftDeserializer: UDTSerializer[Any],
-  val rightDeserializer: UDTSerializer[Any],
-  val serializer: UDTSerializer[Any],
-  val leftCopyKeys: Array[Int],
-  val rightCopyKeys: Array[Int],
-  val mapFunction: (Any, Any) => Any)
+case class JoinParameters[Key, LeftIn, RightIn, Out](
+  val leftUDT: UDT[LeftIn],
+  val leftKeySelector: KeySelector[LeftIn => Key],
+  val rightUDT: UDT[RightIn],
+  val rightKeySelector: KeySelector[RightIn => Key],
+  val outputUDT: UDT[Out],
+  val mapUDF: UDF2[(LeftIn, RightIn) => Out],
+  val mapFunction: (LeftIn, RightIn) => Out)
   extends StubParameters
 
-case class FlatJoinParameters(
-  val leftDeserializer: UDTSerializer[Any],
-  val rightDeserializer: UDTSerializer[Any],
-  val serializer: UDTSerializer[Any],
-  val leftCopyKeys: Array[Int],
-  val rightCopyKeys: Array[Int],
-  val mapFunction: (Any, Any) => Iterator[Any])
+case class FlatJoinParameters[Key, LeftIn, RightIn, Out](
+  val leftUDT: UDT[LeftIn],
+  val leftKeySelector: KeySelector[LeftIn => Key],
+  val rightUDT: UDT[RightIn],
+  val rightKeySelector: KeySelector[RightIn => Key],
+  val outputUDT: UDT[Out],
+  val mapUDF: UDF2[(LeftIn, RightIn) => Iterator[Out]],
+  val mapFunction: (LeftIn, RightIn) => Iterator[Out])
   extends StubParameters

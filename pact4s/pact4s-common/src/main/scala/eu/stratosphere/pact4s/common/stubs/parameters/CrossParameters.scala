@@ -2,16 +2,18 @@ package eu.stratosphere.pact4s.common.stubs.parameters
 
 import eu.stratosphere.pact4s.common.analyzer._
 
-case class CrossParameters(
-  val leftDeserializer: UDTSerializer[Any],
-  val rightDeserializer: UDTSerializer[Any],
-  val serializer: UDTSerializer[Any],
-  val mapFunction: (Any, Any) => Any)
+case class CrossParameters[LeftIn, RightIn, Out](
+  val leftUDT: UDT[LeftIn],
+  val rightUDT: UDT[RightIn],
+  val outputUDT: UDT[Out],
+  val mapUDF: UDF2[(LeftIn, RightIn) => Out],
+  val mapFunction: (LeftIn, RightIn) => Out)
   extends StubParameters
 
-case class FlatCrossParameters(
-  val leftDeserializer: UDTSerializer[Any],
-  val rightDeserializer: UDTSerializer[Any],
-  val serializer: UDTSerializer[Any],
-  val mapFunction: (Any, Any) => Iterator[Any])
+case class FlatCrossParameters[LeftIn, RightIn, Out](
+  val leftUDT: UDT[LeftIn],
+  val rightUDT: UDT[RightIn],
+  val outputUDT: UDT[Out],
+  val mapUDF: UDF2[(LeftIn, RightIn) => Iterator[Out]],
+  val mapFunction: (LeftIn, RightIn) => Iterator[Out])
   extends StubParameters

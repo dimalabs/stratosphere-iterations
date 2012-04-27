@@ -16,26 +16,19 @@ case class JoinStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector:
   extends DataStream[Out] {
 
   override def contract = {
-    val leftInputType = implicitly[UDT[LeftIn]]
-    val rightInputType = implicitly[UDT[RightIn]]
-    val outputType = implicitly[UDT[Out]]
-    val keyTypes = new Array[Class[_ <: PactKey]](0)
+    val leftUDT = implicitly[UDT[LeftIn]]
+    val rightUDT = implicitly[UDT[RightIn]]
+    val outputUDT = implicitly[UDT[Out]]
     val leftKeySelector = implicitly[KeySelector[LeftIn => Key]]
     val rightKeySelector = implicitly[KeySelector[RightIn => Key]]
-    val descriptor = implicitly[UDF2[(LeftIn, RightIn) => Out]]
-    val name = getPactName getOrElse "<Unnamed Joiner>"
+    val mapUDF = implicitly[UDF2[(LeftIn, RightIn) => Out]]
+    val name = getPactName getOrElse "<Unnamed CoGrouper>"
 
-    new MatchContract(classOf[Join4sStub], keyTypes, leftKeySelector.readFields, rightKeySelector.readFields, leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[JoinParameters] {
+    val keyTypes = new Array[Class[_ <: PactKey]](0)
 
-      def getStubParameters = {
-        val leftDeserializer = leftInputType.createSerializer(descriptor.leftReadFields)
-        val rightDeserializer = rightInputType.createSerializer(descriptor.rightReadFields)
-        val serializer = outputType.createSerializer(descriptor.writeFields)
-        val leftCopyKeys = leftKeySelector.readFields
-        val rightCopyKeys = rightKeySelector.readFields
+    new MatchContract(classOf[Join4sStub[Key, LeftIn, RightIn, Out]], keyTypes, leftKeySelector.readFields, rightKeySelector.readFields, leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[JoinParameters[Key, LeftIn, RightIn, Out]] {
 
-        new JoinParameters(leftDeserializer, rightDeserializer, serializer, leftCopyKeys, rightCopyKeys, mapFunction.asInstanceOf[(Any, Any) => Any])
-      }
+      override val stubParameters = new JoinParameters(leftUDT, leftKeySelector, rightUDT, rightKeySelector, outputUDT, mapUDF, mapFunction)
     }
   }
 }
@@ -49,26 +42,19 @@ case class FlatJoinStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelec
   extends DataStream[Out] {
 
   override def contract = {
-    val leftInputType = implicitly[UDT[LeftIn]]
-    val rightInputType = implicitly[UDT[RightIn]]
-    val outputType = implicitly[UDT[Out]]
-    val keyTypes = new Array[Class[_ <: PactKey]](0)
+    val leftUDT = implicitly[UDT[LeftIn]]
+    val rightUDT = implicitly[UDT[RightIn]]
+    val outputUDT = implicitly[UDT[Out]]
     val leftKeySelector = implicitly[KeySelector[LeftIn => Key]]
     val rightKeySelector = implicitly[KeySelector[RightIn => Key]]
-    val descriptor = implicitly[UDF2[(LeftIn, RightIn) => Iterator[Out]]]
-    val name = getPactName getOrElse "<Unnamed Joiner>"
+    val mapUDF = implicitly[UDF2[(LeftIn, RightIn) => Iterator[Out]]]
+    val name = getPactName getOrElse "<Unnamed CoGrouper>"
 
-    new MatchContract(classOf[Join4sStub], keyTypes, leftKeySelector.readFields, rightKeySelector.readFields, leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[JoinParameters] {
+    val keyTypes = new Array[Class[_ <: PactKey]](0)
 
-      def getStubParameters = {
-        val leftDeserializer = leftInputType.createSerializer(descriptor.leftReadFields)
-        val rightDeserializer = rightInputType.createSerializer(descriptor.rightReadFields)
-        val serializer = outputType.createSerializer(descriptor.writeFields)
-        val leftCopyKeys = leftKeySelector.readFields
-        val rightCopyKeys = rightKeySelector.readFields
+    new MatchContract(classOf[FlatJoin4sStub[Key, LeftIn, RightIn, Out]], keyTypes, leftKeySelector.readFields, rightKeySelector.readFields, leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[FlatJoinParameters[Key, LeftIn, RightIn, Out]] {
 
-        new JoinParameters(leftDeserializer, rightDeserializer, serializer, leftCopyKeys, rightCopyKeys, mapFunction.asInstanceOf[(Any, Any) => Iterator[Any]])
-      }
+      override val stubParameters = new FlatJoinParameters(leftUDT, leftKeySelector, rightUDT, rightKeySelector, outputUDT, mapUDF, mapFunction)
     }
   }
 }
