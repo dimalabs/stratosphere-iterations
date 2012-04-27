@@ -852,6 +852,77 @@ public final class PactRecord implements Value
 		return rec;
 	}
 
+	/**
+	 * Bin-copies a field from a source record to this record.
+	 * 
+	 * @param sourceFieldNum
+	 * @param targetFieldNum
+	 * @param target
+	 * @return true iff updateBinaryRepresentation needs to be called on the this record prior
+	 *         to reading the copied field. This will be the case if the source field is unmodified
+	 *         and not null, since the Value that will be set on the this record will be writeable
+	 *         but not readable.
+	 */
+	public boolean copyFrom(final PactRecord source, final int sourceFieldNum, final int targetFieldNum) {
+		// range check
+		if (targetFieldNum < 0 || targetFieldNum >= this.numFields) {
+			throw new IndexOutOfBoundsException();
+		}
+
+		// get offset and check for null
+		final int offset = source == null ? NULL_INDICATOR_OFFSET : source.offsets[sourceFieldNum];
+
+		if (offset == NULL_INDICATOR_OFFSET) {
+			this.setNull(targetFieldNum);
+			return false;
+		}
+		else if (offset == MODIFIED_INDICATOR_OFFSET) {
+			// value that has been set is new or modified
+			final Value value = source.writeFields[sourceFieldNum];
+			this.setField(targetFieldNum, value);
+			return false;
+		}
+		else {
+			final int length = source.lengths[sourceFieldNum];
+			final Value value = new Value() {
+
+				@Override
+				public void write(DataOutput out) throws IOException {
+					out.write(source.binaryData, offset, length);
+				}
+
+				@Override
+				public void read(DataInput in) throws IOException {
+					throw new UnsupportedOperationException();
+				}
+			};
+
+			this.setField(targetFieldNum, value);
+			return true;
+		}
+	}
+
+	/**
+	 * Bin-copies fields from a source record to this record.
+	 * 
+	 * @param sourceFieldNum
+	 * @param targetFieldNum
+	 * @param target
+	 * @return true iff updateBinaryRepresentation needs to be called on the this record prior
+	 *         to reading the copied field. This will be the case if any source field is unmodified
+	 *         and not null, since the Value that will be set on the this record will be writeable
+	 *         but not readable.
+	 */
+	public boolean copyFrom(final PactRecord source, final int[] sourcePositions, final int[] targetPositions) {
+		boolean needsUpdate = false;
+
+		for (int i = 0; i < sourcePositions.length; i++) {
+			needsUpdate |= copyFrom(source, sourcePositions[i], targetPositions[i]);
+		}
+
+		return needsUpdate;
+	}
+	
 	// --------------------------------------------------------------------------------------------
 	
 	/**
