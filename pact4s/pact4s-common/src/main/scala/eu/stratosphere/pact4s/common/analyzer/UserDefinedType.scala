@@ -16,5 +16,5 @@ abstract class UDTSerializer[T] {
 }
 
 object UDTSerializer {
-  implicit def toAny(s: UDTSerializer[_]) = s.asInstanceOf[UDTSerializer[Any]]
+  implicit def toAny(s: UDTSerializer[_]): UDTSerializer[Any] = s.asInstanceOf[UDTSerializer[Any]]
 }

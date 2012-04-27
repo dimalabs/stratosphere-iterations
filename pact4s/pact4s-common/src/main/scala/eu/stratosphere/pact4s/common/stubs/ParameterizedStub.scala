@@ -11,7 +11,10 @@ trait ParameterizedStub[T <: StubParameters] { this: Stub =>
 
   def getParameters = parameters
 
+  def initialize() = {}
+
   override def open(config: Configuration) {
     parameters = StubParameters.getValue[T](config)
+    initialize()
   }
 }

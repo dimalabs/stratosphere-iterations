@@ -19,7 +19,7 @@ class ConnectedComponents(args: String*) extends PactProgram with ConnectedCompo
   def propagateComponent(s: DataStream[(Int, Int)], ws: DataStream[(Int, Int)]) = {
 
     val allNeighbors = ws join undirectedEdges on { case (v, _) => v } isEqualTo { case (from, _) => from } map { case ((_, c), (_, to)) => to -> c }
-    val minNeighbors = allNeighbors groupBy { case (to, _) => to } combine { cs => (cs.head._1, cs map { case (_, c) => c } min) }
+    val minNeighbors = allNeighbors groupBy { case (to, _) => to } combine { cs => cs minBy { _._2 } }
 
     // updated solution elements == new workset
     val s1 = minNeighbors join s on { _._1 } isEqualTo { _._1 } flatMap {

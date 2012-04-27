@@ -34,11 +34,10 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
     (s1, ws1)
   }
 
-  def sumLossesAndGradients(values: Iterable[ValueAndGradient]) = {
-    val id = values.head.id
-    val lossSum = values map { _.value } sum
-    val gradSum = values map { _.gradient } reduce (_ + _)
-    ValueAndGradient(id, lossSum, gradSum)
+  def sumLossesAndGradients(values: Iterator[ValueAndGradient]) = {
+    values reduce { (z, v) => (z, v) match { 
+      case (ValueAndGradient(id, lossSum, gradSum), ValueAndGradient(_, loss, grad)) => ValueAndGradient(id, lossSum + loss, gradSum + grad) 
+    } }
   }
 
   def updateWeight(prev: (Int, Array[Double], Double), vg: ValueAndGradient) = prev match {
@@ -70,7 +69,7 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
     def *(x: Double): Array[Double] = vector map { x * _ }
     def norm: Double = sqrt(vector map { x => x * x } reduce { _ + _ })
   }
-
+  
   implicit def array2WeightVector(vector: Array[Double]): WeightVector = new WeightVector(vector)
 
   case class ValueAndGradient(id: Int, value: Double, gradient: Array[Double])

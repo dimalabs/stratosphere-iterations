@@ -31,12 +31,14 @@ class TransitiveClosureRD(args: String*) extends PactProgram with TransitiveClos
     case (Path(from, _, dist1), Path(_, to, dist2)) => Path(from, to, dist1 + dist2)
   }
 
-  def selectShortestDistance(dist1: Iterable[Path], dist2: Iterable[Path]) = (dist1 ++ dist2) minBy { _.dist }
+  def selectShortestDistance(dist1: Iterator[Path], dist2: Iterator[Path]) = (dist1 ++ dist2) minBy { _.dist }
 
-  def excludeKnownPaths(x: Iterable[Path], c: Iterable[Path]) = c.toSeq match {
-    case Seq() => x
-    case _ => Seq()
-  }
+  def excludeKnownPaths(x: Iterator[Path], c: Iterator[Path]) = {
+    if (c.isEmpty)
+      x
+    else
+      Iterable.empty
+  } 
 
   def getEdge(p: Path): (Int, Int) = (p.from, p.to)
   def getFrom(p: Path): Int = p.from

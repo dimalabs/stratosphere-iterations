@@ -12,7 +12,9 @@ class WordCount(args: String*) extends PactProgram with WordCountGeneratedImplic
   val output = new DataSink(params.output, formatOutput)
 
   val words = input flatMap { line => line.toLowerCase().split("""\W+""") map { (_, 1) } }
-  val counts = words groupBy { case (word, _) => word } combine { values => (values.head._1, values map { _._2 } sum) }
+  val counts = words groupBy { case (word, _) => word } combine { values => values.reduce { (z, s) => (z, s) match {
+    case ((word, sum), (_, count)) => (word, sum + count)
+  } } }
 
   override def outputs = output <~ counts
 

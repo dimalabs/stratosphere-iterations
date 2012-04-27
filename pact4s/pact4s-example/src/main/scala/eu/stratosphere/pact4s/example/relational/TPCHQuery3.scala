@@ -29,7 +29,9 @@ class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImpl
 
   val filteredOrders = orders filter { o => o.status == params.status && o.year >= params.minYear && o.orderPriority.startsWith(params.priority) }
   val prioritizedItems = filteredOrders join lineItems on { _.orderId } isEqualTo { _.orderId } map { (o: Order, li: LineItem) => PrioritizedOrder(o.orderId, o.shipPriority, li.extendedPrice) }
-  val prioritizedOrders = prioritizedItems groupBy { pi => (pi.orderId, pi.shipPriority) } combine { items => PrioritizedOrder(items.head.orderId, items.head.shipPriority, items map { _.revenue } sum) }
+  val prioritizedOrders = prioritizedItems groupBy { pi => (pi.orderId, pi.shipPriority) } combine { items => items.reduce { (z, s) => (z, s) match {
+    case (PrioritizedOrder(orderId, shipPriority, revenue), PrioritizedOrder(_, _, price)) => PrioritizedOrder(orderId, shipPriority, revenue + price) 
+  } } }
 
   override def outputs = output <~ prioritizedOrders
 

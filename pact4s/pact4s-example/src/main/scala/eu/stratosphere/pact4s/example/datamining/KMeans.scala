@@ -28,9 +28,10 @@ class KMeans(args: String*) extends PactProgram with KMeansGeneratedImplicits {
     case (_, Distance(dataPoint, clusterId, _)) => clusterId -> PointSum(1, dataPoint)
   }
 
-  def sumPointSums(dataPoints: Iterable[(Int, PointSum)]): (Int, PointSum) = {
-    val points = dataPoints map { _._2 }
-    dataPoints.head._1 -> points.fold(PointSum(0, Point(0, 0, 0)))(_ + _)
+  def sumPointSums(dataPoints: Iterator[(Int, PointSum)]): (Int, PointSum) = {
+    dataPoints.reduce { (z, v) => (z, v) match {
+      case ((id, total), (_, item)) => (id, total + item)
+    } }
   }
 
   override def name = "KMeans Iteration"

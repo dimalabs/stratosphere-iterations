@@ -5,7 +5,7 @@ import eu.stratosphere.pact4s.common.streams.DataSink
 
 trait SourceToSinkOperator[In] { this: WrappedDataStream[In] =>
 
-  private val input = this.inner
+  private val source = this.inner
 
-  def ~>[S](sink: DataSink[In, S]) = new PlanOutput(input, sink)
+  def ~>[S](sink: DataSink[In, S]) = new PlanOutput(source, sink)
 }
