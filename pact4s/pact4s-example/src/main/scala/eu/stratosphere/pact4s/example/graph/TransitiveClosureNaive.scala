@@ -12,7 +12,7 @@ class TransitiveClosureNaive(args: String*) extends PactProgram with TransitiveC
   val edges = new DataSource(params.edgesInput, parseEdge)
   val output = new DataSink(params.output, formatOutput)
 
-  val transitiveClosure = vertices iterate createClosure
+  val transitiveClosure = vertices keyBy getEdge iterate createClosure
 
   override def outputs = output <~ transitiveClosure
 

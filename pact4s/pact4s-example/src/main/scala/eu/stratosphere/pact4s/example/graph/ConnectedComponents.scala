@@ -12,7 +12,7 @@ class ConnectedComponents(args: String*) extends PactProgram with ConnectedCompo
   val output = new DataSink(params.output, formatOutput)
 
   val undirectedEdges = directedEdges flatMap { case (from, to) => Seq(from -> to, to -> from) }
-  val components = vertices untilEmpty vertices iterate propagateComponent
+  val components = vertices keyBy { _._1 } untilEmpty vertices iterate propagateComponent
 
   override def outputs = output <~ components
 

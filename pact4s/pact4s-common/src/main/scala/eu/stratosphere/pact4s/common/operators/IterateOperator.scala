@@ -7,11 +7,14 @@ trait IterateOperator[SolutionItem] { this: WrappedDataStream[SolutionItem] =>
 
   private val initialSolution = this.inner
 
-  def iterate(stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]) = new KleeneIterateStream(initialSolution, stepFunction)
+  def keyBy[Key, SolutionKeySelector: KeyBuilder[SolutionItem, Key]#Selector](keySelector: SolutionItem => Key) = new {
 
-  def untilEmpty[WorksetItem: UDT](initialWorkset: DataStream[WorksetItem]) = new {
+    def iterate(stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]) = new KleeneIterateStream(initialSolution, stepFunction)
 
-    def iterate(stepFunction: (DataStream[SolutionItem], DataStream[WorksetItem]) => (DataStream[SolutionItem], DataStream[WorksetItem])) = new IncrementalIterateStream(initialSolution, initialWorkset, stepFunction)
+    def untilEmpty[WorksetItem: UDT](initialWorkset: DataStream[WorksetItem]) = new {
+
+      def iterate(stepFunction: (DataStream[SolutionItem], DataStream[WorksetItem]) => (DataStream[SolutionItem], DataStream[WorksetItem])) = new IncrementalIterateStream(initialSolution, initialWorkset, stepFunction)
+    }
   }
 }
 

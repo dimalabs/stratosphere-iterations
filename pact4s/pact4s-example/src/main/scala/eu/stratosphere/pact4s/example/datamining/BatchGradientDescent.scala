@@ -15,7 +15,7 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
 
   val etaWeights = weights map { case (id, w) => (id, w, params.eta) }
 
-  val newWeights = weights untilEmpty etaWeights iterate gradientDescent
+  val newWeights = weights keyBy { _._1 } untilEmpty etaWeights iterate gradientDescent
 
   override def outputs = output <~ newWeights
 
