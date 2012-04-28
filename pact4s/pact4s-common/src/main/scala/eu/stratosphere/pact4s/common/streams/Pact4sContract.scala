@@ -22,7 +22,7 @@ trait ParameterizedContract[T <: StubParameters] { this: Pact4sContract =>
   }
 }
 
-trait KeyedOneInputContract[Key, In] { this: Contract =>
+trait KeyedOneInputContract[Key, In] { this: Pact4sContract =>
 
   val keySelector: KeySelector[In => Key]
 }
