@@ -1,4 +1,4 @@
-package eu.stratosphere.pact4s.example.datamining
+package eu.stratosphere.pact4s.examples.datamining
 
 import scala.collection.JavaConversions._
 import scala.math._

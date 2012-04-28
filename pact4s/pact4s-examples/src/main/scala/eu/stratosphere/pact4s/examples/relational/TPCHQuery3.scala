@@ -1,4 +1,4 @@
-package eu.stratosphere.pact4s.example.relational
+package eu.stratosphere.pact4s.examples.relational
 
 import scala.math._
 import scala.math.Ordered._

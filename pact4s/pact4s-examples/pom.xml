@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <artifactId>pact4s</artifactId>
+    <groupId>eu.stratosphere</groupId>
+    <version>0.2</version>
+  </parent>
+
+  <artifactId>pact4s-examples</artifactId>
+  <name>pact4s-examples</name>
+  
+  <packaging>jar</packaging>
+
+  <dependencies>
+
+    <dependency>
+    	<groupId>eu.stratosphere</groupId>
+    	<artifactId>pact4s-common</artifactId>
+    	<version>${version}</version>
+    </dependency>
+  </dependencies>
+
+  <reporting>
+    <plugins>
+    </plugins>
+  </reporting>
+
+  <build>
+    <plugins>
+      
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+        
+          <execution>
+            <id>BatchGradientDescent</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>BatchGradientDescent</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.datamining.BatchGradientDescent</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/datamining/BatchGradientDescent.class</include>
+                <include>**/datamining/BatchGradientDescent$*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+          
+          <execution>
+            <id>KMeans</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>KMeans</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.datamining.KMeans</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/datamining/KMeans.class</include>
+                <include>**/datamining/KMeans$*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>ConnectedComponents</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>ConnectedComponents</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.ConnectedComponents</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/graph/ConnectedComponents.class</include>
+                <include>**/graph/ConnectedComponents$*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>TransitiveClosureNaive</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>TransitiveClosureNaive</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.TransitiveClosureNaive</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/graph/TransitiveClosureNaive.class</include>
+                <include>**/graph/TransitiveClosureNaive$*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>TransitiveClosureRD</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>TransitiveClosureRD</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.TransitiveClosureRD</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/graph/TransitiveClosureRD.class</include>
+                <include>**/graph/TransitiveClosureRD$*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>TPCHQuery3</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>TPCHQuery3</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.relational.TPCHQuery3</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/relational/TPCHQuery3.class</include>
+                <include>**/relational/TPCHQuery3$*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>WordCount</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>WordCount</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.wordcount.WordCount</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/wordcount/WordCount.class</include>
+                <include>**/wordcount/WordCount$*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>KMeansPlain</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>KMeansPlain</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.datamining.KMeansPlain</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/datamining/KMeansPlain.class</include>
+                <include>**/datamining/KMeansPlain$*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>WordCountPlain</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>WordCountPlain</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.wordcount.WordCountPlain</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/wordcount/WordCountPlain.class</include>
+                <include>**/wordcount/WordCountPlain$*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      
+    </plugins>
+  </build>
+</project>

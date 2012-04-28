@@ -1,4 +1,4 @@
-package eu.stratosphere.pact4s.example.wordcount
+package eu.stratosphere.pact4s.examples.wordcount
 
 import scala.collection.JavaConversions._
 

@@ -1,4 +1,4 @@
-package eu.stratosphere.pact4s.example.graph
+package eu.stratosphere.pact4s.examples.graph
 
 import scala.math._
 import scala.math.Ordered._

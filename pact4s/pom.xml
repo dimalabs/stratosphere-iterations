@@ -86,9 +86,9 @@
 			
 		</plugins>
 	</build>
-
+	
     <modules>
         <module>pact4s-common</module>
-      	<module>pact4s-example</module>
+      	<module>pact4s-examples</module>
     </modules>
 </project>

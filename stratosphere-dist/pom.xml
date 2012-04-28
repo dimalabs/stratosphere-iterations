@@ -104,7 +104,7 @@
     	</dependency>
     	<dependency>
     		<groupId>eu.stratosphere</groupId>
-    		<artifactId>pact4s-example</artifactId>
+    		<artifactId>pact4s-examples</artifactId>
     		<version>${version}</version>
     	</dependency>
     	
