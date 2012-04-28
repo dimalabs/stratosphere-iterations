@@ -8,7 +8,7 @@ import java.io.ObjectOutputStream
 import eu.stratosphere.pact.common.contract.Contract
 import eu.stratosphere.nephele.configuration.Configuration
 
-class StubParameters
+class StubParameters extends Serializable
 
 object StubParameters {
   private val parameterName = "Pact4s Stub Parameters"

@@ -5,7 +5,6 @@ import eu.stratosphere.pact4s.common.stubs._
 import eu.stratosphere.pact4s.common.stubs.parameters._
 
 import eu.stratosphere.pact.common.contract._
-import eu.stratosphere.pact.common.`type`.{ Key => PactKey }
 
 case class CoGroupStream[Key, LeftIn: UDT, RightIn: UDT, Out: UDT, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector, RightKeySelector: KeyBuilder[RightIn, Key]#Selector, F: UDF2Builder[Iterator[LeftIn], Iterator[RightIn], Out]#UDF](
   leftInput: DataStream[LeftIn],
@@ -16,19 +15,22 @@ case class CoGroupStream[Key, LeftIn: UDT, RightIn: UDT, Out: UDT, LeftKeySelect
   extends DataStream[Out] {
 
   override def contract = {
+
+    val stub = classOf[CoGroup4sStub[LeftIn, RightIn, Out]]
     val leftUDT = implicitly[UDT[LeftIn]]
     val rightUDT = implicitly[UDT[RightIn]]
     val outputUDT = implicitly[UDT[Out]]
-    val leftKeySelector = implicitly[KeySelector[LeftIn => Key]]
-    val rightKeySelector = implicitly[KeySelector[RightIn => Key]]
     val mapUDF = implicitly[UDF2[(Iterator[LeftIn], Iterator[RightIn]) => Out]]
     val name = getPactName getOrElse "<Unnamed CoGrouper>"
 
-    val keyTypes = new Array[Class[_ <: PactKey]](0)
+    val leftKey = implicitly[KeySelector[LeftIn => Key]]
+    val rightKey = implicitly[KeySelector[RightIn => Key]]
 
-    new CoGroupContract(classOf[CoGroup4sStub[Key, LeftIn, RightIn, Out]], keyTypes, leftKeySelector.readFields, rightKeySelector.readFields, leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[CoGroupParameters[Key, LeftIn, RightIn, Out]] {
+    new CoGroupContract(stub, leftKey.keyFieldTypes, leftKey.getKeyFields, rightKey.getKeyFields, leftInput.getContract, rightInput.getContract, name) with CoGroup4sContract[Key, LeftIn, RightIn, Out] {
 
-      override val stubParameters = new CoGroupParameters(leftUDT, leftKeySelector, rightUDT, rightKeySelector, outputUDT, mapUDF, mapFunction)
+      override val leftKeySelector = leftKey
+      override val rightKeySelector = rightKey
+      override val stubParameters = new CoGroupParameters(leftUDT, rightUDT, outputUDT, mapUDF, mapFunction)
     }
   }
 }
@@ -42,6 +44,8 @@ case class FlatCoGroupStream[Key, LeftIn: UDT, RightIn: UDT, Out: UDT, LeftKeySe
   extends DataStream[Out] {
 
   override def contract = {
+
+    val stub = classOf[FlatCoGroup4sStub[LeftIn, RightIn, Out]]
     val leftUDT = implicitly[UDT[LeftIn]]
     val rightUDT = implicitly[UDT[RightIn]]
     val outputUDT = implicitly[UDT[Out]]
@@ -50,11 +54,14 @@ case class FlatCoGroupStream[Key, LeftIn: UDT, RightIn: UDT, Out: UDT, LeftKeySe
     val mapUDF = implicitly[UDF2[(Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]]
     val name = getPactName getOrElse "<Unnamed CoGrouper>"
 
-    val keyTypes = new Array[Class[_ <: PactKey]](0)
+    val leftKey = implicitly[KeySelector[LeftIn => Key]]
+    val rightKey = implicitly[KeySelector[RightIn => Key]]
 
-    new CoGroupContract(classOf[FlatCoGroup4sStub[Key, LeftIn, RightIn, Out]], keyTypes, leftKeySelector.readFields, rightKeySelector.readFields, leftInput.getContract, rightInput.getContract, name) with ParameterizedContract[FlatCoGroupParameters[Key, LeftIn, RightIn, Out]] {
+    new CoGroupContract(stub, leftKey.keyFieldTypes, leftKey.getKeyFields, rightKey.getKeyFields, leftInput.getContract, rightInput.getContract, name) with FlatCoGroup4sContract[Key, LeftIn, RightIn, Out] {
 
-      override val stubParameters = new FlatCoGroupParameters(leftUDT, leftKeySelector, rightUDT, rightKeySelector, outputUDT, mapUDF, mapFunction)
+      override val leftKeySelector = leftKey
+      override val rightKeySelector = rightKey
+      override val stubParameters = new FlatCoGroupParameters(leftUDT, rightUDT, outputUDT, mapUDF, mapFunction)
     }
   }
 }

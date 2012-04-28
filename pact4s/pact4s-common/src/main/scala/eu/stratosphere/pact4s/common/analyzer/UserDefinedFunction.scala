@@ -1,34 +1,46 @@
 package eu.stratosphere.pact4s.common.analyzer
 
-trait UDF1[+F <: _ => _] {
-  var readFields: Array[Int] = null
-  var writeFields: Array[Int] = null
-  var copyFields: Map[Int, Int] = null
+abstract sealed class AmbientFieldBehavior
+
+object AmbientFieldBehavior {
+  case object Default extends AmbientFieldBehavior
+  case object Forward extends AmbientFieldBehavior
+  case object Discard extends AmbientFieldBehavior
 }
 
-trait UDF2[+F <: (_, _) => _] {
-  var leftReadFields: Array[Int] = null
-  var leftCopyFields: Map[Int, Int] = null
+trait UDF extends Serializable {
 
-  var rightReadFields: Array[Int] = null
-  var rightCopyFields: Map[Int, Int] = null
+  def isGlobalized: Boolean
+  def getWriteFields: Array[Int]
 
-  var writeFields: Array[Int] = null
+  def relocateInputField(oldPosition: Int, newPosition: Int)
 }
 
-class AnalyzedUDF1[T1, R](inputCount: Int, outputCount: Int) extends UDF1[T1 => R] {
-  readFields = (0 until inputCount).toArray
-  writeFields = (0 until outputCount).toArray
-  copyFields = Map()
+trait UDF1[+F <: _ => _] extends UDF {
+
+  def getReadFields: Array[Int]
+  def getCopiedFields: Map[Int, Int]
+  def getForwardedFields: Iterable[Int]
+  def getDiscardedFields: Iterable[Int]
+
+  def markInputFieldUnread(inputFieldNum: Int)
+  def markInputFieldCopied(fromInputFieldNum: Int, toOutputFieldNum: Int)
+
+  def globalize(inputLocation: Int, outputLocation: Int)
+  def setAmbientFieldBehavior(position: Int, behavior: AmbientFieldBehavior)
 }
 
-class AnalyzedUDF2[T1, T2, R](leftInputCount: Int, rightInputCount: Int, outputCount: Int) extends UDF2[(T1, T2) => R] {
-  leftReadFields = (0 until leftInputCount).toArray
-  leftCopyFields = Map()
+trait UDF2[+F <: (_, _) => _] extends UDF {
 
-  rightReadFields = (0 until rightInputCount).toArray
-  rightCopyFields = Map()
+  def getReadFields: (Array[Int], Array[Int])
+  def getCopiedFields: Map[Int, Either[Int, Int]]
+  def getForwardedFields: (Iterable[Int], Iterable[Int])
+  def getDiscardedFields: (Iterable[Int], Iterable[Int])
 
-  writeFields = (0 until outputCount).toArray
+  def markInputFieldUnread(inputFieldNum: Either[Int, Int])
+  def markInputFieldCopied(fromInputFieldNum: Either[Int, Int], toOutputFieldNum: Int)
+
+  def globalize(leftInputLocation: Int, rightInputLocation: Int, outputLocation: Int)
+  def setAmbientFieldBehavior(position: Either[Int, Int], behavior: AmbientFieldBehavior)
 }
 

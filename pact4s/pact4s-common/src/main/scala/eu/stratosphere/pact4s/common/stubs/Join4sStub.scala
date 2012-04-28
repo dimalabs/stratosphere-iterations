@@ -10,22 +10,24 @@ import eu.stratosphere.pact.common.`type`.PactRecord
 
 @ImplicitOperationFirst(implicitOperation = ImplicitOperationMode.Copy)
 @ImplicitOperationSecond(implicitOperation = ImplicitOperationMode.Copy)
-class Join4sStub[Key, LeftIn, RightIn, Out] extends MatchStub with ParameterizedStub[JoinParameters[Key, LeftIn, RightIn, Out]] {
-
-  private val outputRecord = new PactRecord()
+class Join4sStub[LeftIn, RightIn, Out] extends MatchStub with ParameterizedStub[JoinParameters[LeftIn, RightIn, Out]] {
 
   private var leftDeserializer: UDTSerializer[LeftIn] = _
+  private var leftDiscardedFields: Iterable[Int] = _
   private var rightDeserializer: UDTSerializer[RightIn] = _
-  private var serializer: UDTSerializer[Out] = _
+  private var rightDiscardedFields: Iterable[Int] = _
   private var mapFunction: (LeftIn, RightIn) => Out = _
+  private var serializer: UDTSerializer[Out] = _
 
-  override def initialize(parameters: JoinParameters[Key, LeftIn, RightIn, Out]) = {
-    val JoinParameters(leftUDT, leftKeySelector, rightUDT, rightKeySelector, outputUDT, mapUDF, mapFunction) = parameters
+  override def initialize(parameters: JoinParameters[LeftIn, RightIn, Out]) = {
+    val JoinParameters(leftUDT, rightUDT, outputUDT, mapUDF, mapFunction) = parameters
 
-    this.leftDeserializer = leftUDT.createSerializer(mapUDF.leftReadFields)
-    this.rightDeserializer = rightUDT.createSerializer(mapUDF.rightReadFields)
-    this.serializer = outputUDT.createSerializer(mapUDF.writeFields)
+    this.leftDeserializer = leftUDT.createSerializer(mapUDF.getReadFields._1)
+    this.leftDiscardedFields = mapUDF.getDiscardedFields._1
+    this.rightDeserializer = rightUDT.createSerializer(mapUDF.getReadFields._2)
+    this.rightDiscardedFields = mapUDF.getDiscardedFields._2
     this.mapFunction = mapFunction
+    this.serializer = outputUDT.createSerializer(mapUDF.getWriteFields)
   }
 
   override def `match`(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) {
@@ -34,7 +36,14 @@ class Join4sStub[Key, LeftIn, RightIn, Out] extends MatchStub with Parameterized
     val right = rightDeserializer.deserialize(rightRecord)
     val output = mapFunction.apply(left, right)
 
+    for (field <- leftDiscardedFields)
+      leftRecord.setNull(field)
+
+    for (field <- rightDiscardedFields)
+      rightRecord.setNull(field)
+
     leftRecord.unionFields(rightRecord)
+
     serializer.serialize(output, leftRecord)
     out.collect(leftRecord)
   }
@@ -42,22 +51,24 @@ class Join4sStub[Key, LeftIn, RightIn, Out] extends MatchStub with Parameterized
 
 @ImplicitOperationFirst(implicitOperation = ImplicitOperationMode.Copy)
 @ImplicitOperationSecond(implicitOperation = ImplicitOperationMode.Copy)
-class FlatJoin4sStub[Key, LeftIn, RightIn, Out] extends MatchStub with ParameterizedStub[FlatJoinParameters[Key, LeftIn, RightIn, Out]] {
-
-  private val outputRecord = new PactRecord()
+class FlatJoin4sStub[LeftIn, RightIn, Out] extends MatchStub with ParameterizedStub[FlatJoinParameters[LeftIn, RightIn, Out]] {
 
   private var leftDeserializer: UDTSerializer[LeftIn] = _
+  private var leftDiscardedFields: Iterable[Int] = _
   private var rightDeserializer: UDTSerializer[RightIn] = _
-  private var serializer: UDTSerializer[Out] = _
+  private var rightDiscardedFields: Iterable[Int] = _
   private var mapFunction: (LeftIn, RightIn) => Iterator[Out] = _
+  private var serializer: UDTSerializer[Out] = _
 
-  override def initialize(parameters: FlatJoinParameters[Key, LeftIn, RightIn, Out]) = {
-    val FlatJoinParameters(leftUDT, leftKeySelector, rightUDT, rightKeySelector, outputUDT, mapUDF, mapFunction) = parameters
+  override def initialize(parameters: FlatJoinParameters[LeftIn, RightIn, Out]) = {
+    val FlatJoinParameters(leftUDT, rightUDT, outputUDT, mapUDF, mapFunction) = parameters
 
-    this.leftDeserializer = leftUDT.createSerializer(mapUDF.leftReadFields)
-    this.rightDeserializer = rightUDT.createSerializer(mapUDF.rightReadFields)
-    this.serializer = outputUDT.createSerializer(mapUDF.writeFields)
+    this.leftDeserializer = leftUDT.createSerializer(mapUDF.getReadFields._1)
+    this.leftDiscardedFields = mapUDF.getDiscardedFields._1
+    this.rightDeserializer = rightUDT.createSerializer(mapUDF.getReadFields._2)
+    this.rightDiscardedFields = mapUDF.getDiscardedFields._2
     this.mapFunction = mapFunction
+    this.serializer = outputUDT.createSerializer(mapUDF.getWriteFields)
   }
 
   override def `match`(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) {
@@ -67,6 +78,13 @@ class FlatJoin4sStub[Key, LeftIn, RightIn, Out] extends MatchStub with Parameter
     val output = mapFunction.apply(left, right)
 
     if (output.nonEmpty) {
+
+      for (field <- leftDiscardedFields)
+        leftRecord.setNull(field)
+
+      for (field <- rightDiscardedFields)
+        rightRecord.setNull(field)
+
       leftRecord.unionFields(rightRecord)
 
       for (item <- output) {

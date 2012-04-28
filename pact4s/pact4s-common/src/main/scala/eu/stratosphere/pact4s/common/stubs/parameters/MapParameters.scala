@@ -7,19 +7,11 @@ case class MapParameters[In, Out](
   val outputUDT: UDT[Out],
   val mapUDF: UDF1[In => Out],
   val mapFunction: In => Out)
-  extends StubParameters {
-
-  def createDeserializer() = inputUDT.createSerializer(mapUDF.readFields)
-  def createSerializer() = outputUDT.createSerializer(mapUDF.writeFields)
-}
-
+  extends StubParameters
+  
 case class FlatMapParameters[In, Out](
   val inputUDT: UDT[In],
   val outputUDT: UDT[Out],
   val mapUDF: UDF1[In => Iterator[Out]],
   val mapFunction: In => Iterator[Out])
-  extends StubParameters {
-
-  def createDeserializer() = inputUDT.createSerializer(mapUDF.readFields)
-  def createSerializer() = outputUDT.createSerializer(mapUDF.writeFields)
-}
+  extends StubParameters

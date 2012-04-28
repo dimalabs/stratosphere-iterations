@@ -12,26 +12,26 @@ import eu.stratosphere.pact.common.`type`.PactRecord
 
 @ImplicitOperationFirst(implicitOperation = ImplicitOperationMode.Projection)
 @ImplicitOperationSecond(implicitOperation = ImplicitOperationMode.Projection)
-class CoGroup4sStub[Key, LeftIn, RightIn, Out] extends CoGroupStub with ParameterizedStub[CoGroupParameters[Key, LeftIn, RightIn, Out]] {
+class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub with ParameterizedStub[CoGroupParameters[LeftIn, RightIn, Out]] {
 
   private val outputRecord = new PactRecord()
 
   private var leftIterator: DeserializingIterator[LeftIn] = null
-  private var leftCopyKeys: Array[Int] = _
+  private var leftForwardedFields: Array[Int] = _
   private var rightIterator: DeserializingIterator[RightIn] = null
-  private var rightCopyKeys: Array[Int] = _
-  private var serializer: UDTSerializer[Out] = _
+  private var rightForwardedFields: Array[Int] = _
   private var mapFunction: (Iterator[LeftIn], Iterator[RightIn]) => Out = _
+  private var serializer: UDTSerializer[Out] = _
 
-  override def initialize(parameters: CoGroupParameters[Key, LeftIn, RightIn, Out]) = {
-    val CoGroupParameters(leftUDT, leftKeySelector, rightUDT, rightKeySelector, outputUDT, mapUDF, mapFunction) = parameters
+  override def initialize(parameters: CoGroupParameters[LeftIn, RightIn, Out]) = {
+    val CoGroupParameters(leftUDT, rightUDT, outputUDT, mapUDF, mapFunction) = parameters
 
-    this.leftIterator = new DeserializingIterator(leftUDT.createSerializer(mapUDF.leftReadFields))
-    this.leftCopyKeys = leftKeySelector.readFields
-    this.rightIterator = new DeserializingIterator(rightUDT.createSerializer(mapUDF.rightReadFields))
-    this.rightCopyKeys = rightKeySelector.readFields
-    this.serializer = outputUDT.createSerializer(mapUDF.writeFields)
+    this.leftIterator = new DeserializingIterator(leftUDT.createSerializer(mapUDF.getReadFields._1))
+    this.leftForwardedFields = mapUDF.getForwardedFields._1.toArray
+    this.rightIterator = new DeserializingIterator(rightUDT.createSerializer(mapUDF.getReadFields._1))
+    this.rightForwardedFields = mapUDF.getForwardedFields._2.toArray
     this.mapFunction = mapFunction
+    this.serializer = outputUDT.createSerializer(mapUDF.getWriteFields)
   }
 
   override def coGroup(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = {
@@ -41,8 +41,8 @@ class CoGroup4sStub[Key, LeftIn, RightIn, Out] extends CoGroupStub with Paramete
 
     val output = mapFunction.apply(leftIterator, rightIterator)
 
-    outputRecord.copyFrom(leftIterator.getFirstRecord, leftCopyKeys, leftCopyKeys);
-    outputRecord.copyFrom(rightIterator.getFirstRecord, rightCopyKeys, rightCopyKeys);
+    outputRecord.copyFrom(leftIterator.getFirstRecord, leftForwardedFields, leftForwardedFields);
+    outputRecord.copyFrom(rightIterator.getFirstRecord, rightForwardedFields, rightForwardedFields);
 
     serializer.serialize(output, outputRecord)
     out.collect(outputRecord)
@@ -51,26 +51,26 @@ class CoGroup4sStub[Key, LeftIn, RightIn, Out] extends CoGroupStub with Paramete
 
 @ImplicitOperationFirst(implicitOperation = ImplicitOperationMode.Projection)
 @ImplicitOperationSecond(implicitOperation = ImplicitOperationMode.Projection)
-class FlatCoGroup4sStub[Key, LeftIn, RightIn, Out] extends CoGroupStub with ParameterizedStub[FlatCoGroupParameters[Key, LeftIn, RightIn, Out]] {
+class FlatCoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub with ParameterizedStub[FlatCoGroupParameters[LeftIn, RightIn, Out]] {
 
   private val outputRecord = new PactRecord()
 
   private var leftIterator: DeserializingIterator[LeftIn] = null
-  private var leftCopyKeys: Array[Int] = _
+  private var leftForwardedFields: Array[Int] = _
   private var rightIterator: DeserializingIterator[RightIn] = null
-  private var rightCopyKeys: Array[Int] = _
-  private var serializer: UDTSerializer[Out] = _
+  private var rightForwardedFields: Array[Int] = _
   private var mapFunction: (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out] = _
+  private var serializer: UDTSerializer[Out] = _
 
-  override def initialize(parameters: FlatCoGroupParameters[Key, LeftIn, RightIn, Out]) = {
-    val FlatCoGroupParameters(leftUDT, leftKeySelector, rightUDT, rightKeySelector, outputUDT, mapUDF, mapFunction) = parameters
+  override def initialize(parameters: FlatCoGroupParameters[LeftIn, RightIn, Out]) = {
+    val FlatCoGroupParameters(leftUDT, rightUDT, outputUDT, mapUDF, mapFunction) = parameters
 
-    this.leftIterator = new DeserializingIterator(leftUDT.createSerializer(mapUDF.leftReadFields))
-    this.leftCopyKeys = leftKeySelector.readFields
-    this.rightIterator = new DeserializingIterator(rightUDT.createSerializer(mapUDF.rightReadFields))
-    this.rightCopyKeys = rightKeySelector.readFields
-    this.serializer = outputUDT.createSerializer(mapUDF.writeFields)
+    this.leftIterator = new DeserializingIterator(leftUDT.createSerializer(mapUDF.getReadFields._1))
+    this.leftForwardedFields = mapUDF.getForwardedFields._1.toArray
+    this.rightIterator = new DeserializingIterator(rightUDT.createSerializer(mapUDF.getReadFields._1))
+    this.rightForwardedFields = mapUDF.getForwardedFields._2.toArray
     this.mapFunction = mapFunction
+    this.serializer = outputUDT.createSerializer(mapUDF.getWriteFields)
   }
 
   override def coGroup(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = {
@@ -82,11 +82,11 @@ class FlatCoGroup4sStub[Key, LeftIn, RightIn, Out] extends CoGroupStub with Para
 
     if (output.nonEmpty) {
 
-      outputRecord.copyFrom(leftIterator.getFirstRecord, leftCopyKeys, leftCopyKeys);
-      outputRecord.copyFrom(rightIterator.getFirstRecord, rightCopyKeys, rightCopyKeys);
+      outputRecord.copyFrom(leftIterator.getFirstRecord, leftForwardedFields, leftForwardedFields);
+      outputRecord.copyFrom(rightIterator.getFirstRecord, rightForwardedFields, rightForwardedFields);
 
       for (item <- output) {
-        serializer.serialize(output, outputRecord)
+        serializer.serialize(item, outputRecord)
         out.collect(outputRecord)
       }
     }

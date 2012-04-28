@@ -12,30 +12,32 @@ import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.Implic
 import eu.stratosphere.pact.common.`type`.PactRecord
 
 @ImplicitOperation(implicitOperation = ImplicitOperationMode.Projection)
-class Reduce4sStub[Key, In, Out] extends ReduceStub with ParameterizedStub[ReduceParameters[Key, In, Out]] {
+class Reduce4sStub[In, Out] extends ReduceStub with ParameterizedStub[ReduceParameters[In, Out]] {
 
   private val outputRecord = new PactRecord()
 
-  private var copyKeys: Array[Int] = _
-
   private var combineIterator: DeserializingIterator[In] = null
-  private var combineSerializer: UDTSerializer[In] = _
+  private var combineForwardedFields: Array[Int] = _
   private var combineFunction: Iterator[In] => In = _
+  private var combineSerializer: UDTSerializer[In] = _
 
   private var reduceIterator: DeserializingIterator[In] = null
-  private var reduceSerializer: UDTSerializer[Out] = _
+  private var reduceForwardedFields: Array[Int] = _
   private var reduceFunction: Iterator[In] => Out = _
+  private var reduceSerializer: UDTSerializer[Out] = _
 
-  override def initialize(parameters: ReduceParameters[Key, In, Out]) = {
-    val ReduceParameters(inputUDT, outputUDT, keySelector, combineUDF, combineFunction, reduceUDF, reduceFunction) = parameters
+  override def initialize(parameters: ReduceParameters[In, Out]) = {
+    val ReduceParameters(inputUDT, outputUDT, combineUDF, combineFunction, reduceUDF, reduceFunction) = parameters
 
-    this.copyKeys = keySelector.readFields
-    this.combineIterator = combineUDF map { udf => new DeserializingIterator(inputUDT.createSerializer(udf.readFields)) } getOrElse null
-    this.combineSerializer = combineUDF map { udf => inputUDT.createSerializer(udf.writeFields) } getOrElse null
+    this.combineIterator = combineUDF map { udf => new DeserializingIterator(inputUDT.createSerializer(udf.getReadFields)) } getOrElse null
+    this.combineForwardedFields = combineUDF map { _.getForwardedFields.toArray } getOrElse null
     this.combineFunction = combineFunction getOrElse null
-    this.reduceIterator = new DeserializingIterator(inputUDT.createSerializer(reduceUDF.readFields))
-    this.reduceSerializer = outputUDT.createSerializer(reduceUDF.writeFields)
+    this.combineSerializer = combineUDF map { udf => inputUDT.createSerializer(udf.getWriteFields) } getOrElse null
+
+    this.reduceIterator = new DeserializingIterator(inputUDT.createSerializer(reduceUDF.getReadFields))
+    this.reduceForwardedFields = reduceUDF.getForwardedFields.toArray
     this.reduceFunction = reduceFunction
+    this.reduceSerializer = outputUDT.createSerializer(reduceUDF.getWriteFields)
   }
 
   override def combine(records: JIterator[PactRecord], out: Collector) = {
@@ -44,6 +46,8 @@ class Reduce4sStub[Key, In, Out] extends ReduceStub with ParameterizedStub[Reduc
 
     val outputRecord = combineIterator.getFirstRecord
     val output = combineFunction.apply(combineIterator)
+
+    outputRecord.copyFrom(combineIterator.getFirstRecord, combineForwardedFields, combineForwardedFields);
 
     combineSerializer.serialize(output, outputRecord)
     out.collect(outputRecord)
@@ -55,7 +59,8 @@ class Reduce4sStub[Key, In, Out] extends ReduceStub with ParameterizedStub[Reduc
 
     val output = reduceFunction.apply(reduceIterator)
 
-    outputRecord.copyFrom(reduceIterator.getFirstRecord, copyKeys, copyKeys);
+    outputRecord.copyFrom(reduceIterator.getFirstRecord, reduceForwardedFields, reduceForwardedFields);
+
     reduceSerializer.serialize(output, outputRecord)
     out.collect(outputRecord)
   }
@@ -63,5 +68,5 @@ class Reduce4sStub[Key, In, Out] extends ReduceStub with ParameterizedStub[Reduc
 
 @Combinable
 @ImplicitOperation(implicitOperation = ImplicitOperationMode.Projection)
-class CombinableReduce4sStub[Key, In, Out] extends Reduce4sStub[Key, In, Out]
+class CombinableReduce4sStub[In, Out] extends Reduce4sStub[In, Out]
 
