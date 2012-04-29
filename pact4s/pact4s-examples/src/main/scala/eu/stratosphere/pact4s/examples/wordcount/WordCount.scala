@@ -6,6 +6,11 @@ import scala.math.Ordered._
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
+object WordCount extends PactDescriptor[WordCount] {
+  override val name = "Word Count"
+  override val description = "Parameters: [noSubStasks] [input] [output]"
+}
+
 class WordCount(args: String*) extends PactProgram with WordCountGeneratedImplicits {
 
   val input = new DataSource(params.input, readLine)
@@ -22,8 +27,6 @@ class WordCount(args: String*) extends PactProgram with WordCountGeneratedImplic
 
   override def outputs = output <~ counts
 
-  override def name = "Word Count"
-  override def description = "Parameters: [noSubStasks] [input] [output]"
   override def defaultParallelism = params.numSubTasks
 
   val params = new {

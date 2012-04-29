@@ -6,6 +6,11 @@ import scala.math.Ordered._
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
+object TransitiveClosureNaive extends PactDescriptor[TransitiveClosureNaive] {
+  override val name = "Transitive Closure (Naive)"
+  override val description = "Parameters: [noSubStasks] [vertices] [edges] [output]"
+}
+
 class TransitiveClosureNaive(args: String*) extends PactProgram with TransitiveClosureNaiveGeneratedImplicits {
 
   val vertices = new DataSource(params.verticesInput, parseVertex)
@@ -32,8 +37,6 @@ class TransitiveClosureNaive(args: String*) extends PactProgram with TransitiveC
   def getFrom(p: Path): Int = p.from
   def getTo(p: Path): Int = p.to
 
-  override def name = "Transitive Closure (Naive)"
-  override def description = "Parameters: [noSubStasks] [vertices] [edges] [output]"
   override def defaultParallelism = params.numSubTasks
 
   vertices.hints = RecordSize(16)

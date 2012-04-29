@@ -5,6 +5,11 @@ import scala.math._
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
+object KMeans extends PactDescriptor[KMeans] {
+  override val name = "KMeans Iteration"
+  override val description = "Parameters: [noSubStasks] [dataPoints] [clusterCenters] [output]"
+}
+
 class KMeans(args: String*) extends PactProgram with KMeansGeneratedImplicits {
 
   val dataPoints = new DataSource(params.dataPointInput, parseInput)
@@ -34,8 +39,6 @@ class KMeans(args: String*) extends PactProgram with KMeansGeneratedImplicits {
     } }
   }
 
-  override def name = "KMeans Iteration"
-  override def description = "Parameters: [noSubStasks] [dataPoints] [clusterCenters] [output]"
   override def defaultParallelism = params.numSubTasks
 
   clusterPoints.hints = Degree(1)

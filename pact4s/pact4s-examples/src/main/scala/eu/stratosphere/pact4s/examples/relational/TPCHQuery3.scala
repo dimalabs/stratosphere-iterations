@@ -21,6 +21,11 @@ import eu.stratosphere.pact4s.common.operators._
  *     AND o_orderpriority LIKE "Z%"
  *   GROUP BY l_orderkey, o_shippriority;
  */
+object TPCHQuery3 extends PactDescriptor[TPCHQuery3] {
+  override val name = "TCPH Query 3"
+  override val description = "Parameters: [noSubStasks] [orders] [lineItems] [output]"
+}
+
 class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImplicits {
 
   val orders = new DataSource(params.ordersInput, parseOrder)
@@ -29,14 +34,16 @@ class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImpl
 
   val filteredOrders = orders filter { o => o.status == params.status && o.year >= params.minYear && o.orderPriority.startsWith(params.priority) }
   val prioritizedItems = filteredOrders join lineItems on { _.orderId } isEqualTo { _.orderId } map { (o: Order, li: LineItem) => PrioritizedOrder(o.orderId, o.shipPriority, li.extendedPrice) }
-  val prioritizedOrders = prioritizedItems groupBy { pi => (pi.orderId, pi.shipPriority) } combine { items => items.reduce { (z, s) => (z, s) match {
-    case (PrioritizedOrder(orderId, shipPriority, revenue), PrioritizedOrder(_, _, price)) => PrioritizedOrder(orderId, shipPriority, revenue + price) 
-  } } }
+  val prioritizedOrders = prioritizedItems groupBy { pi => (pi.orderId, pi.shipPriority) } combine { items =>
+    items.reduce { (z, s) =>
+      (z, s) match {
+        case (PrioritizedOrder(orderId, shipPriority, revenue), PrioritizedOrder(_, _, price)) => PrioritizedOrder(orderId, shipPriority, revenue + price)
+      }
+    }
+  }
 
   override def outputs = output <~ prioritizedOrders
 
-  override def name = "TCPH Query 3"
-  override def description = "Parameters: [noSubStasks] [orders] [lineItems] [output]"
   override def defaultParallelism = params.numSubTasks
 
   filteredOrders.hints = RecordSize(32) +: Selectivity(0.05f)

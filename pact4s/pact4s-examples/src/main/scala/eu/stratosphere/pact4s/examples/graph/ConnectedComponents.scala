@@ -5,6 +5,11 @@ import scala.math._
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
+object ConnectedComponents extends PactDescriptor[ConnectedComponents] {
+  override val name = "Connected Components"
+  override val description = "Parameters: [noSubStasks] [vertices] [edges] [output]"
+}
+
 class ConnectedComponents(args: String*) extends PactProgram with ConnectedComponentsGeneratedImplicits {
 
   val vertices = new DataSource(params.verticesInput, parseVertex)
@@ -30,8 +35,6 @@ class ConnectedComponents(args: String*) extends PactProgram with ConnectedCompo
     (s1, s1)
   }
 
-  override def name = "Connected Components"
-  override def description = "Parameters: [noSubStasks] [vertices] [edges] [output]"
   override def defaultParallelism = params.numSubTasks
 
   vertices.hints = RecordSize(8)

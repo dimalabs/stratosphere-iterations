@@ -5,6 +5,11 @@ import scala.math._
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
+trait BatchGradientDescentDescriptor[T <: BatchGradientDescent] extends PactDescriptor[T] {
+  override val name = "Batch Gradient Descent"
+  override val description = "Parameters: [noSubStasks] [eps] [eta] [lambda] [examples] [weights] [output]"
+}
+
 abstract class BatchGradientDescent(args: String*) extends PactProgram with BatchGradientDescentGeneratedImplicits {
 
   def computeGradient(ex: Array[Double], w: Array[Double]): (Double, Array[Double])
@@ -50,7 +55,6 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
     }
   }
 
-  override def description = "Parameters: [noSubStasks] [eps] [eta] [lambda] [examples] [weights] [output]"
   override def defaultParallelism = params.numSubTasks
 
   val params = new {
