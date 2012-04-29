@@ -7,7 +7,7 @@ trait CrossOperator[LeftIn] { this: WrappedDataStream[LeftIn] =>
 
   private val leftInput = this.inner
 
-  def cross[RightIn](rightInput: DataStream[RightIn]) = new {
+  def cross[RightIn: UDT](rightInput: DataStream[RightIn]) = new {
 
     def map[Out: UDT, F: UDF2Builder[LeftIn, RightIn, Out]#UDF](mapFunction: (LeftIn, RightIn) => Out) = new CrossStream(leftInput, rightInput, mapFunction)
 
