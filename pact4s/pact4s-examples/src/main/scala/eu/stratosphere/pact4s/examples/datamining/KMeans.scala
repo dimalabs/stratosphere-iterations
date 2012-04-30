@@ -4,6 +4,7 @@ import scala.math._
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
+import eu.stratosphere.pact4s.common.streams._
 
 object KMeans extends PactDescriptor[KMeans] {
   override val name = "KMeans Iteration"
@@ -14,7 +15,7 @@ class KMeans(args: String*) extends PactProgram with KMeansGeneratedImplicits {
 
   val dataPoints = new DataSource(params.dataPointInput, parseInput)
   val clusterPoints = new DataSource(params.clusterInput, parseInput)
-  val newClusterPoints = new DataSink(params.output, formatOutput)
+  val newClusterPoints = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
 
   val distances = dataPoints cross clusterPoints map computeDistance
   val nearestCenters = distances groupBy { case (pid, _) => pid } combine { ds => ds.minBy(_._2.distance) } map asPointSum
@@ -89,7 +90,7 @@ trait KMeansGeneratedImplicits { this: KMeans =>
 
   implicit val intPointSerializer: UDT[(Int, Point)] = new UDT[(Int, Point)] {
 
-    override val fieldCount = 4
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactDouble], classOf[PactDouble], classOf[PactDouble])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Point)] {
 
@@ -160,7 +161,7 @@ trait KMeansGeneratedImplicits { this: KMeans =>
 
   implicit val intDistanceSerializer: UDT[(Int, Distance)] = new UDT[(Int, Distance)] {
 
-    override val fieldCount = 6
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactDouble], classOf[PactDouble], classOf[PactDouble], classOf[PactInteger], classOf[PactDouble])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Distance)] {
 
@@ -257,7 +258,7 @@ trait KMeansGeneratedImplicits { this: KMeans =>
 
   implicit val intPointSumSerializer: UDT[(Int, PointSum)] = new UDT[(Int, PointSum)] {
 
-    override val fieldCount = 5
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactDouble], classOf[PactDouble], classOf[PactDouble])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, PointSum)] {
 

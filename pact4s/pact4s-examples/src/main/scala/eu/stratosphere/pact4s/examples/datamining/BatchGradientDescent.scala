@@ -4,6 +4,7 @@ import scala.math._
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
+import eu.stratosphere.pact4s.common.streams._
 
 trait BatchGradientDescentDescriptor[T <: BatchGradientDescent] extends PactDescriptor[T] {
   override val name = "Batch Gradient Descent"
@@ -16,10 +17,9 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
 
   val examples = new DataSource(params.examples, readVector)
   val weights = new DataSource(params.weights, readVector)
-  val output = new DataSink(params.output, formatOutput)
+  val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
 
   val etaWeights = weights map { case (id, w) => (id, w, params.eta) }
-
   val newWeights = weights keyBy { _._1 } untilEmpty etaWeights iterate gradientDescent
 
   override def outputs = output <~ newWeights
@@ -27,7 +27,7 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
   def gradientDescent(s: DataStream[(Int, Array[Double])], ws: DataStream[(Int, Array[Double], Double)]) = {
 
     val lossesAndGradients = ws cross examples map { case ((id, w, _), (_, ex)) => ValueAndGradient(id, computeGradient(ex, w)) }
-    val lossAndGradientSums = lossesAndGradients groupBy { _.id } combine sumLossesAndGradients
+    val lossAndGradientSums = lossesAndGradients groupBy { _.id } combine { _.reduce (_ + _) }
     val newWeights = ws join lossAndGradientSums on { _._1 } isEqualTo { _.id } map updateWeight
 
     // updated solution elements
@@ -39,20 +39,13 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
     (s1, ws1)
   }
 
-  def sumLossesAndGradients(values: Iterator[ValueAndGradient]) = {
-    values reduce { (z, v) => (z, v) match { 
-      case (ValueAndGradient(id, lossSum, gradSum), ValueAndGradient(_, loss, grad)) => ValueAndGradient(id, lossSum + loss, gradSum + grad) 
-    } }
-  }
+  def updateWeight(prev: (Int, Array[Double], Double), vg: ValueAndGradient) = {
+    val (id, wOld, eta) = prev
+    val ValueAndGradient(_, lossSum, gradSum) = vg
 
-  def updateWeight(prev: (Int, Array[Double], Double), vg: ValueAndGradient) = prev match {
-    case (id, wOld, eta) => vg match {
-      case ValueAndGradient(_, lossSum, gradSum) => {
-        val delta = lossSum + params.lambda * wOld.norm
-        val wNew = (wOld + (gradSum * params.eta)) * (1 - eta * params.lambda)
-        (id, delta, wNew, eta * 0.9)
-      }
-    }
+    val delta = lossSum + params.lambda * wOld.norm
+    val wNew = (wOld + (gradSum * params.eta)) * (1 - eta * params.lambda)
+    (id, delta, wNew, eta * 0.9)
   }
 
   override def defaultParallelism = params.numSubTasks
@@ -73,10 +66,12 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
     def *(x: Double): Array[Double] = vector map { x * _ }
     def norm: Double = sqrt(vector map { x => x * x } reduce { _ + _ })
   }
-  
+
   implicit def array2WeightVector(vector: Array[Double]): WeightVector = new WeightVector(vector)
 
-  case class ValueAndGradient(id: Int, value: Double, gradient: Array[Double])
+  case class ValueAndGradient(id: Int, value: Double, gradient: Array[Double]) {
+    def +(that: ValueAndGradient) = ValueAndGradient(id, value + that.value, gradient + that.gradient)
+  }
 
   object ValueAndGradient {
     def apply(id: Int, vg: (Double, Array[Double])) = new ValueAndGradient(id, vg._1, vg._2)
@@ -107,7 +102,7 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
 
   implicit val intArrayDoubleUDT: UDT[(Int, Array[Double])] = new UDT[(Int, Array[Double])] {
 
-    override val fieldCount = 2
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactList[PactDouble]])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Array[Double])] {
 
@@ -153,7 +148,7 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
 
   implicit val intArrayDoubleDoubleUDT: UDT[(Int, Array[Double], Double)] = new UDT[(Int, Array[Double], Double)] {
 
-    override val fieldCount = 3
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactList[PactDouble]], classOf[PactDouble])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Array[Double], Double)] {
 
@@ -212,7 +207,7 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
 
   implicit val intDoubleArrayDoubleDoubleUDT: UDT[(Int, Double, Array[Double], Double)] = new UDT[(Int, Double, Array[Double], Double)] {
 
-    override val fieldCount = 4
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactDouble], classOf[PactList[PactDouble]], classOf[PactDouble])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Double, Array[Double], Double)] {
 
@@ -284,7 +279,7 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
 
   implicit val valueAndGradientUDT: UDT[ValueAndGradient] = new UDT[ValueAndGradient] {
 
-    override val fieldCount = 3
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactDouble], classOf[PactList[PactDouble]])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[ValueAndGradient] {
 

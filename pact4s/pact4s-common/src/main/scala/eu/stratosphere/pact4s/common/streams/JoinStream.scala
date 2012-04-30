@@ -6,7 +6,7 @@ import eu.stratosphere.pact4s.common.stubs.parameters._
 
 import eu.stratosphere.pact.common.contract._
 
-case class JoinStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector, RightKeySelector: KeyBuilder[RightIn, Key]#Selector, F: UDF2Builder[LeftIn, RightIn, Out]#UDF](
+case class JoinStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector: SelectorBuilder[LeftIn, Key]#Selector, RightKeySelector: SelectorBuilder[RightIn, Key]#Selector, F: UDF2Builder[LeftIn, RightIn, Out]#UDF](
   leftInput: DataStream[LeftIn],
   rightInput: DataStream[RightIn],
   leftKeySelector: LeftIn => Key,
@@ -23,10 +23,11 @@ case class JoinStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector:
     val mapUDF = implicitly[UDF2[(LeftIn, RightIn) => Out]]
     val name = getPactName getOrElse "<Unnamed CoGrouper>"
 
-    val leftKey = implicitly[KeySelector[LeftIn => Key]]
-    val rightKey = implicitly[KeySelector[RightIn => Key]]
+    val leftKey = implicitly[FieldSelector[LeftIn => Key]]
+    val rightKey = implicitly[FieldSelector[RightIn => Key]]
+    val keyFieldTypes = leftUDT.getKeySet(leftKey.getFields)
 
-    new MatchContract(stub, leftKey.keyFieldTypes, leftKey.getKeyFields, rightKey.getKeyFields, leftInput.getContract, rightInput.getContract, name) with Join4sContract[Key, LeftIn, RightIn, Out] {
+    new MatchContract(stub, keyFieldTypes, leftKey.getFields, rightKey.getFields, leftInput.getContract, rightInput.getContract, name) with Join4sContract[Key, LeftIn, RightIn, Out] {
 
       override val leftKeySelector = leftKey
       override val rightKeySelector = rightKey
@@ -35,7 +36,7 @@ case class JoinStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector:
   }
 }
 
-case class FlatJoinStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector: KeyBuilder[LeftIn, Key]#Selector, RightKeySelector: KeyBuilder[RightIn, Key]#Selector, F: UDF2Builder[LeftIn, RightIn, Iterator[Out]]#UDF](
+case class FlatJoinStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelector: SelectorBuilder[LeftIn, Key]#Selector, RightKeySelector: SelectorBuilder[RightIn, Key]#Selector, F: UDF2Builder[LeftIn, RightIn, Iterator[Out]]#UDF](
   leftInput: DataStream[LeftIn],
   rightInput: DataStream[RightIn],
   leftKeySelector: LeftIn => Key,
@@ -52,10 +53,11 @@ case class FlatJoinStream[LeftIn: UDT, RightIn: UDT, Out: UDT, Key, LeftKeySelec
     val mapUDF = implicitly[UDF2[(LeftIn, RightIn) => Iterator[Out]]]
     val name = getPactName getOrElse "<Unnamed CoGrouper>"
 
-    val leftKey = implicitly[KeySelector[LeftIn => Key]]
-    val rightKey = implicitly[KeySelector[RightIn => Key]]
+    val leftKey = implicitly[FieldSelector[LeftIn => Key]]
+    val rightKey = implicitly[FieldSelector[RightIn => Key]]
+    val keyFieldTypes = leftUDT.getKeySet(leftKey.getFields)
 
-    new MatchContract(stub, leftKey.keyFieldTypes, leftKey.getKeyFields, rightKey.getKeyFields, leftInput.getContract, rightInput.getContract, name) with FlatJoin4sContract[Key, LeftIn, RightIn, Out] {
+    new MatchContract(stub, keyFieldTypes, leftKey.getFields, rightKey.getFields, leftInput.getContract, rightInput.getContract, name) with FlatJoin4sContract[Key, LeftIn, RightIn, Out] {
 
       override val leftKeySelector = leftKey
       override val rightKeySelector = rightKey

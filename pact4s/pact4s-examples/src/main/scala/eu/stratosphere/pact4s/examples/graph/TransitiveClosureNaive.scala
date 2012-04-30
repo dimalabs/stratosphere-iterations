@@ -5,6 +5,7 @@ import scala.math.Ordered._
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
+import eu.stratosphere.pact4s.common.streams._
 
 object TransitiveClosureNaive extends PactDescriptor[TransitiveClosureNaive] {
   override val name = "Transitive Closure (Naive)"
@@ -15,7 +16,7 @@ class TransitiveClosureNaive(args: String*) extends PactProgram with TransitiveC
 
   val vertices = new DataSource(params.verticesInput, parseVertex)
   val edges = new DataSource(params.edgesInput, parseEdge)
-  val output = new DataSink(params.output, formatOutput)
+  val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
 
   val transitiveClosure = vertices keyBy getEdge iterate createClosure
 
@@ -77,7 +78,7 @@ trait TransitiveClosureNaiveGeneratedImplicits { this: TransitiveClosureNaive =>
 
   implicit val pathSerializer: UDT[Path] = new UDT[Path] {
 
-    override val fieldCount = 3
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactInteger])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[Path] {
 

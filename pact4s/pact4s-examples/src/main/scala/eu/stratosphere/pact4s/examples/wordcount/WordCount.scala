@@ -5,6 +5,7 @@ import scala.math.Ordered._
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
+import eu.stratosphere.pact4s.common.streams._
 
 object WordCount extends PactDescriptor[WordCount] {
   override val name = "Word Count"
@@ -14,7 +15,7 @@ object WordCount extends PactDescriptor[WordCount] {
 class WordCount(args: String*) extends PactProgram with WordCountGeneratedImplicits {
 
   val input = new DataSource(params.input, readLine)
-  val output = new DataSink(params.output, formatOutput)
+  val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
 
   val words = input flatMap { line => line.toLowerCase().split("""\W+""") map { (_, 1) } }
   val counts = words groupBy { case (word, _) => word } combine { values =>
@@ -51,7 +52,7 @@ trait WordCountGeneratedImplicits {
 
   implicit val stringSerializer: UDT[String] = new UDT[String] {
 
-    override val fieldCount = 1
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactString])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[String] {
 
@@ -82,7 +83,7 @@ trait WordCountGeneratedImplicits {
 
   implicit val stringIntSerializer: UDT[(String, Int)] = new UDT[(String, Int)] {
 
-    override val fieldCount = 2
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactString], classOf[PactInteger])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(String, Int)] {
 

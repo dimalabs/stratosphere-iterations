@@ -6,7 +6,7 @@ import eu.stratosphere.pact4s.common.stubs.parameters._
 import eu.stratosphere.pact.common.contract._
 
 trait Pact4sContract { this: Contract =>
-  def persistConfiguration()
+  def persistConfiguration() = {}
 }
 
 object Pact4sContract {
@@ -24,13 +24,13 @@ trait ParameterizedContract[T <: StubParameters] { this: Pact4sContract =>
 
 trait KeyedOneInputContract[Key, In] { this: Pact4sContract =>
 
-  val keySelector: KeySelector[In => Key]
+  val keySelector: FieldSelector[In => Key]
 }
 
 trait KeyedTwoInputContract[Key, LeftIn, RightIn] { this: Pact4sContract =>
 
-  val leftKeySelector: KeySelector[LeftIn => Key]
-  val rightKeySelector: KeySelector[RightIn => Key]
+  val leftKeySelector: FieldSelector[LeftIn => Key]
+  val rightKeySelector: FieldSelector[RightIn => Key]
 }
 
 trait CoGroup4sContract[Key, LeftIn, RightIn, Out] extends Pact4sContract

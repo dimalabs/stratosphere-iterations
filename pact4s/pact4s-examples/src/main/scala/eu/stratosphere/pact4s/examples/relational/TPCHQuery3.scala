@@ -5,6 +5,7 @@ import scala.math.Ordered._
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
+import eu.stratosphere.pact4s.common.streams._
 
 /**
  * The TPC-H is a decision support benchmark on relational data.
@@ -30,7 +31,7 @@ class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImpl
 
   val orders = new DataSource(params.ordersInput, parseOrder)
   val lineItems = new DataSource(params.lineItemsInput, parseLineItem)
-  val output = new DataSink(params.output, formatOutput)
+  val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
 
   val filteredOrders = orders filter { o => o.status == params.status && o.year >= params.minYear && o.orderPriority.startsWith(params.priority) }
   val prioritizedItems = filteredOrders join lineItems on { _.orderId } isEqualTo { _.orderId } map { (o: Order, li: LineItem) => PrioritizedOrder(o.orderId, o.shipPriority, li.extendedPrice) }
@@ -90,7 +91,7 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
 
   implicit val orderSerializer: UDT[Order] = new UDT[Order] {
 
-    override val fieldCount = 7
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactInteger], classOf[PactInteger], classOf[PactInteger], classOf[PactString], classOf[PactInteger])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[Order] {
 
@@ -200,7 +201,7 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
 
   implicit val lineItemSerializer: UDT[LineItem] = new UDT[LineItem] {
 
-    override val fieldCount = 2
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactDouble])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[LineItem] {
 
@@ -245,7 +246,7 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
 
   implicit val prioritizedOrderSerializer: UDT[PrioritizedOrder] = new UDT[PrioritizedOrder] {
 
-    override val fieldCount = 3
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactDouble])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[PrioritizedOrder] {
 

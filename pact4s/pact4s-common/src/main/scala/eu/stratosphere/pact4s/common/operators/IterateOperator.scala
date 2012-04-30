@@ -7,7 +7,7 @@ trait IterateOperator[SolutionItem] { this: WrappedDataStream[SolutionItem] =>
 
   private val initialSolution = this.inner
 
-  def keyBy[Key, SolutionKeySelector: KeyBuilder[SolutionItem, Key]#Selector](keySelector: SolutionItem => Key) = new {
+  def keyBy[Key, SolutionKeySelector: SelectorBuilder[SolutionItem, Key]#Selector](keySelector: SolutionItem => Key) = new {
 
     def iterate(stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]) = new KleeneIterateStream(initialSolution, stepFunction)
 

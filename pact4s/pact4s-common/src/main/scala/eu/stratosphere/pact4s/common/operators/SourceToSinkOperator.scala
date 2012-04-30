@@ -9,5 +9,5 @@ trait SourceToSinkOperator[In] { this: WrappedDataStream[In] =>
 
   private val source = this.inner
 
-  def ~>(sink: DataSink[In, _]) = new PlanOutput(source, sink)
+  def ~>(sink: DataSink[In]) = new PlanOutput(source, sink)
 }

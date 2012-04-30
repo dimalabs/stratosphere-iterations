@@ -11,28 +11,11 @@ import eu.stratosphere.pact4s.common.analyzer.UDT
 
 package object operators {
 
-  case class WrappedDataSink[T](inner: DataSink[T, _])
+  case class WrappedDataSink[T](inner: DataSink[T])
   case class WrappedDataStream[T](inner: DataStream[T])
 
   implicit def dataStream2SourceToSink[T: UDT](input: DataStream[T]) = new WrappedDataStream(input) with SourceToSinkOperator[T]
-  implicit def dataSink2SinkToSource[T: UDT, F: UDF2Builder[T, OutputStream, Unit]#UDF](sink: DataSink[T, F]) = new WrappedDataSink(sink) with SinkToSourceOperator[T]
-
-  implicit def stringFormatter2Writer[In: UDT, F: UDF1Builder[In, String]#UDF](formatter: In => String): (In, OutputStream) => Unit = (item: In, stream: OutputStream) => {
-    val s = formatter(item)
-    stream.write(s.getBytes)
-  }
-
-  implicit def stringBuilderFormatter2Writer[In: UDT, F: UDF2Builder[In, StringBuilder, Unit]#UDF](formatter: (In, StringBuilder) => Unit): (In, OutputStream) => Unit = {
-    val buffer = new StringBuilder
-
-    val writer = (item: In, stream: OutputStream) => {
-      buffer.clear()
-      formatter(item, buffer)
-      stream.write(buffer.toString.getBytes)
-    }
-
-    writer
-  }
+  implicit def dataSink2SinkToSource[T: UDT](sink: DataSink[T]) = new WrappedDataSink(sink) with SinkToSourceOperator[T]
 
   implicit def dataStream2CoGroup[T: UDT](input: DataStream[T]) = new WrappedDataStream(input) with CoGroupOperator[T]
   implicit def dataStream2Cross[T: UDT](input: DataStream[T]) = new WrappedDataStream(input) with CrossOperator[T]

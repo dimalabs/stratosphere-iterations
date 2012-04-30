@@ -2,13 +2,11 @@ package eu.stratosphere.pact4s.common.analyzer
 
 import eu.stratosphere.pact.common.`type`.{ Key => PactKey }
 
-trait KeySelector[+F <: _ => _] {
-
-  val keyFieldTypes: Array[Class[_ <: PactKey]]
+trait FieldSelector[+F <: _ => _] {
 
   def isGlobalized: Boolean
-  def getKeyFields: Array[Int]
+  def getFields: Array[Int]
 
   def globalize(inputLocation: Int)
-  def relocateKeyField(oldPosition: Int, newPosition: Int)
+  def relocateField(oldPosition: Int, newPosition: Int)
 }

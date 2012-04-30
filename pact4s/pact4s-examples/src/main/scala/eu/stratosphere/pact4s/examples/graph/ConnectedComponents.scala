@@ -4,6 +4,7 @@ import scala.math._
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
+import eu.stratosphere.pact4s.common.streams._
 
 object ConnectedComponents extends PactDescriptor[ConnectedComponents] {
   override val name = "Connected Components"
@@ -14,7 +15,7 @@ class ConnectedComponents(args: String*) extends PactProgram with ConnectedCompo
 
   val vertices = new DataSource(params.verticesInput, parseVertex)
   val directedEdges = new DataSource(params.edgesInput, parseEdge)
-  val output = new DataSink(params.output, formatOutput)
+  val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
 
   val undirectedEdges = directedEdges flatMap { case (from, to) => Seq(from -> to, to -> from) }
   val components = vertices keyBy { _._1 } untilEmpty vertices iterate propagateComponent
@@ -72,7 +73,7 @@ trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>
 
   implicit val intIntUDT: UDT[(Int, Int)] = new UDT[(Int, Int)] {
 
-    override val fieldCount = 2
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Int)] {
 

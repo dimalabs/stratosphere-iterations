@@ -17,6 +17,15 @@ object Pact4sDataSinkContract {
   implicit def toGenericSinks(s: Seq[Pact4sDataSinkContract]): Collection[GenericDataSink] = s
 }
 
-trait FileDataSink4sContract[In] extends Pact4sDataSinkContract
-  with ParameterizedContract[OutputParameters[In]] { this: FileDataSink => }
+trait RawDataSink4sContract[In] extends Pact4sDataSinkContract
+  with ParameterizedContract[RawOutputParameters[In]] { this: FileDataSink => }
 
+trait BinaryDataSink4sContract[In] extends Pact4sDataSinkContract
+  with ParameterizedContract[BinaryOutputParameters[In]] { this: FileDataSink => }
+
+trait SequentialDataSink4sContract extends Pact4sDataSinkContract { this: FileDataSink => }
+
+trait DelimetedDataSink4sContract[In] extends Pact4sDataSinkContract
+  with ParameterizedContract[DelimetedOutputParameters[In]] { this: FileDataSink => }
+
+trait RecordDataSink4sContract extends Pact4sDataSinkContract { this: FileDataSink => }
