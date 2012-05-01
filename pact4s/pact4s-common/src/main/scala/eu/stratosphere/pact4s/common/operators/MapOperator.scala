@@ -4,7 +4,6 @@ import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact4s.common.stubs._
-import eu.stratosphere.pact4s.common.stubs.parameters._
 
 import eu.stratosphere.pact.common.contract._
 
@@ -27,18 +26,10 @@ trait MapOperator[In] { this: WrappedDataStream[In] =>
 
       new MapContract(stub, input.getContract, name) with Map4sContract[In, Out] {
 
-        val inputUDT = implicitly[UDT[In]]
-        val outputUDT = implicitly[UDT[Out]]
-        val mapUDF = implicitly[UDF1[In => R]]
-
-        override def getStubParameters = {
-
-          val deserializer = inputUDT.createSerializer(mapUDF.getReadFields)
-          val serializer = outputUDT.createSerializer(mapUDF.getWriteFields)
-          val discard = mapUDF.getDiscardedFields.toArray
-
-          new MapParameters(deserializer, serializer, discard, mapFunction)
-        }
+        override val inputUDT = implicitly[UDT[In]]
+        override val outputUDT = implicitly[UDT[Out]]
+        override val mapUDF = implicitly[UDF1[In => R]]
+        override val userFunction = mapFunction
       }
     }
   }

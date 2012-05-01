@@ -4,7 +4,6 @@ import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact4s.common.stubs._
-import eu.stratosphere.pact4s.common.stubs.parameters._
 
 import eu.stratosphere.pact.common.contract._
 
@@ -48,25 +47,13 @@ trait ReduceOperator[In] { this: WrappedDataStream[In] =>
 
       new ReduceContract(stub, keyFieldTypes, keyFieldSelector.getFields, input.getContract, name) with Reduce4sContract[Key, In, Out] {
 
-        val inputUDT = implicitly[UDT[In]]
-        val outputUDT = implicitly[UDT[Out]]
-        val combinerUDF = implicitly[UDF1[Iterator[In] => In]]
-        val reducerUDF = implicitly[UDF1[Iterator[In] => Out]]
-
         override val keySelector = keyFieldSelector
-
-        override def getStubParameters = {
-
-          val combineDeserializer = combineFunction map { _ => inputUDT.createSerializer(combinerUDF.getReadFields) }
-          val combineSerializer = combineFunction map { _ => inputUDT.createSerializer(combinerUDF.getWriteFields) }
-          val combineForward = combineFunction map { _ => combinerUDF.getForwardedFields.toArray }
-
-          val reduceDeserializer = inputUDT.createSerializer(reducerUDF.getReadFields)
-          val reduceSerializer = outputUDT.createSerializer(reducerUDF.getWriteFields)
-          val reduceForward = reducerUDF.getForwardedFields.toArray
-
-          new ReduceParameters(combineDeserializer, combineSerializer, combineForward, combineFunction, reduceDeserializer, reduceSerializer, reduceForward, reduceFunction)
-        }
+        override val inputUDT = implicitly[UDT[In]]
+        override val outputUDT = implicitly[UDT[Out]]
+        override val combineUDF = implicitly[UDF1[Iterator[In] => In]]
+        override val reduceUDF = implicitly[UDF1[Iterator[In] => Out]]
+        override val userCombineFunction = combineFunction
+        override val userReduceFunction = reduceFunction
       }
     }
   }

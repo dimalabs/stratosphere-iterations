@@ -14,12 +14,18 @@ case class PlanOutput[In: UDT](source: DataStream[In], sink: DataSink[In]) {
 
   def getContract: Pact4sDataSinkContract = {
 
+    val DataSink(url, format) = sink
+    val stub = format.stub
     val name = sink.getPactName getOrElse "<Unnamed File Data Sink>"
-    val uri = new URI(sink.url)
 
-    val contract = uri.getScheme match {
-      case "file" | null => new FileDataSink(sink.format.stub.asInstanceOf[Class[FileOutputFormat]], sink.url, source.getContract, name) with Pact4sDataSinkContract {
-        override def persistConfiguration() = sink.format.configure(this.getParameters())
+    val contract = new URI(sink.url).getScheme match {
+
+      case "file" | null => new FileDataSink(stub.asInstanceOf[Class[FileOutputFormat]], url, source.getContract, name) with Pact4sDataSinkContract {
+
+        override val inputUDT = format.inputUDT
+        override val fieldSelector = format.fieldSelector
+
+        override def persistConfiguration() = format.persistConfiguration(this.getParameters())
       }
     }
 
@@ -30,5 +36,5 @@ case class PlanOutput[In: UDT](source: DataStream[In], sink: DataSink[In]) {
 
 object PlanOutput {
 
-  implicit def planOutput2Seq[In, S](p: PlanOutput[In]): Seq[PlanOutput[In]] = Seq(p)
+  implicit def planOutput2Seq[In](p: PlanOutput[In]): Seq[PlanOutput[In]] = Seq(p)
 }

@@ -1,16 +1,25 @@
 package eu.stratosphere.pact4s.common.stubs
 
 import eu.stratosphere.pact4s.common.analyzer._
-import eu.stratosphere.pact4s.common.stubs.parameters._
 
 import eu.stratosphere.pact.common.stubs._
 import eu.stratosphere.pact.common.stubs.StubAnnotation._
 import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode
 import eu.stratosphere.pact.common.`type`.PactRecord
+import eu.stratosphere.nephele.configuration.Configuration
+
+case class CrossParameters[LeftIn, RightIn, Out](
+  val leftDeserializer: UDTSerializer[LeftIn],
+  val leftDiscard: Array[Int],
+  val rightDeserializer: UDTSerializer[RightIn],
+  val rightDiscard: Array[Int],
+  val serializer: UDTSerializer[Out],
+  val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]])
+  extends StubParameters
 
 @ImplicitOperationFirst(implicitOperation = ImplicitOperationMode.Copy)
 @ImplicitOperationSecond(implicitOperation = ImplicitOperationMode.Copy)
-class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub with ParameterizedStub[CrossParameters[LeftIn, RightIn, Out]] {
+class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub {
 
   private var leftDeserializer: UDTSerializer[LeftIn] = _
   private var leftDiscard: Array[Int] = _
@@ -18,9 +27,11 @@ class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub with ParameterizedStub
   private var rightDiscard: Array[Int] = _
   private var serializer: UDTSerializer[Out] = _
 
-  private var stubFunction: (PactRecord, PactRecord, Collector) => Unit = _
+  private var userFunction: (PactRecord, PactRecord, Collector) => Unit = _
 
-  override def initialize(parameters: CrossParameters[LeftIn, RightIn, Out]) {
+  override def open(config: Configuration) = {
+    super.open(config)
+    val parameters = StubParameters.getValue[CrossParameters[LeftIn, RightIn, Out]](config)
 
     this.leftDeserializer = parameters.leftDeserializer
     this.leftDiscard = parameters.leftDiscard
@@ -28,16 +39,16 @@ class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub with ParameterizedStub
     this.rightDiscard = parameters.rightDiscard
     this.serializer = parameters.serializer
 
-    this.stubFunction = parameters.mapFunction.fold(doCross _, doFlatCross _)
+    this.userFunction = parameters.userFunction.fold(doCross _, doFlatCross _)
   }
 
-  override def cross(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) = stubFunction(leftRecord, rightRecord, out)
+  override def cross(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) = userFunction(leftRecord, rightRecord, out)
 
-  private def doCross(mapFunction: (LeftIn, RightIn) => Out)(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) {
+  private def doCross(userFunction: (LeftIn, RightIn) => Out)(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) {
 
     val left = leftDeserializer.deserialize(leftRecord)
     val right = rightDeserializer.deserialize(rightRecord)
-    val output = mapFunction.apply(left, right)
+    val output = userFunction.apply(left, right)
 
     for (field <- leftDiscard)
       leftRecord.setNull(field)
@@ -51,11 +62,11 @@ class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub with ParameterizedStub
     out.collect(leftRecord)
   }
 
-  private def doFlatCross(mapFunction: (LeftIn, RightIn) => Iterator[Out])(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) {
+  private def doFlatCross(userFunction: (LeftIn, RightIn) => Iterator[Out])(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) {
 
     val left = leftDeserializer.deserialize(leftRecord)
     val right = rightDeserializer.deserialize(rightRecord)
-    val output = mapFunction.apply(left, right)
+    val output = userFunction.apply(left, right)
 
     if (output.nonEmpty) {
 

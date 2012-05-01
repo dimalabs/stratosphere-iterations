@@ -5,7 +5,6 @@ import java.io.OutputStream
 
 import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.stubs._
-import eu.stratosphere.pact4s.common.stubs.parameters._
 
 import eu.stratosphere.pact.common.io._
 import eu.stratosphere.nephele.configuration.Configuration
@@ -18,7 +17,7 @@ abstract class DataSinkFormat[In: UDT] {
   val inputUDT: UDT[In]
   val fieldSelector: FieldSelector[In => Unit]
 
-  def configure(config: Configuration) = {}
+  def persistConfiguration(config: Configuration) = {}
 }
 
 case class RawDataSinkFormat[In: UDT, F: SelectorBuilder[In, Unit]#Selector](val writeFunction: (In, OutputStream) => Unit) extends DataSinkFormat[In] {
@@ -28,12 +27,12 @@ case class RawDataSinkFormat[In: UDT, F: SelectorBuilder[In, Unit]#Selector](val
   override val inputUDT = implicitly[UDT[In]]
   override val fieldSelector = implicitly[FieldSelector[In => Unit]]
 
-  override def configure(config: Configuration) {
+  override def persistConfiguration(config: Configuration) {
 
     val deserializer = inputUDT.createSerializer(fieldSelector.getFields)
 
     val stubParameters = RawOutputParameters(deserializer, writeFunction)
-    StubParameters.setValue(config, stubParameters)
+    stubParameters.persist(config)
   }
 }
 
@@ -46,12 +45,12 @@ case class BinaryDataSinkFormat[In: UDT, F: SelectorBuilder[In, Unit]#Selector](
   override val inputUDT = implicitly[UDT[In]]
   override val fieldSelector = implicitly[FieldSelector[In => Unit]]
 
-  override def configure(config: Configuration) {
+  override def persistConfiguration(config: Configuration) {
 
     val deserializer = inputUDT.createSerializer(fieldSelector.getFields)
 
     val stubParameters = BinaryOutputParameters(deserializer, writeFunction)
-    StubParameters.setValue(config, stubParameters)
+    stubParameters.persist(config)
 
     if (blockSize.isDefined)
       config.setLong(BinaryOutputFormat.BLOCK_SIZE_PARAMETER_KEY, blockSize.get)
@@ -67,7 +66,7 @@ case class SequentialDataSinkFormat[In: UDT](val blockSize: Option[Long] = None)
   override val inputUDT = implicitly[UDT[In]]
   override val fieldSelector = implicitly[FieldSelector[In => Unit]]
 
-  override def configure(config: Configuration) {
+  override def persistConfiguration(config: Configuration) {
     if (blockSize.isDefined)
       config.setLong(BinaryOutputFormat.BLOCK_SIZE_PARAMETER_KEY, blockSize.get)
   }
@@ -82,12 +81,12 @@ case class DelimetedDataSinkFormat[In: UDT, F: SelectorBuilder[In, Unit]#Selecto
   override val inputUDT = implicitly[UDT[In]]
   override val fieldSelector = implicitly[FieldSelector[In => Unit]]
 
-  override def configure(config: Configuration) {
+  override def persistConfiguration(config: Configuration) {
 
     val deserializer = inputUDT.createSerializer(fieldSelector.getFields)
 
     val stubParameters = DelimetedOutputParameters(deserializer, writeFunction)
-    StubParameters.setValue(config, stubParameters)
+    stubParameters.persist(config)
 
     if (delimeter.isDefined)
       config.setString(DelimitedOutputFormat.RECORD_DELIMITER, delimeter.get)
@@ -136,7 +135,7 @@ case class RecordDataSinkFormat[In: UDT](val recordDelimeter: Option[String] = N
   override val inputUDT = implicitly[UDT[In]]
   override val fieldSelector = implicitly[FieldSelector[In => Unit]]
 
-  override def configure(config: Configuration) {
+  override def persistConfiguration(config: Configuration) {
 
     val fields = implicitly[UDT[In]].fieldTypes
 

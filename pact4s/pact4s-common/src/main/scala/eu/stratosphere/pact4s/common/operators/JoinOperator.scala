@@ -4,7 +4,6 @@ import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact4s.common.stubs._
-import eu.stratosphere.pact4s.common.stubs.parameters._
 
 import eu.stratosphere.pact.common.contract._
 
@@ -36,24 +35,13 @@ trait JoinOperator[LeftIn] { this: WrappedDataStream[LeftIn] =>
 
             new MatchContract(stub, keyFieldTypes, leftKey.getFields, rightKey.getFields, leftInput.getContract, rightInput.getContract, name) with Join4sContract[Key, LeftIn, RightIn, Out] {
 
-              val leftUDT = implicitly[UDT[LeftIn]]
-              val rightUDT = implicitly[UDT[RightIn]]
-              val outputUDT = implicitly[UDT[Out]]
-              val mapUDF = implicitly[UDF2[(LeftIn, RightIn) => R]]
-
               override val leftKeySelector = leftKey
               override val rightKeySelector = rightKey
-
-              override def getStubParameters = {
-
-                val leftDeserializer = leftUDT.createSerializer(mapUDF.getReadFields._1)
-                val leftDiscard = mapUDF.getDiscardedFields._1.toArray
-                val rightDeserializer = rightUDT.createSerializer(mapUDF.getReadFields._2)
-                val rightDiscard = mapUDF.getDiscardedFields._2.toArray
-                val serializer = outputUDT.createSerializer(mapUDF.getWriteFields)
-
-                new JoinParameters(leftDeserializer, leftDiscard, rightDeserializer, rightDiscard, serializer, mapFunction)
-              }
+              override val leftUDT = implicitly[UDT[LeftIn]]
+              override val rightUDT = implicitly[UDT[RightIn]]
+              override val outputUDT = implicitly[UDT[Out]]
+              override val joinUDF = implicitly[UDF2[(LeftIn, RightIn) => R]]
+              override val userFunction = mapFunction
             }
           }
         }

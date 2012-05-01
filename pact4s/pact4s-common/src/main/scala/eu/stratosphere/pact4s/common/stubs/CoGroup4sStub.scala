@@ -3,16 +3,25 @@ package eu.stratosphere.pact4s.common.stubs
 import java.util.{ Iterator => JIterator }
 
 import eu.stratosphere.pact4s.common.analyzer._
-import eu.stratosphere.pact4s.common.stubs.parameters._
 
 import eu.stratosphere.pact.common.stubs._
 import eu.stratosphere.pact.common.stubs.StubAnnotation._
 import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode
 import eu.stratosphere.pact.common.`type`.PactRecord
+import eu.stratosphere.nephele.configuration.Configuration
+
+case class CoGroupParameters[LeftIn, RightIn, Out](
+  val leftDeserializer: UDTSerializer[LeftIn],
+  val leftForward: Array[Int],
+  val rightDeserializer: UDTSerializer[RightIn],
+  val rightForward: Array[Int],
+  val serializer: UDTSerializer[Out],
+  val userFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]])
+  extends StubParameters
 
 @ImplicitOperationFirst(implicitOperation = ImplicitOperationMode.Projection)
 @ImplicitOperationSecond(implicitOperation = ImplicitOperationMode.Projection)
-class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub with ParameterizedStub[CoGroupParameters[LeftIn, RightIn, Out]] {
+class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
 
   private val outputRecord = new PactRecord()
 
@@ -22,9 +31,11 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub with Parameterized
   private var rightForward: Array[Int] = _
   private var serializer: UDTSerializer[Out] = _
 
-  private var stubFunction: (JIterator[PactRecord], JIterator[PactRecord], Collector) => Unit = _
+  private var userFunction: (JIterator[PactRecord], JIterator[PactRecord], Collector) => Unit = _
 
-  override def initialize(parameters: CoGroupParameters[LeftIn, RightIn, Out]) = {
+  override def open(config: Configuration) = {
+    super.open(config)
+    val parameters = StubParameters.getValue[CoGroupParameters[LeftIn, RightIn, Out]](config)
 
     this.leftIterator = new DeserializingIterator(parameters.leftDeserializer)
     this.leftForward = parameters.leftForward
@@ -32,17 +43,17 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub with Parameterized
     this.rightForward = parameters.rightForward
     this.serializer = parameters.serializer
 
-    this.stubFunction = parameters.mapFunction.fold(doCoGroup _, doFlatCoGroup _)
+    this.userFunction = parameters.userFunction.fold(doCoGroup _, doFlatCoGroup _)
   }
 
-  override def coGroup(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = stubFunction(leftRecords, rightRecords, out)
+  override def coGroup(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = userFunction(leftRecords, rightRecords, out)
 
-  private def doCoGroup(mapFunction: (Iterator[LeftIn], Iterator[RightIn]) => Out)(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = {
+  private def doCoGroup(userFunction: (Iterator[LeftIn], Iterator[RightIn]) => Out)(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = {
 
     leftIterator.initialize(leftRecords)
     rightIterator.initialize(rightRecords)
 
-    val output = mapFunction.apply(leftIterator, rightIterator)
+    val output = userFunction.apply(leftIterator, rightIterator)
 
     outputRecord.copyFrom(leftIterator.getFirstRecord, leftForward, leftForward);
     outputRecord.copyFrom(rightIterator.getFirstRecord, rightForward, rightForward);
@@ -51,12 +62,12 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub with Parameterized
     out.collect(outputRecord)
   }
 
-  private def doFlatCoGroup(mapFunction: (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out])(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = {
+  private def doFlatCoGroup(userFunction: (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out])(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = {
 
     leftIterator.initialize(leftRecords)
     rightIterator.initialize(rightRecords)
 
-    val output = mapFunction.apply(leftIterator, rightIterator)
+    val output = userFunction.apply(leftIterator, rightIterator)
 
     if (output.nonEmpty) {
 

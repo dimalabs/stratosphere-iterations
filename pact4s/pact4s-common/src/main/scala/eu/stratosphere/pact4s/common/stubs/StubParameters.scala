@@ -1,4 +1,4 @@
-package eu.stratosphere.pact4s.common.stubs.parameters
+package eu.stratosphere.pact4s.common.stubs
 
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -8,10 +8,14 @@ import java.io.ObjectOutputStream
 import eu.stratosphere.pact.common.contract.Contract
 import eu.stratosphere.nephele.configuration.Configuration
 
-class StubParameters extends Serializable
+class StubParameters extends Serializable {
+
+  def persist(config: Configuration) = StubParameters.setValue(config, this)
+  def persist(contract: Contract) = StubParameters.setValue(contract, this)
+}
 
 object StubParameters {
-  private val parameterName = "Pact4s Stub Parameters"
+  private val parameterName = "pact4s.stub.parameters"
 
   def getValue[T <: StubParameters](config: Configuration): T = {
 
@@ -32,7 +36,7 @@ object StubParameters {
     }
   }
 
-  def setValue[T <: StubParameters](config: Configuration, parameters: T): Unit = {
+  def setValue(config: Configuration, parameters: StubParameters): Unit = {
 
     val baos = new ByteArrayOutputStream
     val oos = new ObjectOutputStream(baos)
@@ -51,5 +55,5 @@ object StubParameters {
     }
   }
 
-  def setValue[T <: StubParameters](contract: Contract, parameters: T): Unit = setValue(contract.getParameters(), parameters)
+  def setValue(contract: Contract, parameters: StubParameters): Unit = setValue(contract.getParameters(), parameters)
 }

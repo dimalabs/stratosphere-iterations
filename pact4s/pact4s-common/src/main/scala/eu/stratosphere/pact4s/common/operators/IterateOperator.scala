@@ -4,7 +4,6 @@ import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact4s.common.stubs._
-import eu.stratosphere.pact4s.common.stubs.parameters._
 
 import eu.stratosphere.pact.common.contract._
 
