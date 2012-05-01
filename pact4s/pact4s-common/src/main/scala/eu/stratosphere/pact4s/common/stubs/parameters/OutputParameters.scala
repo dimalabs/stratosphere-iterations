@@ -6,19 +6,16 @@ import java.io.OutputStream
 import eu.stratosphere.pact4s.common.analyzer._
 
 case class RawOutputParameters[In](
-  val inputUDT: UDT[In],
-  val writeUDF: FieldSelector[In => Unit],
+  val deserializer: UDTSerializer[In],
   val writeFunction: (In, OutputStream) => Unit)
   extends StubParameters
 
 case class BinaryOutputParameters[In](
-  val inputUDT: UDT[In],
-  val writeUDF: FieldSelector[In => Unit],
+  val deserializer: UDTSerializer[In],
   val writeFunction: (In, DataOutput) => Unit)
   extends StubParameters
 
 case class DelimetedOutputParameters[In](
-  val inputUDT: UDT[In],
-  val writeUDF: FieldSelector[In => Unit],
+  val deserializer: UDTSerializer[In],
   val writeFunction: (In, Array[Byte]) => Int)
   extends StubParameters

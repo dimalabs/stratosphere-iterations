@@ -17,27 +17,26 @@ class Reduce4sStub[In, Out] extends ReduceStub with ParameterizedStub[ReducePara
   private val outputRecord = new PactRecord()
 
   private var combineIterator: DeserializingIterator[In] = null
-  private var combineForwardedFields: Array[Int] = _
+  private var combineForward: Array[Int] = _
   private var combineFunction: Iterator[In] => In = _
   private var combineSerializer: UDTSerializer[In] = _
 
   private var reduceIterator: DeserializingIterator[In] = null
-  private var reduceForwardedFields: Array[Int] = _
+  private var reduceForward: Array[Int] = _
   private var reduceFunction: Iterator[In] => Out = _
   private var reduceSerializer: UDTSerializer[Out] = _
 
   override def initialize(parameters: ReduceParameters[In, Out]) = {
-    val ReduceParameters(inputUDT, outputUDT, combineUDF, combineFunction, reduceUDF, reduceFunction) = parameters
 
-    this.combineIterator = combineUDF map { udf => new DeserializingIterator(inputUDT.createSerializer(udf.getReadFields)) } getOrElse null
-    this.combineForwardedFields = combineUDF map { _.getForwardedFields.toArray } getOrElse null
-    this.combineFunction = combineFunction getOrElse null
-    this.combineSerializer = combineUDF map { udf => inputUDT.createSerializer(udf.getWriteFields) } getOrElse null
+    this.combineIterator = parameters.combineDeserializer map { d => new DeserializingIterator(d) } getOrElse null
+    this.combineForward = parameters.combineForward getOrElse null
+    this.combineFunction = parameters.combineFunction getOrElse null
+    this.combineSerializer = parameters.combineSerializer getOrElse null
 
-    this.reduceIterator = new DeserializingIterator(inputUDT.createSerializer(reduceUDF.getReadFields))
-    this.reduceForwardedFields = reduceUDF.getForwardedFields.toArray
-    this.reduceFunction = reduceFunction
-    this.reduceSerializer = outputUDT.createSerializer(reduceUDF.getWriteFields)
+    this.reduceIterator = new DeserializingIterator(parameters.reduceDeserializer)
+    this.reduceForward = parameters.reduceForward
+    this.reduceFunction = parameters.reduceFunction
+    this.reduceSerializer = parameters.reduceSerializer
   }
 
   override def combine(records: JIterator[PactRecord], out: Collector) = {
@@ -47,7 +46,7 @@ class Reduce4sStub[In, Out] extends ReduceStub with ParameterizedStub[ReducePara
     val outputRecord = combineIterator.getFirstRecord
     val output = combineFunction.apply(combineIterator)
 
-    outputRecord.copyFrom(combineIterator.getFirstRecord, combineForwardedFields, combineForwardedFields);
+    outputRecord.copyFrom(combineIterator.getFirstRecord, combineForward, combineForward);
 
     combineSerializer.serialize(output, outputRecord)
     out.collect(outputRecord)
@@ -59,7 +58,7 @@ class Reduce4sStub[In, Out] extends ReduceStub with ParameterizedStub[ReducePara
 
     val output = reduceFunction.apply(reduceIterator)
 
-    outputRecord.copyFrom(reduceIterator.getFirstRecord, reduceForwardedFields, reduceForwardedFields);
+    outputRecord.copyFrom(reduceIterator.getFirstRecord, reduceForward, reduceForward);
 
     reduceSerializer.serialize(output, outputRecord)
     out.collect(outputRecord)

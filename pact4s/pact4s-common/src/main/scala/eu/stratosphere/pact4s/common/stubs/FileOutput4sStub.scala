@@ -15,10 +15,9 @@ class RawOutput4sStub[In] extends FileOutputFormat with ParameterizedOutputForma
   private var writeFunction: (In, OutputStream) => Unit = _
 
   override def initialize(parameters: RawOutputParameters[In]) = {
-    val RawOutputParameters(inputUDT, writeUDF, formatFunction) = parameters
 
-    this.deserializer = inputUDT.createSerializer(writeUDF.getFields)
-    this.writeFunction = writeFunction
+    this.deserializer = parameters.deserializer
+    this.writeFunction = parameters.writeFunction
   }
 
   override def writeRecord(record: PactRecord) = {
@@ -34,10 +33,9 @@ class BinaryOutput4sStub[In] extends BinaryOutputFormat with ParameterizedOutput
   private var writeFunction: (In, DataOutput) => Unit = _
 
   override def initialize(parameters: BinaryOutputParameters[In]) = {
-    val BinaryOutputParameters(inputUDT, writeUDF, formatFunction) = parameters
 
-    this.deserializer = inputUDT.createSerializer(writeUDF.getFields)
-    this.writeFunction = writeFunction
+    this.deserializer = parameters.deserializer
+    this.writeFunction = parameters.writeFunction
   }
 
   override def serialize(record: PactRecord, target: DataOutput) = {
@@ -53,10 +51,9 @@ class DelimetedOutput4sStub[In] extends DelimitedOutputFormat with Parameterized
   private var writeFunction: (In, Array[Byte]) => Int = _
 
   override def initialize(parameters: DelimetedOutputParameters[In]) = {
-    val DelimetedOutputParameters(inputUDT, writeUDF, formatFunction) = parameters
 
-    this.deserializer = inputUDT.createSerializer(writeUDF.getFields)
-    this.writeFunction = writeFunction
+    this.deserializer = parameters.deserializer
+    this.writeFunction = parameters.writeFunction
   }
 
   override def serializeRecord(record: PactRecord, target: Array[Byte]): Int = {

@@ -1,4 +1,4 @@
-package eu.stratosphere.pact4s.common.streams
+package eu.stratosphere.pact4s.common
 
 import eu.stratosphere.pact4s.common.analyzer._
 

@@ -17,63 +17,41 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub with Parameterized
   private val outputRecord = new PactRecord()
 
   private var leftIterator: DeserializingIterator[LeftIn] = null
-  private var leftForwardedFields: Array[Int] = _
+  private var leftForward: Array[Int] = _
   private var rightIterator: DeserializingIterator[RightIn] = null
-  private var rightForwardedFields: Array[Int] = _
-  private var mapFunction: (Iterator[LeftIn], Iterator[RightIn]) => Out = _
+  private var rightForward: Array[Int] = _
   private var serializer: UDTSerializer[Out] = _
 
-  override def initialize(parameters: CoGroupParameters[LeftIn, RightIn, Out]) = {
-    val CoGroupParameters(leftUDT, rightUDT, outputUDT, mapUDF, mapFunction) = parameters
+  private var stubFunction: (JIterator[PactRecord], JIterator[PactRecord], Collector) => Unit = _
 
-    this.leftIterator = new DeserializingIterator(leftUDT.createSerializer(mapUDF.getReadFields._1))
-    this.leftForwardedFields = mapUDF.getForwardedFields._1.toArray
-    this.rightIterator = new DeserializingIterator(rightUDT.createSerializer(mapUDF.getReadFields._1))
-    this.rightForwardedFields = mapUDF.getForwardedFields._2.toArray
-    this.mapFunction = mapFunction
-    this.serializer = outputUDT.createSerializer(mapUDF.getWriteFields)
+  override def initialize(parameters: CoGroupParameters[LeftIn, RightIn, Out]) = {
+
+    this.leftIterator = new DeserializingIterator(parameters.leftDeserializer)
+    this.leftForward = parameters.leftForward
+    this.rightIterator = new DeserializingIterator(parameters.rightDeserializer)
+    this.rightForward = parameters.rightForward
+    this.serializer = parameters.serializer
+
+    this.stubFunction = parameters.mapFunction.fold(doCoGroup _, doFlatCoGroup _)
   }
 
-  override def coGroup(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = {
+  override def coGroup(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = stubFunction(leftRecords, rightRecords, out)
+
+  private def doCoGroup(mapFunction: (Iterator[LeftIn], Iterator[RightIn]) => Out)(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = {
 
     leftIterator.initialize(leftRecords)
     rightIterator.initialize(rightRecords)
 
     val output = mapFunction.apply(leftIterator, rightIterator)
 
-    outputRecord.copyFrom(leftIterator.getFirstRecord, leftForwardedFields, leftForwardedFields);
-    outputRecord.copyFrom(rightIterator.getFirstRecord, rightForwardedFields, rightForwardedFields);
+    outputRecord.copyFrom(leftIterator.getFirstRecord, leftForward, leftForward);
+    outputRecord.copyFrom(rightIterator.getFirstRecord, rightForward, rightForward);
 
     serializer.serialize(output, outputRecord)
     out.collect(outputRecord)
   }
-}
 
-@ImplicitOperationFirst(implicitOperation = ImplicitOperationMode.Projection)
-@ImplicitOperationSecond(implicitOperation = ImplicitOperationMode.Projection)
-class FlatCoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub with ParameterizedStub[FlatCoGroupParameters[LeftIn, RightIn, Out]] {
-
-  private val outputRecord = new PactRecord()
-
-  private var leftIterator: DeserializingIterator[LeftIn] = null
-  private var leftForwardedFields: Array[Int] = _
-  private var rightIterator: DeserializingIterator[RightIn] = null
-  private var rightForwardedFields: Array[Int] = _
-  private var mapFunction: (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out] = _
-  private var serializer: UDTSerializer[Out] = _
-
-  override def initialize(parameters: FlatCoGroupParameters[LeftIn, RightIn, Out]) = {
-    val FlatCoGroupParameters(leftUDT, rightUDT, outputUDT, mapUDF, mapFunction) = parameters
-
-    this.leftIterator = new DeserializingIterator(leftUDT.createSerializer(mapUDF.getReadFields._1))
-    this.leftForwardedFields = mapUDF.getForwardedFields._1.toArray
-    this.rightIterator = new DeserializingIterator(rightUDT.createSerializer(mapUDF.getReadFields._1))
-    this.rightForwardedFields = mapUDF.getForwardedFields._2.toArray
-    this.mapFunction = mapFunction
-    this.serializer = outputUDT.createSerializer(mapUDF.getWriteFields)
-  }
-
-  override def coGroup(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = {
+  private def doFlatCoGroup(mapFunction: (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out])(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = {
 
     leftIterator.initialize(leftRecords)
     rightIterator.initialize(rightRecords)
@@ -82,8 +60,8 @@ class FlatCoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub with Parameter
 
     if (output.nonEmpty) {
 
-      outputRecord.copyFrom(leftIterator.getFirstRecord, leftForwardedFields, leftForwardedFields);
-      outputRecord.copyFrom(rightIterator.getFirstRecord, rightForwardedFields, rightForwardedFields);
+      outputRecord.copyFrom(leftIterator.getFirstRecord, leftForward, leftForward);
+      outputRecord.copyFrom(rightIterator.getFirstRecord, rightForward, rightForward);
 
       for (item <- output) {
         serializer.serialize(item, outputRecord)

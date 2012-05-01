@@ -1,12 +1,7 @@
 package eu.stratosphere.pact4s.common
 
-import java.io.OutputStream
-
 import scala.collection.TraversableOnce
 
-import eu.stratosphere.pact4s.common.analyzer._
-import eu.stratosphere.pact4s.common.streams.DataSink
-import eu.stratosphere.pact4s.common.streams.DataStream
 import eu.stratosphere.pact4s.common.analyzer.UDT
 
 package object operators {
@@ -14,8 +9,8 @@ package object operators {
   case class WrappedDataSink[T](inner: DataSink[T])
   case class WrappedDataStream[T](inner: DataStream[T])
 
-  implicit def dataStream2SourceToSink[T: UDT](input: DataStream[T]) = new WrappedDataStream(input) with SourceToSinkOperator[T]
   implicit def dataSink2SinkToSource[T: UDT](sink: DataSink[T]) = new WrappedDataSink(sink) with SinkToSourceOperator[T]
+  implicit def dataStream2SourceToSink[T: UDT](input: DataStream[T]) = new WrappedDataStream(input) with SourceToSinkOperator[T]
 
   implicit def dataStream2CoGroup[T: UDT](input: DataStream[T]) = new WrappedDataStream(input) with CoGroupOperator[T]
   implicit def dataStream2Cross[T: UDT](input: DataStream[T]) = new WrappedDataStream(input) with CrossOperator[T]

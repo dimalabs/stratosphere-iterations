@@ -12,60 +12,48 @@ import eu.stratosphere.pact.common.`type`.PactRecord
 class Map4sStub[In, Out] extends MapStub with ParameterizedStub[MapParameters[In, Out]] {
 
   private var deserializer: UDTSerializer[In] = _
-  private var discardedFields: Iterable[Int] = _
-  private var mapFunction: In => Out = _
   private var serializer: UDTSerializer[Out] = _
+  private var discard: Array[Int] = _
+
+  private var stubFunction: (PactRecord, Collector) => Unit = _
 
   override def initialize(parameters: MapParameters[In, Out]) {
-    val MapParameters(inputUDT, outputUDT, mapUDF, mapFunction) = parameters
 
-    this.deserializer = inputUDT.createSerializer(mapUDF.getReadFields)
-    this.discardedFields = mapUDF.getDiscardedFields
-    this.mapFunction = mapFunction
-    this.serializer = outputUDT.createSerializer(mapUDF.getWriteFields)
+    this.deserializer = parameters.deserializer
+    this.serializer = parameters.serializer
+    this.discard = parameters.discard
+
+    this.stubFunction = parameters.mapFunction.fold(doMap _, doFlatMap _)
   }
 
-  override def map(record: PactRecord, out: Collector) = {
+  override def map(record: PactRecord, out: Collector) = stubFunction(record, out)
+
+  private def doMap(mapFunction: In => Out)(record: PactRecord, out: Collector) = {
 
     val input = deserializer.deserialize(record)
     val output = mapFunction.apply(input)
 
-    for (field <- discardedFields)
+    for (field <- discard)
       record.setNull(field)
 
     serializer.serialize(output, record)
     out.collect(record)
   }
-}
 
-@ImplicitOperation(implicitOperation = ImplicitOperationMode.Copy)
-class FlatMap4sStub[In, Out] extends MapStub with ParameterizedStub[FlatMapParameters[In, Out]] {
-
-  private var deserializer: UDTSerializer[In] = _
-  private var discardedFields: Iterable[Int] = _
-  private var mapFunction: In => Iterator[Out] = _
-  private var serializer: UDTSerializer[Out] = _
-
-  override def initialize(parameters: FlatMapParameters[In, Out]) {
-    val FlatMapParameters(inputUDT, outputUDT, mapUDF, mapFunction) = parameters
-
-    this.deserializer = inputUDT.createSerializer(mapUDF.getReadFields)
-    this.discardedFields = mapUDF.getDiscardedFields
-    this.mapFunction = mapFunction
-    this.serializer = outputUDT.createSerializer(mapUDF.getWriteFields)
-  }
-
-  override def map(record: PactRecord, out: Collector) = {
+  private def doFlatMap(flatMapFunction: In => Iterator[Out])(record: PactRecord, out: Collector) = {
 
     val input = deserializer.deserialize(record)
-    val output = mapFunction.apply(input)
+    val output = flatMapFunction.apply(input)
 
-    for (field <- discardedFields)
-      record.setNull(field)
+    if (output.nonEmpty) {
 
-    for (item <- output) {
-      serializer.serialize(item, record)
-      out.collect(record)
+      for (field <- discard)
+        record.setNull(field)
+
+      for (item <- output) {
+        serializer.serialize(item, record)
+        out.collect(record)
+      }
     }
   }
 }

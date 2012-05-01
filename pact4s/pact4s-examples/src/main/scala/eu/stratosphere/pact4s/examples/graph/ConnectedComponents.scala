@@ -4,7 +4,6 @@ import scala.math._
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
-import eu.stratosphere.pact4s.common.streams._
 
 object ConnectedComponents extends PactDescriptor[ConnectedComponents] {
   override val name = "Connected Components"

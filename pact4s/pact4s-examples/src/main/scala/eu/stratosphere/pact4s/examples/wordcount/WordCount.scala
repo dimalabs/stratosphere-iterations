@@ -5,7 +5,6 @@ import scala.math.Ordered._
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
-import eu.stratosphere.pact4s.common.streams._
 
 object WordCount extends PactDescriptor[WordCount] {
   override val name = "Word Count"

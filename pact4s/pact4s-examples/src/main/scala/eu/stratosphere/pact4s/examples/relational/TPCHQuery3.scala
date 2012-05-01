@@ -5,7 +5,6 @@ import scala.math.Ordered._
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
-import eu.stratosphere.pact4s.common.streams._
 
 /**
  * The TPC-H is a decision support benchmark on relational data.

@@ -3,10 +3,12 @@ package eu.stratosphere.pact4s.common.stubs.parameters
 import eu.stratosphere.pact4s.common.analyzer._
 
 case class ReduceParameters[In, Out](
-  val inputUDT: UDT[In],
-  val outputUDT: UDT[Out],
-  val combineUDF: Option[UDF1[Iterator[In] => In]],
+  val combineDeserializer: Option[UDTSerializer[In]],
+  val combineSerializer: Option[UDTSerializer[In]],
+  val combineForward: Option[Array[Int]],
   val combineFunction: Option[Iterator[In] => In],
-  val reduceUDF: UDF1[Iterator[In] => Out],
+  val reduceDeserializer: UDTSerializer[In],
+  val reduceSerializer: UDTSerializer[Out],
+  val reduceForward: Array[Int],
   val reduceFunction: Iterator[In] => Out)
   extends StubParameters

@@ -1,49 +1,39 @@
-package eu.stratosphere.pact4s.common.streams
+package eu.stratosphere.pact4s.common
 
 import java.io.DataOutput
 import java.io.OutputStream
 
-import eu.stratosphere.pact4s.common.Hintable
 import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.stubs._
 import eu.stratosphere.pact4s.common.stubs.parameters._
 
 import eu.stratosphere.pact.common.io._
-import eu.stratosphere.pact.common.contract.FileDataSink
-import eu.stratosphere.pact.common.contract.GenericDataSink
 import eu.stratosphere.nephele.configuration.Configuration
 
 case class DataSink[In: UDT](url: String, format: DataSinkFormat[In]) extends Hintable
 
-case class PlanOutput[In: UDT](source: DataStream[In], sink: DataSink[In]) {
-
-  def getContract: Pact4sDataSinkContract = {
-
-    val name = sink.getPactName getOrElse "<Unnamed File Data Sink>"
-    val contract = sink.format.getContract(source.getContract, sink.url, name)
-    sink.applyHints(contract)
-    contract
-  }
-}
-
-object PlanOutput {
-
-  implicit def planOutput2Seq[In](p: PlanOutput[In]): Seq[PlanOutput[In]] = Seq(p)
-}
-
 abstract class DataSinkFormat[In: UDT] {
 
-  def getContract(input: Pact4sContract, url: String, name: String): Pact4sDataSinkContract
+  val stub: Class[_ <: OutputFormat]
+  val inputUDT: UDT[In]
+  val fieldSelector: FieldSelector[In => Unit]
+
+  def configure(config: Configuration) = {}
 }
 
 case class RawDataSinkFormat[In: UDT, F: SelectorBuilder[In, Unit]#Selector](val writeFunction: (In, OutputStream) => Unit) extends DataSinkFormat[In] {
 
-  override def getContract(input: Pact4sContract, url: String, name: String) = {
+  override val stub = classOf[RawOutput4sStub[In]]
 
-    new FileDataSink(classOf[RawOutput4sStub[In]], url, input, name) with RawDataSink4sContract[In] {
+  override val inputUDT = implicitly[UDT[In]]
+  override val fieldSelector = implicitly[FieldSelector[In => Unit]]
 
-      override val stubParameters = RawOutputParameters(implicitly[UDT[In]], implicitly[FieldSelector[In => Unit]], writeFunction)
-    }
+  override def configure(config: Configuration) {
+
+    val deserializer = inputUDT.createSerializer(fieldSelector.getFields)
+
+    val stubParameters = RawOutputParameters(deserializer, writeFunction)
+    StubParameters.setValue(config, stubParameters)
   }
 }
 
@@ -51,12 +41,20 @@ case class BinaryDataSinkFormat[In: UDT, F: SelectorBuilder[In, Unit]#Selector](
 
   def this(writeFunction: (In, DataOutput) => Unit, blockSize: Long) = this(writeFunction, Some(blockSize))
 
-  override def getContract(input: Pact4sContract, url: String, name: String) = {
+  override val stub = classOf[BinaryOutput4sStub[In]]
 
-    new FileDataSink(classOf[BinaryOutput4sStub[In]], url, input, name) with BinaryDataSink4sContract[In] {
+  override val inputUDT = implicitly[UDT[In]]
+  override val fieldSelector = implicitly[FieldSelector[In => Unit]]
 
-      override val stubParameters = BinaryOutputParameters(implicitly[UDT[In]], implicitly[FieldSelector[In => Unit]], writeFunction)
-    }
+  override def configure(config: Configuration) {
+
+    val deserializer = inputUDT.createSerializer(fieldSelector.getFields)
+
+    val stubParameters = BinaryOutputParameters(deserializer, writeFunction)
+    StubParameters.setValue(config, stubParameters)
+
+    if (blockSize.isDefined)
+      config.setLong(BinaryOutputFormat.BLOCK_SIZE_PARAMETER_KEY, blockSize.get)
   }
 }
 
@@ -64,13 +62,14 @@ case class SequentialDataSinkFormat[In: UDT](val blockSize: Option[Long] = None)
 
   def this(blockSize: Long) = this(Some(blockSize))
 
-  override def getContract(input: Pact4sContract, url: String, name: String) = {
+  override val stub = classOf[SequentialOutputFormat]
 
-    new FileDataSink(classOf[SequentialOutputFormat], url, input, name) with SequentialDataSink4sContract {
+  override val inputUDT = implicitly[UDT[In]]
+  override val fieldSelector = implicitly[FieldSelector[In => Unit]]
 
-      if (blockSize.isDefined)
-        this.getParameters().setLong(BinaryOutputFormat.BLOCK_SIZE_PARAMETER_KEY, blockSize.get)
-    }
+  override def configure(config: Configuration) {
+    if (blockSize.isDefined)
+      config.setLong(BinaryOutputFormat.BLOCK_SIZE_PARAMETER_KEY, blockSize.get)
   }
 }
 
@@ -78,12 +77,20 @@ case class DelimetedDataSinkFormat[In: UDT, F: SelectorBuilder[In, Unit]#Selecto
 
   def this(writeFunction: (In, Array[Byte]) => Int, delimeter: String) = this(writeFunction, Some(delimeter))
 
-  override def getContract(input: Pact4sContract, url: String, name: String) = {
+  override val stub = classOf[DelimetedOutput4sStub[In]]
 
-    new FileDataSink(classOf[DelimetedOutput4sStub[In]], url, input, name) with DelimetedDataSink4sContract[In] {
+  override val inputUDT = implicitly[UDT[In]]
+  override val fieldSelector = implicitly[FieldSelector[In => Unit]]
 
-      override val stubParameters = DelimetedOutputParameters(implicitly[UDT[In]], implicitly[FieldSelector[In => Unit]], writeFunction)
-    }
+  override def configure(config: Configuration) {
+
+    val deserializer = inputUDT.createSerializer(fieldSelector.getFields)
+
+    val stubParameters = DelimetedOutputParameters(deserializer, writeFunction)
+    StubParameters.setValue(config, stubParameters)
+
+    if (delimeter.isDefined)
+      config.setString(DelimitedOutputFormat.RECORD_DELIMITER, delimeter.get)
   }
 }
 
@@ -124,25 +131,27 @@ case class RecordDataSinkFormat[In: UDT](val recordDelimeter: Option[String] = N
 
   def this(recordDelimeter: String, fieldDelimeter: String, lenient: Boolean) = this(Some(recordDelimeter), Some(fieldDelimeter), Some(lenient))
 
-  override def getContract(input: Pact4sContract, url: String, name: String) = {
+  override val stub = classOf[RecordOutputFormat]
 
-    new FileDataSink(classOf[RecordOutputFormat], url, input, name) with RecordDataSink4sContract {
+  override val inputUDT = implicitly[UDT[In]]
+  override val fieldSelector = implicitly[FieldSelector[In => Unit]]
 
-      val fields = implicitly[UDT[In]].fieldTypes
+  override def configure(config: Configuration) {
 
-      this.getParameters().setInteger(RecordOutputFormat.NUM_FIELDS_PARAMETER, fields.length)
+    val fields = implicitly[UDT[In]].fieldTypes
 
-      for (fieldNum <- 0 until fields.length)
-        this.getParameters().setClass(RecordOutputFormat.FIELD_TYPE_PARAMETER_PREFIX + fieldNum, fields(fieldNum))
+    config.setInteger(RecordOutputFormat.NUM_FIELDS_PARAMETER, fields.length)
 
-      if (recordDelimeter.isDefined)
-        this.getParameters().setString(RecordOutputFormat.RECORD_DELIMITER_PARAMETER, recordDelimeter.get)
+    for (fieldNum <- 0 until fields.length)
+      config.setClass(RecordOutputFormat.FIELD_TYPE_PARAMETER_PREFIX + fieldNum, fields(fieldNum))
 
-      if (fieldDelimeter.isDefined)
-        this.getParameters().setString(RecordOutputFormat.FIELD_DELIMITER_PARAMETER, fieldDelimeter.get)
+    if (recordDelimeter.isDefined)
+      config.setString(RecordOutputFormat.RECORD_DELIMITER_PARAMETER, recordDelimeter.get)
 
-      if (lenient.isDefined)
-        this.getParameters().setBoolean(RecordOutputFormat.LENIENT_PARSING, lenient.get)
-    }
+    if (fieldDelimeter.isDefined)
+      config.setString(RecordOutputFormat.FIELD_DELIMITER_PARAMETER, fieldDelimeter.get)
+
+    if (lenient.isDefined)
+      config.setBoolean(RecordOutputFormat.LENIENT_PARSING, lenient.get)
   }
 }

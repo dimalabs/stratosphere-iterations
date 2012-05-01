@@ -3,15 +3,8 @@ package eu.stratosphere.pact4s.common.stubs.parameters
 import eu.stratosphere.pact4s.common.analyzer._
 
 case class MapParameters[In, Out](
-  val inputUDT: UDT[In],
-  val outputUDT: UDT[Out],
-  val mapUDF: UDF1[In => Out],
-  val mapFunction: In => Out)
-  extends StubParameters
-  
-case class FlatMapParameters[In, Out](
-  val inputUDT: UDT[In],
-  val outputUDT: UDT[Out],
-  val mapUDF: UDF1[In => Iterator[Out]],
-  val mapFunction: In => Iterator[Out])
+  val deserializer: UDTSerializer[In],
+  val serializer: UDTSerializer[Out],
+  val discard: Array[Int],
+  val mapFunction: Either[In => Out, In => Iterator[Out]])
   extends StubParameters

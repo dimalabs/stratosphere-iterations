@@ -13,33 +13,36 @@ import eu.stratosphere.pact.common.`type`.PactRecord
 class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub with ParameterizedStub[CrossParameters[LeftIn, RightIn, Out]] {
 
   private var leftDeserializer: UDTSerializer[LeftIn] = _
-  private var leftDiscardedFields: Iterable[Int] = _
+  private var leftDiscard: Array[Int] = _
   private var rightDeserializer: UDTSerializer[RightIn] = _
-  private var rightDiscardedFields: Iterable[Int] = _
-  private var mapFunction: (LeftIn, RightIn) => Out = _
+  private var rightDiscard: Array[Int] = _
   private var serializer: UDTSerializer[Out] = _
 
-  override def initialize(parameters: CrossParameters[LeftIn, RightIn, Out]) {
-    val CrossParameters(leftUDT, rightUDT, outputUDT, mapUDF, mapFunction) = parameters
+  private var stubFunction: (PactRecord, PactRecord, Collector) => Unit = _
 
-    this.leftDeserializer = leftUDT.createSerializer(mapUDF.getReadFields._1)
-    this.leftDiscardedFields = mapUDF.getDiscardedFields._1
-    this.rightDeserializer = rightUDT.createSerializer(mapUDF.getReadFields._2)
-    this.rightDiscardedFields = mapUDF.getDiscardedFields._2
-    this.mapFunction = mapFunction
-    this.serializer = outputUDT.createSerializer(mapUDF.getWriteFields)
+  override def initialize(parameters: CrossParameters[LeftIn, RightIn, Out]) {
+
+    this.leftDeserializer = parameters.leftDeserializer
+    this.leftDiscard = parameters.leftDiscard
+    this.rightDeserializer = parameters.rightDeserializer
+    this.rightDiscard = parameters.rightDiscard
+    this.serializer = parameters.serializer
+
+    this.stubFunction = parameters.mapFunction.fold(doCross _, doFlatCross _)
   }
 
-  override def cross(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) {
+  override def cross(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) = stubFunction(leftRecord, rightRecord, out)
+
+  private def doCross(mapFunction: (LeftIn, RightIn) => Out)(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) {
 
     val left = leftDeserializer.deserialize(leftRecord)
     val right = rightDeserializer.deserialize(rightRecord)
     val output = mapFunction.apply(left, right)
 
-    for (field <- leftDiscardedFields)
+    for (field <- leftDiscard)
       leftRecord.setNull(field)
 
-    for (field <- rightDiscardedFields)
+    for (field <- rightDiscard)
       rightRecord.setNull(field)
 
     leftRecord.unionFields(rightRecord)
@@ -47,31 +50,8 @@ class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub with ParameterizedStub
     serializer.serialize(output, leftRecord)
     out.collect(leftRecord)
   }
-}
 
-@ImplicitOperationFirst(implicitOperation = ImplicitOperationMode.Copy)
-@ImplicitOperationSecond(implicitOperation = ImplicitOperationMode.Copy)
-class FlatCross4sStub[LeftIn, RightIn, Out] extends CrossStub with ParameterizedStub[FlatCrossParameters[LeftIn, RightIn, Out]] {
-
-  private var leftDeserializer: UDTSerializer[LeftIn] = _
-  private var leftDiscardedFields: Iterable[Int] = _
-  private var rightDeserializer: UDTSerializer[RightIn] = _
-  private var rightDiscardedFields: Iterable[Int] = _
-  private var mapFunction: (LeftIn, RightIn) => Iterator[Out] = _
-  private var serializer: UDTSerializer[Out] = _
-
-  override def initialize(parameters: FlatCrossParameters[LeftIn, RightIn, Out]) {
-    val FlatCrossParameters(leftUDT, rightUDT, outputUDT, mapUDF, mapFunction) = parameters
-
-    this.leftDeserializer = leftUDT.createSerializer(mapUDF.getReadFields._1)
-    this.leftDiscardedFields = mapUDF.getDiscardedFields._1
-    this.rightDeserializer = rightUDT.createSerializer(mapUDF.getReadFields._2)
-    this.rightDiscardedFields = mapUDF.getDiscardedFields._2
-    this.mapFunction = mapFunction
-    this.serializer = outputUDT.createSerializer(mapUDF.getWriteFields)
-  }
-
-  override def cross(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) {
+  private def doFlatCross(mapFunction: (LeftIn, RightIn) => Iterator[Out])(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) {
 
     val left = leftDeserializer.deserialize(leftRecord)
     val right = rightDeserializer.deserialize(rightRecord)
@@ -79,10 +59,10 @@ class FlatCross4sStub[LeftIn, RightIn, Out] extends CrossStub with Parameterized
 
     if (output.nonEmpty) {
 
-      for (field <- leftDiscardedFields)
+      for (field <- leftDiscard)
         leftRecord.setNull(field)
 
-      for (field <- rightDiscardedFields)
+      for (field <- rightDiscard)
         rightRecord.setNull(field)
 
       leftRecord.unionFields(rightRecord)
