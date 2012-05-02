@@ -333,10 +333,8 @@ public abstract class SingleInputNode extends OptimizerNode {
 	@Override
 	protected void readReadsAnnotation() {
 		
-		SingleInputContract<?> c = (SingleInputContract<?>)super.getPactContract();
-		
 		// get readSet annotation from stub
-		Reads readSetAnnotation = c.getUserCodeClass().getAnnotation(Reads.class);
+		Reads readSetAnnotation = super.getPactContract().getUserCodeAnnotation(Reads.class);
 		
 		// extract readSet from annotation
 		if(readSetAnnotation == null) {
@@ -357,7 +355,7 @@ public abstract class SingleInputNode extends OptimizerNode {
 		SingleInputContract<?> c = (SingleInputContract<?>)super.getPactContract();
 		
 		// get updateSet annotation from stub
-		ImplicitOperation implOpAnnotation = c.getUserCodeClass().getAnnotation(ImplicitOperation.class);
+		ImplicitOperation implOpAnnotation = c.getUserCodeAnnotation(ImplicitOperation.class);
 		
 		this.implOpMode = null;
 		this.explCopies = null;
@@ -368,7 +366,7 @@ public abstract class SingleInputNode extends OptimizerNode {
 			switch(implOpAnnotation.implicitOperation()) {
 			case Copy:
 				// implicit copies -> we have explicit projection
-				ExplicitProjections explProjAnnotation = c.getUserCodeClass().getAnnotation(ExplicitProjections.class);
+				ExplicitProjections explProjAnnotation = c.getUserCodeAnnotation(ExplicitProjections.class);
 				if(explProjAnnotation != null) {
 					this.implOpMode = ImplicitOperationMode.Copy;
 					this.explProjections = new FieldSet(explProjAnnotation.fields());
@@ -376,7 +374,7 @@ public abstract class SingleInputNode extends OptimizerNode {
 				break;
 			case Projection:
 				// implicit projections -> we have explicit copies
-				ExplicitCopies explCopyjAnnotation = c.getUserCodeClass().getAnnotation(ExplicitCopies.class);
+				ExplicitCopies explCopyjAnnotation = c.getUserCodeAnnotation(ExplicitCopies.class);
 				if(explCopyjAnnotation != null) {
 					this.implOpMode = ImplicitOperationMode.Projection;
 					this.explCopies = new FieldSet(explCopyjAnnotation.fields());

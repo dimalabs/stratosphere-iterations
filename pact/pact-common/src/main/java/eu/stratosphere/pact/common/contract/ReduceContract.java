@@ -215,7 +215,7 @@ public class ReduceContract extends SingleInputContract<ReduceStub>
 	 */
 	public boolean isCombinable()
 	{
-		return getUserCodeClass().getAnnotation(Combinable.class) != null;
+		return getUserCodeAnnotation(Combinable.class) != null;
 	}
 	
 	/**

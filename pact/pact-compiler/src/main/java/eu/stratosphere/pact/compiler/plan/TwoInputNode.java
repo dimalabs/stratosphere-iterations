@@ -615,8 +615,8 @@ public abstract class TwoInputNode extends OptimizerNode
 		DualInputContract<?> c = (DualInputContract<?>)super.getPactContract();
 		
 		// get readSet annotation from stub
-		ReadsFirst readSet1Annotation = c.getUserCodeClass().getAnnotation(ReadsFirst.class);
-		ReadsSecond readSet2Annotation = c.getUserCodeClass().getAnnotation(ReadsSecond.class);
+		ReadsFirst readSet1Annotation = c.getUserCodeAnnotation(ReadsFirst.class);
+		ReadsSecond readSet2Annotation = c.getUserCodeAnnotation(ReadsSecond.class);
 		
 		// extract readSets from annotations
 		if(readSet1Annotation == null) {
@@ -641,8 +641,8 @@ public abstract class TwoInputNode extends OptimizerNode
 		DualInputContract<?> c = (DualInputContract<?>)super.getPactContract();
 		
 		// get updateSet annotation from stub
-		ImplicitOperationFirst implOp1Annotation = c.getUserCodeClass().getAnnotation(ImplicitOperationFirst.class);
-		ImplicitOperationSecond implOp2Annotation = c.getUserCodeClass().getAnnotation(ImplicitOperationSecond.class);
+		ImplicitOperationFirst implOp1Annotation = c.getUserCodeAnnotation(ImplicitOperationFirst.class);
+		ImplicitOperationSecond implOp2Annotation = c.getUserCodeAnnotation(ImplicitOperationSecond.class);
 		
 		// set sets to null by default
 		this.implOpMode1 = null;
@@ -653,7 +653,7 @@ public abstract class TwoInputNode extends OptimizerNode
 			switch(implOp1Annotation.implicitOperation()) {
 			case Copy:
 				// implicit copy -> we have explicit projection
-				ExplicitProjectionsFirst explProjAnnotation = c.getUserCodeClass().getAnnotation(ExplicitProjectionsFirst.class);
+				ExplicitProjectionsFirst explProjAnnotation = c.getUserCodeAnnotation(ExplicitProjectionsFirst.class);
 				if(explProjAnnotation != null) {
 					this.implOpMode1 = ImplicitOperationMode.Copy;
 					this.explProjections1 = new FieldSet(explProjAnnotation.fields());
@@ -661,7 +661,7 @@ public abstract class TwoInputNode extends OptimizerNode
 				break;
 			case Projection:
 				// implicit projection -> we have explicit copies
-				ExplicitCopiesFirst explCopyjAnnotation = c.getUserCodeClass().getAnnotation(ExplicitCopiesFirst.class);
+				ExplicitCopiesFirst explCopyjAnnotation = c.getUserCodeAnnotation(ExplicitCopiesFirst.class);
 				if(explCopyjAnnotation != null) {
 					this.implOpMode1 = ImplicitOperationMode.Projection;
 					this.explCopies1 = new FieldSet(explCopyjAnnotation.fields());
@@ -679,7 +679,7 @@ public abstract class TwoInputNode extends OptimizerNode
 			switch(implOp2Annotation.implicitOperation()) {
 			case Copy:
 				// implicit copy -> we have explicit projection
-				ExplicitProjectionsSecond explProjAnnotation = c.getUserCodeClass().getAnnotation(ExplicitProjectionsSecond.class);
+				ExplicitProjectionsSecond explProjAnnotation = c.getUserCodeAnnotation(ExplicitProjectionsSecond.class);
 				if(explProjAnnotation != null) {
 					this.implOpMode2 = ImplicitOperationMode.Copy;
 					this.explProjections2 = new FieldSet(explProjAnnotation.fields());
@@ -687,7 +687,7 @@ public abstract class TwoInputNode extends OptimizerNode
 				break;
 			case Projection:
 				// implicit projection -> we have explicit copies
-				ExplicitCopiesSecond explCopyjAnnotation = c.getUserCodeClass().getAnnotation(ExplicitCopiesSecond.class);
+				ExplicitCopiesSecond explCopyjAnnotation = c.getUserCodeAnnotation(ExplicitCopiesSecond.class);
 				if(explCopyjAnnotation != null) {
 					this.implOpMode2 = ImplicitOperationMode.Projection;
 					this.explCopies2 = new FieldSet(explCopyjAnnotation.fields());

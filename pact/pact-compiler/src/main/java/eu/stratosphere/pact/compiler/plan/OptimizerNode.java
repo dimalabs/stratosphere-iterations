@@ -1288,7 +1288,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	protected void readWritesAnnotation() {
 
 		// get readSet annotation from stub
-		ExplicitModifications addSetAnnotation = pactContract.getUserCodeClass().getAnnotation(ExplicitModifications.class);
+		ExplicitModifications addSetAnnotation = pactContract.getUserCodeAnnotation(ExplicitModifications.class);
 		
 		// extract addSet from annotation
 		if(addSetAnnotation == null) {
@@ -1313,7 +1313,7 @@ public abstract class OptimizerNode implements Visitable<OptimizerNode>
 	protected void readOutputCardBoundAnnotation() {
 		
 		// get readSet annotation from stub
-		OutCardBounds outCardAnnotation = pactContract.getUserCodeClass().getAnnotation(OutCardBounds.class);
+		OutCardBounds outCardAnnotation = pactContract.getUserCodeAnnotation(OutCardBounds.class);
 		
 		// extract addSet from annotation
 		if(outCardAnnotation == null) {
