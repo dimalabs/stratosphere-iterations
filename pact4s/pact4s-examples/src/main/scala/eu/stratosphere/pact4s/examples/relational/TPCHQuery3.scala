@@ -28,8 +28,8 @@ object TPCHQuery3 extends PactDescriptor[TPCHQuery3] {
 
 class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImplicits {
 
-  val orders = new DataSource(params.ordersInput, parseOrder)
-  val lineItems = new DataSource(params.lineItemsInput, parseLineItem)
+  val orders = new DataSource(params.ordersInput, DelimetedDataSourceFormat(parseOrder _))
+  val lineItems = new DataSource(params.lineItemsInput, DelimetedDataSourceFormat(parseLineItem _))
   val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
 
   val filteredOrders = orders filter { o => o.status == params.status && o.year >= params.minYear && o.orderPriority.startsWith(params.priority) }

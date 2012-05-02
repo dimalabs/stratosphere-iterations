@@ -12,8 +12,8 @@ object KMeans extends PactDescriptor[KMeans] {
 
 class KMeans(args: String*) extends PactProgram with KMeansGeneratedImplicits {
 
-  val dataPoints = new DataSource(params.dataPointInput, parseInput)
-  val clusterPoints = new DataSource(params.clusterInput, parseInput)
+  val dataPoints = new DataSource(params.dataPointInput, DelimetedDataSourceFormat(parseInput _))
+  val clusterPoints = new DataSource(params.clusterInput, DelimetedDataSourceFormat(parseInput _))
   val newClusterPoints = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
 
   val distances = dataPoints cross clusterPoints map computeDistance

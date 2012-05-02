@@ -137,7 +137,7 @@ case class RecordDataSinkFormat[In: UDT](val recordDelimeter: Option[String] = N
 
   override def persistConfiguration(config: Configuration) {
 
-    val fields = implicitly[UDT[In]].fieldTypes
+    val fields = inputUDT.fieldTypes
 
     config.setInteger(RecordOutputFormat.NUM_FIELDS_PARAMETER, fields.length)
 

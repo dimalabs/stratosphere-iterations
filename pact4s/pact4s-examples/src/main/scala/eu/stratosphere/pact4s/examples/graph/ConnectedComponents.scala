@@ -12,8 +12,8 @@ object ConnectedComponents extends PactDescriptor[ConnectedComponents] {
 
 class ConnectedComponents(args: String*) extends PactProgram with ConnectedComponentsGeneratedImplicits {
 
-  val vertices = new DataSource(params.verticesInput, parseVertex)
-  val directedEdges = new DataSource(params.edgesInput, parseEdge)
+  val vertices = new DataSource(params.verticesInput, DelimetedDataSourceFormat(parseVertex _))
+  val directedEdges = new DataSource(params.edgesInput, DelimetedDataSourceFormat(parseEdge _))
   val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
 
   val undirectedEdges = directedEdges flatMap { case (from, to) => Seq(from -> to, to -> from) }

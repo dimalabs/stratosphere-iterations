@@ -14,8 +14,8 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
 
   def computeGradient(ex: Array[Double], w: Array[Double]): (Double, Array[Double])
 
-  val examples = new DataSource(params.examples, readVector)
-  val weights = new DataSource(params.weights, readVector)
+  val examples = new DataSource(params.examples, DelimetedDataSourceFormat(readVector _))
+  val weights = new DataSource(params.weights, DelimetedDataSourceFormat(readVector _))
   val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
 
   val etaWeights = weights map { case (id, w) => (id, w, params.eta) }

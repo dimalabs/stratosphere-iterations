@@ -7,6 +7,7 @@ import scala.collection.JavaConversions._
 import eu.stratosphere.pact4s.common.analyzer._
 
 import eu.stratosphere.pact.common.contract._
+import eu.stratosphere.pact.common.io._
 
 trait Pact4sContract { this: Contract =>
   def persistConfiguration() = {}
@@ -14,6 +15,12 @@ trait Pact4sContract { this: Contract =>
 
 object Pact4sContract {
   implicit def toContract(c: Pact4sContract): Contract = c
+}
+
+trait Pact4sDataSourceContract extends Pact4sContract { this: GenericDataSource[_ <: InputFormat[_]] =>
+
+  val outputUDT: UDT[_]
+  val fieldSelector: FieldSelector[_]
 }
 
 trait Pact4sDataSinkContract extends Pact4sContract { this: GenericDataSink =>

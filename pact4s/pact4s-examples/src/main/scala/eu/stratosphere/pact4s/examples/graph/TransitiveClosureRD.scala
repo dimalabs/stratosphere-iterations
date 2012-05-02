@@ -16,8 +16,8 @@ object TransitiveClosureRD extends PactDescriptor[TransitiveClosureRD] {
 
 class TransitiveClosureRD(args: String*) extends PactProgram with TransitiveClosureRDGeneratedImplicits {
 
-  val vertices = new DataSource(params.verticesInput, parseVertex)
-  val edges = new DataSource(params.edgesInput, parseEdge)
+  val vertices = new DataSource(params.verticesInput, DelimetedDataSourceFormat(parseVertex _))
+  val edges = new DataSource(params.edgesInput, DelimetedDataSourceFormat(parseEdge _))
   val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
 
   val transitiveClosure = vertices keyBy getEdge untilEmpty edges iterate createClosure

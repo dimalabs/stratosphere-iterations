@@ -13,7 +13,7 @@ object WordCount extends PactDescriptor[WordCount] {
 
 class WordCount(args: String*) extends PactProgram with WordCountGeneratedImplicits {
 
-  val input = new DataSource(params.input, readLine)
+  val input = new DataSource(params.input, DelimetedDataSourceFormat(readLine _))
   val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
 
   val words = input flatMap { line => line.toLowerCase().split("""\W+""") map { (_, 1) } }
