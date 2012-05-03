@@ -3,6 +3,7 @@ package eu.stratosphere.pact4s.common
 import eu.stratosphere.pact4s.common.analyzer._
 
 import eu.stratosphere.pact.common.contract.Contract
+import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.pact.common.util.FieldSet
 
 trait Hintable[T] {
@@ -77,3 +78,23 @@ case class KeyCardinality[T: UDT, Key, KeySelector: SelectorBuilder[T, Key]#Sele
   }
 }
 
+case class Distribution(dataDistribution: Class[_ <: DataDistribution[_]]) extends CompilerHint[Nothing] {
+  override def applyToContract(contract: Contract) = contract.getCompilerHints().setInputDistributionClass(dataDistribution)
+}
+
+abstract class DataDistribution[Key] extends eu.stratosphere.pact.common.contract.DataDistribution {
+
+  val udt: UDT[Key]
+  def getSplitBorder(splitId: Int, totalSplits: Int): Key
+
+  final override def getSplit(splitId: Int, totalSplits: Int): PactRecord = {
+
+    val key = getSplitBorder(splitId, totalSplits)
+    val record = new PactRecord
+
+    val serializer = udt.createSerializer((0 until udt.fieldTypes.length).toArray)
+    serializer.serialize(key, record)
+
+    record
+  }
+}
