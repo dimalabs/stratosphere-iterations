@@ -21,10 +21,8 @@ trait MapOperator[In] { this: WrappedDataStream[In] =>
     mapFunction: Either[In => Out, In => Iterator[Out]]): DataStream[Out] = new DataStream[Out] {
 
     override def contract = {
-      val stub = classOf[Map4sStub[In, Out]]
-      val name = getPactName getOrElse "<Unnamed Mapper>"
 
-      new MapContract(stub, input.getContract, name) with Map4sContract[In, Out] {
+      new MapContract(Map4sContract.getStub, input.getContract, getPactName(MapContract.DEFAULT_NAME)) with Map4sContract[In, Out] {
 
         override val inputUDT = implicitly[UDT[In]]
         override val outputUDT = implicitly[UDT[Out]]

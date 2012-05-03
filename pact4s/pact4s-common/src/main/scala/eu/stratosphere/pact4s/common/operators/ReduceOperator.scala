@@ -39,13 +39,10 @@ trait ReduceOperator[In] { this: WrappedDataStream[In] =>
 
     override def contract = {
 
-      val stub = combineFunction map { _ => classOf[CombinableReduce4sStub[In, Out]] } getOrElse classOf[Reduce4sStub[In, Out]]
-      val name = getPactName getOrElse "<Unnamed Reducer>"
-
       val keyFieldSelector = implicitly[FieldSelector[In => Key]]
       val keyFieldTypes = implicitly[UDT[In]].getKeySet(keyFieldSelector.getFields)
 
-      new ReduceContract(stub, keyFieldTypes, keyFieldSelector.getFields, input.getContract, name) with Reduce4sContract[Key, In, Out] {
+      new ReduceContract(Reduce4sContract.getStub, keyFieldTypes, keyFieldSelector.getFields, input.getContract, getPactName(ReduceContract.DEFAULT_NAME)) with Reduce4sContract[Key, In, Out] {
 
         override val keySelector = keyFieldSelector
         override val inputUDT = implicitly[UDT[In]]

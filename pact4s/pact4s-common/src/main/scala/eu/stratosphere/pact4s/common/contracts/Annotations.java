@@ -3,6 +3,7 @@ package eu.stratosphere.pact4s.common.contracts;
 import java.lang.annotation.Annotation;
 import java.util.Arrays;
 
+import eu.stratosphere.pact.common.contract.ReduceContract;
 import eu.stratosphere.pact.common.stubs.StubAnnotation;
 import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode;
 
@@ -310,6 +311,33 @@ public class Annotations {
 			int lb = (127 * "lowerBound".hashCode()) ^ Integer.valueOf(lowerBound).hashCode();
 			int ub = (127 * "upperBound".hashCode()) ^ Integer.valueOf(upperBound).hashCode();
 			return lb + ub;
+		}
+	}
+
+	public static class Combinable implements Annotation, ReduceContract.Combinable {
+
+		public Combinable() {
+		}
+
+		@Override
+		public Class<? extends Annotation> annotationType() {
+			return ReduceContract.Combinable.class;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj == null || !annotationType().isAssignableFrom(obj.getClass()))
+				return false;
+
+			if (!annotationType().equals(((Annotation) obj).annotationType()))
+				return false;
+
+			return true;
+		}
+
+		@Override
+		public int hashCode() {
+			return 0;
 		}
 	}
 }

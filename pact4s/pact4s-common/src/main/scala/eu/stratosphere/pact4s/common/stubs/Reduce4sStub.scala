@@ -74,7 +74,3 @@ class Reduce4sStub[In, Out] extends ReduceStub {
     out.collect(outputRecord)
   }
 }
-
-@Combinable
-class CombinableReduce4sStub[In, Out] extends Reduce4sStub[In, Out]
-

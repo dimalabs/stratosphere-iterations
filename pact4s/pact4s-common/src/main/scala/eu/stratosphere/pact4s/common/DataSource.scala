@@ -17,30 +17,23 @@ import eu.stratosphere.nephele.configuration.Configuration
 
 case class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends DataStream[Out] {
 
-  override def contract = {
-    val stub = format.stub
-    val name = this.getPactName getOrElse "<Unnamed File Data Sink>"
+  override def contract = new URI(url).getScheme match {
 
-    val contract = new URI(url).getScheme match {
+    case "file" | null => new FileDataSource(format.stub.asInstanceOf[Class[FileInputFormat]], url, getPactName(FileDataSource.DEFAULT_NAME)) with Pact4sDataSourceContract {
 
-      case "file" | null => new FileDataSource(stub.asInstanceOf[Class[FileInputFormat]], url, name) with Pact4sDataSourceContract {
+      override val outputUDT = format.outputUDT
+      override val fieldSelector = format.fieldSelector
 
-        override val outputUDT = format.outputUDT
-        override val fieldSelector = format.fieldSelector
-
-        override def persistConfiguration() = format.persistConfiguration(this.getParameters())
-      }
-
-      case "ext" => new GenericDataSource(stub.asInstanceOf[Class[InputFormat[_]]], name) with Pact4sDataSourceContract {
-
-        override val outputUDT = format.outputUDT
-        override val fieldSelector = format.fieldSelector
-
-        override def persistConfiguration() = format.persistConfiguration(this.getParameters())
-      }
+      override def persistConfiguration() = format.persistConfiguration(this.getParameters())
     }
 
-    contract
+    case "ext" => new GenericDataSource(format.stub.asInstanceOf[Class[InputFormat[_]]], getPactName(GenericDataSource.DEFAULT_NAME)) with Pact4sDataSourceContract {
+
+      override val outputUDT = format.outputUDT
+      override val fieldSelector = format.fieldSelector
+
+      override def persistConfiguration() = format.persistConfiguration(this.getParameters())
+    }
   }
 }
 

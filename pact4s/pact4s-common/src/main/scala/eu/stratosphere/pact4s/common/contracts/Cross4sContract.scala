@@ -38,5 +38,8 @@ trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sContract { this: Cross
 }
 
 object Cross4sContract {
+
+  def getStub[LeftIn, RightIn, Out] = classOf[Cross4sStub[LeftIn, RightIn, Out]]
+
   def unapply(c: Cross4sContract[_, _, _]) = Some((c.leftUDT, c.rightUDT, c.outputUDT, c.crossUDF))
 }

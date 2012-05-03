@@ -26,14 +26,11 @@ trait CoGroupOperator[LeftIn] { this: WrappedDataStream[LeftIn] =>
 
           override def contract = {
 
-            val stub = classOf[CoGroup4sStub[LeftIn, RightIn, Out]]
-            val name = getPactName getOrElse "<Unnamed CoGrouper>"
-
             val leftKey = implicitly[FieldSelector[LeftIn => Key]]
             val rightKey = implicitly[FieldSelector[RightIn => Key]]
             val keyFieldTypes = implicitly[UDT[LeftIn]].getKeySet(leftKey.getFields)
 
-            new CoGroupContract(stub, keyFieldTypes, leftKey.getFields, rightKey.getFields, leftInput.getContract, rightInput.getContract, name) with CoGroup4sContract[Key, LeftIn, RightIn, Out] {
+            new CoGroupContract(CoGroup4sContract.getStub, keyFieldTypes, leftKey.getFields, rightKey.getFields, leftInput.getContract, rightInput.getContract, getPactName(CoGroupContract.DEFAULT_NAME)) with CoGroup4sContract[Key, LeftIn, RightIn, Out] {
 
               override val leftKeySelector = leftKey
               override val rightKeySelector = rightKey

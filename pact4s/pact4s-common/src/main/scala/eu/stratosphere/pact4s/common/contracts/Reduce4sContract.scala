@@ -16,7 +16,9 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sContract { this: ReduceContra
   val userCombineFunction: Option[Iterator[In] => In]
   val userReduceFunction: Iterator[In] => Out
 
-  override val annotations = Seq(
+  private val combinableAnnotation = userCombineFunction map { _ => new Annotations.Combinable() }
+
+  override val annotations = (combinableAnnotation toSeq) ++ Seq(
     new Annotations.Reads((combineUDF.getReadFields.toSet union reduceUDF.getReadFields.toSet).toArray),
     new Annotations.ExplicitModifications(reduceUDF.getWriteFields),
     new Annotations.ImplicitOperation(ImplicitOperationMode.Projection),
@@ -40,5 +42,8 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sContract { this: ReduceContra
 }
 
 object Reduce4sContract {
+
+  def getStub[In, Out] = classOf[Reduce4sStub[In, Out]]
+
   def unapply(c: Reduce4sContract[_, _, _]) = Some((c.keySelector, c.inputUDT, c.outputUDT, c.combineUDF, c.reduceUDF))
 }

@@ -8,11 +8,14 @@ trait Hintable {
 
   def getHints = hints
 
-  def getHint[T <: CompilerHint : Manifest] = getHints find {
+  def getHint[T <: CompilerHint: Manifest] = getHints find {
     hint => manifest[T].erasure.isAssignableFrom(hint.getClass)
   }
 
-  def getPactName = getHint[PactName] map { case PactName(pactName) => pactName }
+  def getPactName(default: String) = getHint[PactName] match {
+    case Some(PactName(pactName)) => pactName
+    case None                     => default
+  }
 
   def applyHints(contract: Contract) = {
     for (hint <- getHints) hint.applyToContract(contract)

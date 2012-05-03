@@ -22,10 +22,7 @@ trait CrossOperator[LeftIn] { this: WrappedDataStream[LeftIn] =>
 
       override def contract = {
 
-        val stub = classOf[Cross4sStub[LeftIn, RightIn, Out]]
-        val name = getPactName getOrElse "<Unnamed Mapper>"
-
-        new CrossContract(stub, leftInput.getContract, rightInput.getContract, name) with Cross4sContract[LeftIn, RightIn, Out] {
+        new CrossContract(Cross4sContract.getStub, leftInput.getContract, rightInput.getContract, getPactName(CrossContract.DEFAULT_NAME)) with Cross4sContract[LeftIn, RightIn, Out] {
 
           override val leftUDT = implicitly[UDT[LeftIn]]
           override val rightUDT = implicitly[UDT[RightIn]]

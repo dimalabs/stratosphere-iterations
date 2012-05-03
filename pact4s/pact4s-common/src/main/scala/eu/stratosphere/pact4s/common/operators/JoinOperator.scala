@@ -26,14 +26,11 @@ trait JoinOperator[LeftIn] { this: WrappedDataStream[LeftIn] =>
 
           override def contract = {
 
-            val stub = classOf[Join4sStub[LeftIn, RightIn, Out]]
-            val name = getPactName getOrElse "<Unnamed Matcher>"
-
             val leftKey = implicitly[FieldSelector[LeftIn => Key]]
             val rightKey = implicitly[FieldSelector[RightIn => Key]]
             val keyFieldTypes = implicitly[UDT[LeftIn]].getKeySet(leftKey.getFields)
 
-            new MatchContract(stub, keyFieldTypes, leftKey.getFields, rightKey.getFields, leftInput.getContract, rightInput.getContract, name) with Join4sContract[Key, LeftIn, RightIn, Out] {
+            new MatchContract(Join4sContract.getStub, keyFieldTypes, leftKey.getFields, rightKey.getFields, leftInput.getContract, rightInput.getContract, getPactName(MatchContract.DEFAULT_NAME)) with Join4sContract[Key, LeftIn, RightIn, Out] {
 
               override val leftKeySelector = leftKey
               override val rightKeySelector = rightKey

@@ -40,5 +40,8 @@ trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sContract { this: M
 }
 
 object Join4sContract {
+
+  def getStub[LeftIn, RightIn, Out] = classOf[Join4sStub[LeftIn, RightIn, Out]]
+
   def unapply(c: Join4sContract[_, _, _, _]) = Some((c.leftKeySelector, c.rightKeySelector, c.leftUDT, c.rightUDT, c.outputUDT, c.joinUDF))
 }
