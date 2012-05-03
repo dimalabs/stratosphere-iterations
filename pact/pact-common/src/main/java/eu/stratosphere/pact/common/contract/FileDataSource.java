@@ -23,7 +23,7 @@ import eu.stratosphere.pact.common.io.FileInputFormat;
  */
 public class FileDataSource extends GenericDataSource<FileInputFormat>
 {
-	private static String DEFAULT_NAME = "<Unnamed File Data Source>";
+	public static final String DEFAULT_NAME = "<Unnamed File Data Source>";
 	
 	protected final String filePath;
 

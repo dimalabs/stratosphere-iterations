@@ -37,7 +37,7 @@ import eu.stratosphere.pact.common.type.Key;
  */
 public class ReduceContract extends SingleInputContract<ReduceStub>
 {	
-	private static final String DEFAULT_NAME = "<Unnamed Reducer>";	// the default name for contracts
+	public static final String DEFAULT_NAME = "<Unnamed Reducer>";	// the default name for contracts
 
 	// --------------------------------------------------------------------------------------------
 	

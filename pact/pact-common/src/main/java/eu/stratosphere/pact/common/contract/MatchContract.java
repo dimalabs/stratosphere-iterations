@@ -34,7 +34,7 @@ import eu.stratosphere.pact.common.type.Key;
  */
 public class MatchContract extends DualInputContract<MatchStub>
 {	
-	private static String DEFAULT_NAME = "<Unnamed Matcher>";		// the default name for contracts
+	public static final String DEFAULT_NAME = "<Unnamed Matcher>";		// the default name for contracts
 	
 	// --------------------------------------------------------------------------------------------
 

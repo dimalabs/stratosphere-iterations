@@ -35,7 +35,7 @@ import eu.stratosphere.pact.common.stubs.MapStub;
  */
 public class MapContract extends SingleInputContract<MapStub>
 {	
-	private static String DEFAULT_NAME = "<Unnamed Mapper>";
+	public static final String DEFAULT_NAME = "<Unnamed Mapper>";
 
 	/**
 	 * Creates a MapContract with the provided {@link MapStub} implementation

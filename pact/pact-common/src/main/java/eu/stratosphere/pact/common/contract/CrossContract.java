@@ -32,7 +32,7 @@ import eu.stratosphere.pact.common.stubs.CrossStub;
  */
 public class CrossContract extends DualInputContract<CrossStub>
 {	
-	private static String DEFAULT_NAME = "<Unnamed Crosser>";
+	public static final String DEFAULT_NAME = "<Unnamed Crosser>";
 
 	/**
 	 * Creates a CrossContract with the provided {@link CrossStub} implementation

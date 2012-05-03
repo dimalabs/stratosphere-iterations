@@ -28,7 +28,7 @@ import eu.stratosphere.pact.common.plan.Visitor;
  */
 public class GenericDataSink extends Contract 
 {
-	private static String DEFAULT_NAME = "<Unnamed Generic Data Sink>";
+	public static final String DEFAULT_NAME = "<Unnamed Generic Data Sink>";
 
 	// --------------------------------------------------------------------------------------------
 	
