@@ -25,7 +25,7 @@ trait ReduceOperator[In] { this: WrappedDataStream[In] =>
 
       def reduce[Out: UDT, F: UDF1Builder[Iterator[In], Out]#UDF](reduceFunction: Iterator[In] => Out): DataStream[Out] = new ReduceStream(input, keySelector, Some(combineFunction), reduceFunction) {
 
-        override def getHints = if (this.hints == null) outer.hints else this.hints
+        override def getHints = if (this.hints == null) outer.getGenericHints else this.hints
       }
     }
   }

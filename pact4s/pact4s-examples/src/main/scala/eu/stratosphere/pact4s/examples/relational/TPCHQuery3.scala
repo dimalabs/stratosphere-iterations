@@ -46,9 +46,10 @@ class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImpl
 
   override def defaultParallelism = params.numSubTasks
 
-  filteredOrders.hints = RecordSize(32) +: Selectivity(0.05f)
+  orders.hints = UniqueKey({ o: Order => o.orderId })
+  filteredOrders.hints = RecordSize(32) +: RecordsEmitted(0.05f)
   prioritizedItems.hints = RecordSize(64)
-  prioritizedOrders.hints = RecordSize(64) +: Selectivity(1f)
+  prioritizedOrders.hints = RecordSize(64) +: RecordsEmitted(1f)
 
   val params = new {
     val status = 'F'

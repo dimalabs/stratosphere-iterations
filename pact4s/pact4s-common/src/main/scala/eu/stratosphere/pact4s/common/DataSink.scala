@@ -9,7 +9,7 @@ import eu.stratosphere.pact4s.common.stubs._
 import eu.stratosphere.pact.common.io._
 import eu.stratosphere.nephele.configuration.Configuration
 
-case class DataSink[In: UDT](url: String, format: DataSinkFormat[In]) extends Hintable
+case class DataSink[In: UDT](url: String, format: DataSinkFormat[In]) extends Hintable[In]
 
 abstract class DataSinkFormat[In: UDT] {
 

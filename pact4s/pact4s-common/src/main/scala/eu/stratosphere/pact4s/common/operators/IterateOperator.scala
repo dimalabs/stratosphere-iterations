@@ -11,6 +11,11 @@ trait IterateOperator[SolutionItem] { this: WrappedDataStream[SolutionItem] =>
 
   private val initialSolution = this.inner
 
+  def iterate(stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]): DataStream[SolutionItem] = new DataStream[SolutionItem] {
+
+    override def contract = throw new UnsupportedOperationException("Not implemented yet")
+  }
+
   def keyBy[Key, SolutionKeySelector: SelectorBuilder[SolutionItem, Key]#Selector](keySelector: SolutionItem => Key) = new {
 
     def iterate(stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]): DataStream[SolutionItem] = new DataStream[SolutionItem] {

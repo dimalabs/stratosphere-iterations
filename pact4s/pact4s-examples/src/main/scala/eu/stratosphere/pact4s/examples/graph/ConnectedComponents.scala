@@ -39,7 +39,7 @@ class ConnectedComponents(args: String*) extends PactProgram with ConnectedCompo
 
   vertices.hints = RecordSize(8)
   directedEdges.hints = RecordSize(8)
-  undirectedEdges.hints = RecordSize(8) +: Selectivity(2.0f)
+  undirectedEdges.hints = RecordSize(8) +: RecordsEmitted(2.0f)
   output.hints = RecordSize(8)
 
   val params = new {

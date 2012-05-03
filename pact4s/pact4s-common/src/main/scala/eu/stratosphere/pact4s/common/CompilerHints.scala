@@ -1,18 +1,17 @@
 package eu.stratosphere.pact4s.common
 
+import eu.stratosphere.pact4s.common.analyzer._
+
 import eu.stratosphere.pact.common.contract.Contract
+import eu.stratosphere.pact.common.util.FieldSet
 
-trait Hintable {
+trait Hintable[T] {
 
-  var hints: Seq[CompilerHint] = null
+  var hints: Seq[CompilerHint[T]] = null
 
   def getHints = hints
 
-  def getHint[T <: CompilerHint: Manifest] = getHints find {
-    hint => manifest[T].erasure.isAssignableFrom(hint.getClass)
-  }
-
-  def getPactName(default: String) = getHint[PactName] match {
+  def getPactName(default: String) = getHints find { case _: PactName => true } match {
     case Some(PactName(pactName)) => pactName
     case None                     => default
   }
@@ -20,28 +19,61 @@ trait Hintable {
   def applyHints(contract: Contract) = {
     for (hint <- getHints) hint.applyToContract(contract)
   }
+
+  def getGenericHints = getHints filter { classOf[CompilerHint[Nothing]].isInstance(_) } map { _.asInstanceOf[CompilerHint[Nothing]] }
 }
 
-abstract class CompilerHint {
+abstract class CompilerHint[+T] {
   def applyToContract(contract: Contract)
 }
 
 object CompilerHint {
-  implicit def hint2SeqHint(h: CompilerHint): Seq[CompilerHint] = Seq(h)
+  implicit def hint2SeqHint[T](h: CompilerHint[T]): Seq[CompilerHint[T]] = Seq(h)
 }
 
-case class Degree(degreeOfParallelism: Int) extends CompilerHint {
+case class PactName(val pactName: String) extends CompilerHint[Nothing] {
+  override def applyToContract(contract: Contract) = {}
+}
+
+case class Degree(val degreeOfParallelism: Int) extends CompilerHint[Nothing] {
   override def applyToContract(contract: Contract) = contract.setDegreeOfParallelism(degreeOfParallelism)
 }
 
-case class RecordSize(sizeInBytes: Float) extends CompilerHint {
-  override def applyToContract(contract: Contract) = contract.getCompilerHints().setAvgBytesPerRecord(sizeInBytes)
+case class RecordSize(val avgSizeInBytes: Float) extends CompilerHint[Nothing] {
+  override def applyToContract(contract: Contract) = contract.getCompilerHints().setAvgBytesPerRecord(avgSizeInBytes)
 }
 
-case class Selectivity(selectivityInPercent: Float) extends CompilerHint {
-  override def applyToContract(contract: Contract) = contract.getCompilerHints().setAvgRecordsEmittedPerStubCall(selectivityInPercent)
+case class RecordsEmitted(val avgNumRecords: Float) extends CompilerHint[Nothing] {
+  override def applyToContract(contract: Contract) = contract.getCompilerHints().setAvgRecordsEmittedPerStubCall(avgNumRecords)
 }
 
-case class PactName(pactName: String) extends CompilerHint {
-  override def applyToContract(contract: Contract) = {}
+case class UniqueKey[T: UDT, Key, KeySelector: SelectorBuilder[T, Key]#Selector](val keySelector: T => Key) extends CompilerHint[T] {
+
+  override def applyToContract(contract: Contract) = {
+
+    val fieldSet = new FieldSet(implicitly[FieldSelector[T => Key]].getFields)
+    val hints = contract.getCompilerHints()
+
+    val fieldSets = hints.getUniqueFields()
+    if (fieldSets == null)
+      hints.setUniqueField(fieldSet)
+    else
+      fieldSets.add(fieldSet)
+  }
 }
+
+case class KeyCardinality[T: UDT, Key, KeySelector: SelectorBuilder[T, Key]#Selector](val keySelector: T => Key, val numDistinctKeys: Long, val avgNumRecordsPerKey: Option[Long] = None) extends CompilerHint[T] {
+
+  def this(keySelector: T => Key, numDistinctKeys: Long, avgNumRecordsPerKey: Long) = this(keySelector, numDistinctKeys, Some(avgNumRecordsPerKey))
+
+  override def applyToContract(contract: Contract) = {
+
+    val fieldSet = new FieldSet(implicitly[FieldSelector[T => Key]].getFields)
+    val hints = contract.getCompilerHints()
+    hints.setDistinctCount(fieldSet, numDistinctKeys)
+
+    if (avgNumRecordsPerKey.isDefined)
+      hints.setAvgNumRecordsPerDistinctFields(fieldSet, avgNumRecordsPerKey.get)
+  }
+}
+
