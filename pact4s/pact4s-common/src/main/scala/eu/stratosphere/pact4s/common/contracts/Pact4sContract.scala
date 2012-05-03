@@ -1,5 +1,6 @@
 package eu.stratosphere.pact4s.common.contracts
 
+import java.lang.annotation.Annotation
 import java.util.Collection
 
 import scala.collection.JavaConversions._
@@ -11,6 +12,12 @@ import eu.stratosphere.pact.common.io._
 
 trait Pact4sContract { this: Contract =>
   def persistConfiguration() = {}
+
+  val annotations: Seq[Annotation] = Seq()
+
+  override def getUserCodeAnnotation[A <: Annotation](annotationClass: Class[A]): A = {
+    annotations find { _.annotationType().equals(annotationClass) } map { _.asInstanceOf[A] } getOrElse null.asInstanceOf[A]
+  }
 }
 
 object Pact4sContract {
@@ -21,12 +28,16 @@ trait Pact4sDataSourceContract extends Pact4sContract { this: GenericDataSource[
 
   val outputUDT: UDT[_]
   val fieldSelector: FieldSelector[_]
+
+  override val annotations = Seq(new Annotations.ExplicitModifications(fieldSelector.getFields))
 }
 
 trait Pact4sDataSinkContract extends Pact4sContract { this: GenericDataSink =>
 
   val inputUDT: UDT[_]
   val fieldSelector: FieldSelector[_]
+
+  override val annotations = Seq(new Annotations.Reads(fieldSelector.getFields))
 }
 
 object Pact4sDataSinkContract {

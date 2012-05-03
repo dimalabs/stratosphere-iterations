@@ -4,6 +4,7 @@ import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
+import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode;
 
 trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sContract { this: MatchContract =>
 
@@ -15,12 +16,22 @@ trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sContract { this: M
   val joinUDF: UDF2[(LeftIn, RightIn) => _]
   val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
 
+  override val annotations = Seq(
+    new Annotations.ReadsFirst(joinUDF.getReadFields._1),
+    new Annotations.ReadsSecond(joinUDF.getReadFields._2),
+    new Annotations.ExplicitModifications(joinUDF.getWriteFields),
+    new Annotations.ImplicitOperationFirst(ImplicitOperationMode.Copy),
+    new Annotations.ImplicitOperationSecond(ImplicitOperationMode.Copy),
+    new Annotations.ExplicitProjectionsFirst(joinUDF.getDiscardedFields._1),
+    new Annotations.ExplicitProjectionsSecond(joinUDF.getDiscardedFields._2)
+  )
+
   override def persistConfiguration() = {
 
     val leftDeserializer = leftUDT.createSerializer(joinUDF.getReadFields._1)
-    val leftDiscard = joinUDF.getDiscardedFields._1.toArray
+    val leftDiscard = joinUDF.getDiscardedFields._1
     val rightDeserializer = rightUDT.createSerializer(joinUDF.getReadFields._2)
-    val rightDiscard = joinUDF.getDiscardedFields._2.toArray
+    val rightDiscard = joinUDF.getDiscardedFields._2
     val serializer = outputUDT.createSerializer(joinUDF.getWriteFields)
 
     val stubParameters = new JoinParameters(leftDeserializer, leftDiscard, rightDeserializer, rightDiscard, serializer, userFunction)

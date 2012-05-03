@@ -4,6 +4,7 @@ import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
+import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode;
 
 trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sContract { this: CrossContract =>
 
@@ -13,12 +14,22 @@ trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sContract { this: Cross
   val crossUDF: UDF2[(LeftIn, RightIn) => _]
   val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
 
+  override val annotations = Seq(
+    new Annotations.ReadsFirst(crossUDF.getReadFields._1),
+    new Annotations.ReadsSecond(crossUDF.getReadFields._2),
+    new Annotations.ExplicitModifications(crossUDF.getWriteFields),
+    new Annotations.ImplicitOperationFirst(ImplicitOperationMode.Copy),
+    new Annotations.ImplicitOperationSecond(ImplicitOperationMode.Copy),
+    new Annotations.ExplicitProjectionsFirst(crossUDF.getDiscardedFields._1),
+    new Annotations.ExplicitProjectionsSecond(crossUDF.getDiscardedFields._2)
+  )
+
   override def persistConfiguration() = {
 
     val leftDeserializer = leftUDT.createSerializer(crossUDF.getReadFields._1)
-    val leftDiscard = crossUDF.getDiscardedFields._1.toArray
+    val leftDiscard = crossUDF.getDiscardedFields._1
     val rightDeserializer = rightUDT.createSerializer(crossUDF.getReadFields._2)
-    val rightDiscard = crossUDF.getDiscardedFields._2.toArray
+    val rightDiscard = crossUDF.getDiscardedFields._2
     val serializer = outputUDT.createSerializer(crossUDF.getWriteFields)
 
     val stubParameters = new CrossParameters(leftDeserializer, leftDiscard, rightDeserializer, rightDiscard, serializer, userFunction)

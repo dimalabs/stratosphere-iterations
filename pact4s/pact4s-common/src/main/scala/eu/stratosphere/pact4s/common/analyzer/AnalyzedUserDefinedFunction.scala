@@ -98,8 +98,8 @@ class AnalyzedUDF1[T1, R](inputLength: Int, outputLength: Int) extends AnalyzedU
   override def getReadFields = readFields
   override def getReadFieldSets = Seq(readFields)
   override def getCopiedFields = copiedFields toMap
-  override def getForwardedFields = ambientFields filter { case (_, forward) => forward } keys
-  override def getDiscardedFields = ambientFields filterNot { case (_, forward) => forward } keys
+  override def getForwardedFields = (ambientFields filter { case (_, forward) => forward } keys) toArray
+  override def getDiscardedFields = (ambientFields filterNot { case (_, forward) => forward } keys) toArray
 
   override def markInputFieldUnread(inputFieldNum: Int) = {
 
@@ -159,7 +159,7 @@ class AnalyzedUDF2[T1, T2, R](leftInputLength: Int, rightInputLength: Int, outpu
   override def markInputFieldUnread(inputFieldNum: Either[Int, Int]) = {
 
     inputFieldNum match {
-      case Left(inputFieldNum) => { markInputFieldUnused(leftReadFields, inputFieldNum) }
+      case Left(inputFieldNum)  => { markInputFieldUnused(leftReadFields, inputFieldNum) }
       case Right(inputFieldNum) => { markInputFieldUnused(rightReadFields, inputFieldNum) }
     }
   }
@@ -175,7 +175,7 @@ class AnalyzedUDF2[T1, T2, R](leftInputLength: Int, rightInputLength: Int, outpu
     globalize(Seq(leftInputLocation, rightInputLocation), outputLocation)
 
     copiedFields = copiedFields map {
-      case (to, Left(from)) => (to + outputLocation, Left(from + leftInputLocation))
+      case (to, Left(from))  => (to + outputLocation, Left(from + leftInputLocation))
       case (to, Right(from)) => (to + outputLocation, Right(from + rightInputLocation))
     }
   }
@@ -207,13 +207,13 @@ class AnalyzedUDF2[T1, T2, R](leftInputLength: Int, rightInputLength: Int, outpu
   }
 
   private def unpack(item: Either[Int, Int]) = item match {
-    case Left(x) => x
+    case Left(x)  => x
     case Right(x) => x
   }
 
   private def split(items: Iterable[Either[Int, Int]]) = {
     val (left, right) = items.partition(_.isLeft)
-    (left map unpack, right map unpack)
+    (left map unpack toArray, right map unpack toArray)
   }
 }
 

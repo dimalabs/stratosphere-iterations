@@ -6,8 +6,6 @@ import eu.stratosphere.pact4s.common.analyzer._
 
 import eu.stratosphere.pact.common.contract.ReduceContract.Combinable
 import eu.stratosphere.pact.common.stubs._
-import eu.stratosphere.pact.common.stubs.StubAnnotation._
-import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode
 import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.nephele.configuration.Configuration
 
@@ -22,7 +20,6 @@ case class ReduceParameters[In, Out](
   val reduceFunction: Iterator[In] => Out)
   extends StubParameters
 
-@ImplicitOperation(implicitOperation = ImplicitOperationMode.Projection)
 class Reduce4sStub[In, Out] extends ReduceStub {
 
   private val outputRecord = new PactRecord()
@@ -79,6 +76,5 @@ class Reduce4sStub[In, Out] extends ReduceStub {
 }
 
 @Combinable
-@ImplicitOperation(implicitOperation = ImplicitOperationMode.Projection)
 class CombinableReduce4sStub[In, Out] extends Reduce4sStub[In, Out]
 

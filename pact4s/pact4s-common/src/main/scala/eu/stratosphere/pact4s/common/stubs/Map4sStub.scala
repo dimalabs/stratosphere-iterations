@@ -3,8 +3,6 @@ package eu.stratosphere.pact4s.common.stubs
 import eu.stratosphere.pact4s.common.analyzer._
 
 import eu.stratosphere.pact.common.stubs._
-import eu.stratosphere.pact.common.stubs.StubAnnotation._
-import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode
 import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.nephele.configuration.Configuration
 
@@ -15,7 +13,6 @@ case class MapParameters[In, Out](
   val userFunction: Either[In => Out, In => Iterator[Out]])
   extends StubParameters
 
-@ImplicitOperation(implicitOperation = ImplicitOperationMode.Copy)
 class Map4sStub[In, Out] extends MapStub {
 
   private var deserializer: UDTSerializer[In] = _

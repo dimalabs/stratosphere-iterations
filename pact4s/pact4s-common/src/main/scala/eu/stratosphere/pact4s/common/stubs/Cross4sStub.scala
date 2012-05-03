@@ -3,8 +3,6 @@ package eu.stratosphere.pact4s.common.stubs
 import eu.stratosphere.pact4s.common.analyzer._
 
 import eu.stratosphere.pact.common.stubs._
-import eu.stratosphere.pact.common.stubs.StubAnnotation._
-import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode
 import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.nephele.configuration.Configuration
 
@@ -17,8 +15,6 @@ case class CrossParameters[LeftIn, RightIn, Out](
   val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]])
   extends StubParameters
 
-@ImplicitOperationFirst(implicitOperation = ImplicitOperationMode.Copy)
-@ImplicitOperationSecond(implicitOperation = ImplicitOperationMode.Copy)
 class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub {
 
   private var leftDeserializer: UDTSerializer[LeftIn] = _

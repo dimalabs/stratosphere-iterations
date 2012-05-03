@@ -5,8 +5,6 @@ import java.util.{ Iterator => JIterator }
 import eu.stratosphere.pact4s.common.analyzer._
 
 import eu.stratosphere.pact.common.stubs._
-import eu.stratosphere.pact.common.stubs.StubAnnotation._
-import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode
 import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.nephele.configuration.Configuration
 
@@ -19,8 +17,6 @@ case class CoGroupParameters[LeftIn, RightIn, Out](
   val userFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]])
   extends StubParameters
 
-@ImplicitOperationFirst(implicitOperation = ImplicitOperationMode.Projection)
-@ImplicitOperationSecond(implicitOperation = ImplicitOperationMode.Projection)
 class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
 
   private val outputRecord = new PactRecord()

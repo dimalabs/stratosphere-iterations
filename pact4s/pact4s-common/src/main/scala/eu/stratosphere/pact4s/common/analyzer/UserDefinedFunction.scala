@@ -20,8 +20,8 @@ trait UDF1[+F <: _ => _] extends UDF {
 
   def getReadFields: Array[Int]
   def getCopiedFields: Map[Int, Int]
-  def getForwardedFields: Iterable[Int]
-  def getDiscardedFields: Iterable[Int]
+  def getForwardedFields: Array[Int]
+  def getDiscardedFields: Array[Int]
 
   def markInputFieldUnread(inputFieldNum: Int)
   def markInputFieldCopied(fromInputFieldNum: Int, toOutputFieldNum: Int)
@@ -34,8 +34,8 @@ trait UDF2[+F <: (_, _) => _] extends UDF {
 
   def getReadFields: (Array[Int], Array[Int])
   def getCopiedFields: Map[Int, Either[Int, Int]]
-  def getForwardedFields: (Iterable[Int], Iterable[Int])
-  def getDiscardedFields: (Iterable[Int], Iterable[Int])
+  def getForwardedFields: (Array[Int], Array[Int])
+  def getDiscardedFields: (Array[Int], Array[Int])
 
   def markInputFieldUnread(inputFieldNum: Either[Int, Int])
   def markInputFieldCopied(fromInputFieldNum: Either[Int, Int], toOutputFieldNum: Int)
