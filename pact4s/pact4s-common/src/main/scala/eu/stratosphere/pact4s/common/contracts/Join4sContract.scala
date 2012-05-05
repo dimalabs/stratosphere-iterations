@@ -16,7 +16,7 @@ trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sContract { this: M
   val joinUDF: UDF2[(LeftIn, RightIn) => _]
   val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
 
-  override val annotations = Seq(
+  override def annotations = Seq(
     new Annotations.ReadsFirst(joinUDF.getReadFields._1),
     new Annotations.ReadsSecond(joinUDF.getReadFields._2),
     new Annotations.ExplicitModifications(joinUDF.getWriteFields),

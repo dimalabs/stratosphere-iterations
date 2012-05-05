@@ -16,7 +16,7 @@ trait CoGroup4sContract[Key, LeftIn, RightIn, Out] extends Pact4sContract { this
   val coGroupUDF: UDF2[(Iterator[LeftIn], Iterator[RightIn]) => _]
   val userFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]
 
-  override val annotations = Seq(
+  override def annotations = Seq(
     new Annotations.ReadsFirst(coGroupUDF.getReadFields._1),
     new Annotations.ReadsSecond(coGroupUDF.getReadFields._2),
     new Annotations.ExplicitModifications(coGroupUDF.getWriteFields),

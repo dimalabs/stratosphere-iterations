@@ -20,9 +20,9 @@ trait CrossOperator[LeftIn] { this: WrappedDataStream[LeftIn] =>
     private def createStream[Out: UDT, R, F: UDF2Builder[LeftIn, RightIn, R]#UDF](
       mapFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]): DataStream[Out] = new DataStream[Out] {
 
-      override def contract = {
+      override def createContract = {
 
-        new CrossContract(Cross4sContract.getStub, leftInput.getContract, rightInput.getContract, getPactName(CrossContract.DEFAULT_NAME)) with Cross4sContract[LeftIn, RightIn, Out] {
+        new CrossContract(Cross4sContract.getStub, leftInput.getContract, rightInput.getContract) with Cross4sContract[LeftIn, RightIn, Out] {
 
           override val leftUDT = implicitly[UDT[LeftIn]]
           override val rightUDT = implicitly[UDT[RightIn]]

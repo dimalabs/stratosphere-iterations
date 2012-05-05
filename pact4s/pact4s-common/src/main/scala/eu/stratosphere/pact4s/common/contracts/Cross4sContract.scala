@@ -14,7 +14,7 @@ trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sContract { this: Cross
   val crossUDF: UDF2[(LeftIn, RightIn) => _]
   val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
 
-  override val annotations = Seq(
+  override def annotations = Seq(
     new Annotations.ReadsFirst(crossUDF.getReadFields._1),
     new Annotations.ReadsSecond(crossUDF.getReadFields._2),
     new Annotations.ExplicitModifications(crossUDF.getWriteFields),

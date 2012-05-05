@@ -13,21 +13,21 @@ trait IterateOperator[SolutionItem] { this: WrappedDataStream[SolutionItem] =>
 
   def iterate(stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]): DataStream[SolutionItem] = new DataStream[SolutionItem] {
 
-    override def contract = throw new UnsupportedOperationException("Not implemented yet")
+    override def createContract = throw new UnsupportedOperationException("Not implemented yet")
   }
 
   def keyBy[Key, SolutionKeySelector: SelectorBuilder[SolutionItem, Key]#Selector](keySelector: SolutionItem => Key) = new {
 
     def iterate(stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]): DataStream[SolutionItem] = new DataStream[SolutionItem] {
 
-      override def contract = throw new UnsupportedOperationException("Not implemented yet")
+      override def createContract = throw new UnsupportedOperationException("Not implemented yet")
     }
 
     def untilEmpty[WorksetItem: UDT](initialWorkset: DataStream[WorksetItem]) = new {
 
       def iterate(stepFunction: (DataStream[SolutionItem], DataStream[WorksetItem]) => (DataStream[SolutionItem], DataStream[WorksetItem])): DataStream[SolutionItem] = new DataStream[SolutionItem] {
 
-        override def contract = throw new UnsupportedOperationException("Not implemented yet")
+        override def createContract = throw new UnsupportedOperationException("Not implemented yet")
       }
     }
   }

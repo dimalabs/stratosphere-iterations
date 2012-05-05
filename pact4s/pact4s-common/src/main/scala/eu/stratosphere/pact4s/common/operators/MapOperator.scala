@@ -20,9 +20,9 @@ trait MapOperator[In] { this: WrappedDataStream[In] =>
   private def createStream[Out: UDT, R, F: UDF1Builder[In, R]#UDF](
     mapFunction: Either[In => Out, In => Iterator[Out]]): DataStream[Out] = new DataStream[Out] {
 
-    override def contract = {
+    override def createContract = {
 
-      new MapContract(Map4sContract.getStub, input.getContract, getPactName(MapContract.DEFAULT_NAME)) with Map4sContract[In, Out] {
+      new MapContract(Map4sContract.getStub, input.getContract) with Map4sContract[In, Out] {
 
         override val inputUDT = implicitly[UDT[In]]
         override val outputUDT = implicitly[UDT[Out]]

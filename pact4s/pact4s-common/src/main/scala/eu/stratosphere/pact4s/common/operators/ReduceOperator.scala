@@ -25,7 +25,7 @@ trait ReduceOperator[In] { this: WrappedDataStream[In] =>
 
       def reduce[Out: UDT, F: UDF1Builder[Iterator[In], Out]#UDF](reduceFunction: Iterator[In] => Out): DataStream[Out] = new ReduceStream(input, keySelector, Some(combineFunction), reduceFunction) {
 
-        override def getHints = if (this.hints == null) outer.getGenericHints else this.hints
+        override def getHints = outer.getGenericHints ++ this.hints
       }
     }
   }
@@ -37,12 +37,12 @@ trait ReduceOperator[In] { this: WrappedDataStream[In] =>
     reduceFunction: Iterator[In] => Out)
     extends DataStream[Out] {
 
-    override def contract = {
+    override def createContract = {
 
       val keyFieldSelector = implicitly[FieldSelector[In => Key]]
       val keyFieldTypes = implicitly[UDT[In]].getKeySet(keyFieldSelector.getFields)
 
-      new ReduceContract(Reduce4sContract.getStub, keyFieldTypes, keyFieldSelector.getFields, input.getContract, getPactName(ReduceContract.DEFAULT_NAME)) with Reduce4sContract[Key, In, Out] {
+      new ReduceContract(Reduce4sContract.getStub, keyFieldTypes, keyFieldSelector.getFields, input.getContract) with Reduce4sContract[Key, In, Out] {
 
         override val keySelector = keyFieldSelector
         override val inputUDT = implicitly[UDT[In]]

@@ -15,7 +15,7 @@ trait Map4sContract[In, Out] extends Pact4sContract { this: MapContract =>
   val mapUDF: UDF1[In => _]
   val userFunction: Either[In => Out, In => Iterator[Out]]
 
-  override val annotations = Seq(
+  override def annotations = Seq(
     new Annotations.Reads(mapUDF.getReadFields),
     new Annotations.ExplicitModifications(mapUDF.getWriteFields),
     new Annotations.ImplicitOperation(ImplicitOperationMode.Copy),

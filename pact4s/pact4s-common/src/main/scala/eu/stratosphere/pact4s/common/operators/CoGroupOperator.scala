@@ -24,13 +24,13 @@ trait CoGroupOperator[LeftIn] { this: WrappedDataStream[LeftIn] =>
         private def createStream[Out: UDT, R, F: UDF2Builder[Iterator[LeftIn], Iterator[RightIn], R]#UDF](
           mapFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]): DataStream[Out] = new DataStream[Out] {
 
-          override def contract = {
+          override def createContract = {
 
             val leftKey = implicitly[FieldSelector[LeftIn => Key]]
             val rightKey = implicitly[FieldSelector[RightIn => Key]]
             val keyFieldTypes = implicitly[UDT[LeftIn]].getKeySet(leftKey.getFields)
 
-            new CoGroupContract(CoGroup4sContract.getStub, keyFieldTypes, leftKey.getFields, rightKey.getFields, leftInput.getContract, rightInput.getContract, getPactName(CoGroupContract.DEFAULT_NAME)) with CoGroup4sContract[Key, LeftIn, RightIn, Out] {
+            new CoGroupContract(CoGroup4sContract.getStub, keyFieldTypes, leftKey.getFields, rightKey.getFields, leftInput.getContract, rightInput.getContract) with CoGroup4sContract[Key, LeftIn, RightIn, Out] {
 
               override val leftKeySelector = leftKey
               override val rightKeySelector = rightKey

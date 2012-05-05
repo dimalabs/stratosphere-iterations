@@ -13,7 +13,7 @@ import eu.stratosphere.pact.common.io._
 trait Pact4sContract { this: Contract =>
   def persistConfiguration() = {}
 
-  val annotations: Seq[Annotation] = Seq()
+  def annotations: Seq[Annotation] = Seq()
 
   override def getUserCodeAnnotation[A <: Annotation](annotationClass: Class[A]): A = {
     annotations find { _.annotationType().equals(annotationClass) } map { _.asInstanceOf[A] } getOrElse null.asInstanceOf[A]

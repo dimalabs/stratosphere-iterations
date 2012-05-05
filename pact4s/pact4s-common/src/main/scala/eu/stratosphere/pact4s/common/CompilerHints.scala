@@ -9,14 +9,9 @@ import eu.stratosphere.pact.common.util.FieldSet
 
 trait Hintable[T] {
 
-  var hints: Seq[CompilerHint[T]] = null
+  var hints: Seq[CompilerHint[T]] = Seq()
 
   def getHints = hints
-
-  def getPactName(default: String) = getHints find { case _: PactName => true } match {
-    case Some(PactName(pactName)) => pactName
-    case None                     => default
-  }
 
   def applyHints(contract: Contract) = {
     for (hint <- getHints) hint.applyToContract(contract)
@@ -34,7 +29,7 @@ object CompilerHint {
 }
 
 case class PactName(val pactName: String) extends CompilerHint[Nothing] {
-  override def applyToContract(contract: Contract) = {}
+  override def applyToContract(contract: Contract) = contract.setName(pactName)
 }
 
 case class Degree(val degreeOfParallelism: Int) extends CompilerHint[Nothing] {
@@ -83,9 +78,8 @@ case class InputDistribution(dataDistribution: Class[_ <: InputDataDistribution[
   override def applyToContract(contract: Contract) = contract.getCompilerHints().setInputDistributionClass(dataDistribution)
 }
 
-abstract class InputDataDistribution[Key] extends DataDistribution {
+abstract class InputDataDistribution[Key: UDT] extends DataDistribution {
 
-  val udt: UDT[Key]
   def getSplitBorder(splitId: Int, totalSplits: Int): Key
 
   final override def getSplit(splitId: Int, totalSplits: Int): PactRecord = {
@@ -93,6 +87,7 @@ abstract class InputDataDistribution[Key] extends DataDistribution {
     val key = getSplitBorder(splitId, totalSplits)
     val record = new PactRecord
 
+    val udt = implicitly[UDT[Key]]
     val serializer = udt.createSerializer((0 until udt.fieldTypes.length).toArray)
     serializer.serialize(key, record)
 

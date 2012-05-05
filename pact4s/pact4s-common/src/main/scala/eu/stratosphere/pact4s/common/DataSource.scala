@@ -17,9 +17,9 @@ import eu.stratosphere.nephele.configuration.Configuration
 
 case class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends DataStream[Out] {
 
-  override def contract = new URI(url).getScheme match {
+  override def createContract = new URI(url).getScheme match {
 
-    case "file" | null => new FileDataSource(format.stub.asInstanceOf[Class[FileInputFormat]], url, getPactName(FileDataSource.DEFAULT_NAME)) with Pact4sDataSourceContract {
+    case "file" | null => new FileDataSource(format.stub.asInstanceOf[Class[FileInputFormat]], url) with Pact4sDataSourceContract {
 
       override val outputUDT = format.outputUDT
       override val fieldSelector = format.fieldSelector
@@ -27,7 +27,7 @@ case class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) exte
       override def persistConfiguration() = format.persistConfiguration(this.getParameters())
     }
 
-    case "ext" => new GenericDataSource(format.stub.asInstanceOf[Class[InputFormat[_]]], getPactName(GenericDataSource.DEFAULT_NAME)) with Pact4sDataSourceContract {
+    case "ext" => new GenericDataSource(format.stub.asInstanceOf[Class[InputFormat[_]]]) with Pact4sDataSourceContract {
 
       override val outputUDT = format.outputUDT
       override val fieldSelector = format.fieldSelector
