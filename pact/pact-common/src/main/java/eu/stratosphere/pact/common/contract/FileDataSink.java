@@ -27,7 +27,7 @@ import eu.stratosphere.pact.common.io.FileOutputFormat;
  */
 public class FileDataSink extends GenericDataSink
 {
-	public static final String DEFAULT_NAME = "<Unnamed File Data Sink>";
+	private static String DEFAULT_NAME = "<Unnamed File Data Sink>";
 
 	protected final String filePath;
 

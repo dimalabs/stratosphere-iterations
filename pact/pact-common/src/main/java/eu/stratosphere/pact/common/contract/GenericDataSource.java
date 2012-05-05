@@ -30,7 +30,7 @@ import eu.stratosphere.pact.common.stubs.StubAnnotation;
 public class GenericDataSource<T extends InputFormat<?>> extends Contract 
 	implements StubAnnotationConfigurable
 {
-	public static final String DEFAULT_NAME = "<Unnamed Generic Data Source>";
+	private static String DEFAULT_NAME = "<Unnamed Generic Data Source>";
 	
 	protected final Class<? extends T> clazz;
 

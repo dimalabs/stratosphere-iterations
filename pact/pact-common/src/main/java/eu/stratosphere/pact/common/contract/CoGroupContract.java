@@ -33,7 +33,7 @@ import eu.stratosphere.pact.common.type.Key;
  */
 public class CoGroupContract extends DualInputContract<CoGroupStub>
 {	
-	public static final String DEFAULT_NAME = "<Unnamed CoGrouper>";		// the default name for contracts
+	private static String DEFAULT_NAME = "<Unnamed CoGrouper>";		// the default name for contracts
 	
 	/**
 	 * Creates a CoGroupContract with the provided {@link CoGroupStub} implementation
