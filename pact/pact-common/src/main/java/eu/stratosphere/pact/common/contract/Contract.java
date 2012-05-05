@@ -29,7 +29,7 @@ import eu.stratosphere.pact.common.type.PactRecord;
 */
 public abstract class Contract implements Visitable<Contract>
 {
-	protected final String name;					// the name of the contract instance. optional.
+	protected String name;					        // the name of the contract instance. optional.
 
 	protected final Configuration parameters;		// the parameters that allow to parameterize the stub function
 
@@ -63,6 +63,14 @@ public abstract class Contract implements Visitable<Contract>
 	 */
 	public String getName() {
 		return this.name;
+	}
+
+	/**
+	 * Sets the name of the contract instance. The name is only used to describe the contract instance
+	 * in logging output and graphical representations.
+	 */
+	public void setName(String name) {
+		this.name = name;
 	}
 
 	/**
