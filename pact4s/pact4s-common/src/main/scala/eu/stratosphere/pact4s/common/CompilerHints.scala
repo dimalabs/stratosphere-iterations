@@ -13,10 +13,6 @@ trait Hintable[T] {
 
   def getHints = hints
 
-  def applyHints(contract: Contract) = {
-    for (hint <- getHints) hint.applyToContract(contract)
-  }
-
   def getGenericHints = getHints filter { classOf[CompilerHint[Nothing]].isInstance(_) } map { _.asInstanceOf[CompilerHint[Nothing]] }
 }
 

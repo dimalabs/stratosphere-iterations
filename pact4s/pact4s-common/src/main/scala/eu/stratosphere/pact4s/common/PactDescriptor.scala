@@ -2,7 +2,8 @@ package eu.stratosphere.pact4s.common
 
 import java.lang.reflect.Constructor
 
-import eu.stratosphere.pact4s.common.analyzer.GlobalSchemaGenerator
+import eu.stratosphere.pact4s.common.contracts._
+import eu.stratosphere.pact4s.common.analyzer._
 
 import eu.stratosphere.pact.common.plan._
 
@@ -16,8 +17,10 @@ abstract class PactDescriptor[T <: PactProgram: Manifest] extends PlanAssembler 
 
   override def getPlan(args: String*): Plan = {
 
+    implicit val env = new Environment
+
     val program = createInstance(args: _*)
-    val sinks = program.outputs map { _.getContract }
+    val sinks = program.outputs map { _.getContract.asInstanceOf[Pact4sDataSinkContract[_]] }
 
     initGlobalSchema(sinks)
 

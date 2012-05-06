@@ -12,9 +12,11 @@ import eu.stratosphere.pact.common.io._
 
 trait Pact4sContract { this: Contract =>
 
+  var outDegree = 0
+
   def persistConfiguration() = {}
 
-  def annotations: Seq[Annotation] = Seq()
+  protected def annotations: Seq[Annotation] = Seq()
 
   override def getUserCodeAnnotation[A <: Annotation](annotationClass: Class[A]): A = {
     annotations find { _.annotationType().equals(annotationClass) } map { _.asInstanceOf[A] } getOrElse null.asInstanceOf[A]
@@ -30,7 +32,7 @@ trait Pact4sDataSourceContract[Out] extends Pact4sContract { this: GenericDataSo
   val outputUDT: UDT[Out]
   val fieldSelector: FieldSelector[_ => Out]
 
-  override val annotations = Seq(new Annotations.ExplicitModifications(fieldSelector.getFields))
+  override def annotations = Seq(new Annotations.ExplicitModifications(fieldSelector.getFields))
 }
 
 object Pact4sDataSourceContract {
@@ -46,7 +48,7 @@ trait Pact4sDataSinkContract[In] extends Pact4sContract { this: GenericDataSink 
   val inputUDT: UDT[In]
   val fieldSelector: FieldSelector[In => _]
 
-  override val annotations = Seq(new Annotations.Reads(fieldSelector.getFields))
+  override def annotations = Seq(new Annotations.Reads(fieldSelector.getFields))
 }
 
 object Pact4sDataSinkContract {
