@@ -8,6 +8,12 @@ import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.Implic
 
 trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sContract { this: CrossContract =>
 
+  def leftInput = this.getFirstInputs().get(0)
+  def leftInput_=(left: Pact4sContract) = this.setFirstInput(left)
+
+  def rightInput = this.getSecondInputs().get(0)
+  def rightInput_=(right: Pact4sContract) = this.setSecondInput(right)
+
   val leftUDT: UDT[LeftIn]
   val rightUDT: UDT[RightIn]
   val outputUDT: UDT[Out]
@@ -41,5 +47,5 @@ object Cross4sContract {
 
   def getStub[LeftIn, RightIn, Out] = classOf[Cross4sStub[LeftIn, RightIn, Out]]
 
-  def unapply(c: Cross4sContract[_, _, _]) = Some((c.leftUDT, c.rightUDT, c.outputUDT, c.crossUDF))
+  def unapply(c: Cross4sContract[_, _, _]) = Some((c.leftInput, c.rightInput, c.leftUDT, c.rightUDT, c.outputUDT, c.crossUDF))
 }

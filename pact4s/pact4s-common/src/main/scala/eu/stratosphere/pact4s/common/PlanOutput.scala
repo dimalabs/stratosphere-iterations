@@ -12,9 +12,9 @@ import eu.stratosphere.pact.common.contract.GenericDataSink
 
 case class PlanOutput[In: UDT](source: DataStream[In], sink: DataSink[In]) {
 
-  private def createContract: Pact4sDataSinkContract = new URI(sink.url).getScheme match {
+  private def createContract: Pact4sDataSinkContract[In] = new URI(sink.url).getScheme match {
 
-    case "file" | null => new FileDataSink(sink.format.stub.asInstanceOf[Class[FileOutputFormat]], sink.url, source.getContract) with Pact4sDataSinkContract {
+    case "file" | null => new FileDataSink(sink.format.stub.asInstanceOf[Class[FileOutputFormat]], sink.url, source.getContract) with Pact4sDataSinkContract[In] {
 
       override val inputUDT = sink.format.inputUDT
       override val fieldSelector = sink.format.fieldSelector
@@ -23,7 +23,7 @@ case class PlanOutput[In: UDT](source: DataStream[In], sink: DataSink[In]) {
     }
   }
 
-  lazy val getContract: Pact4sDataSinkContract = {
+  lazy val getContract: Pact4sDataSinkContract[In] = {
 
     val contract = createContract
     sink.applyHints(contract)

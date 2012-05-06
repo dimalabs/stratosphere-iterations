@@ -8,6 +8,12 @@ import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.Implic
 
 trait CoGroup4sContract[Key, LeftIn, RightIn, Out] extends Pact4sContract { this: CoGroupContract =>
 
+  def leftInput = this.getFirstInputs().get(0)
+  def leftInput_=(left: Pact4sContract) = this.setFirstInput(left)
+
+  def rightInput = this.getSecondInputs().get(0)
+  def rightInput_=(right: Pact4sContract) = this.setSecondInput(right)
+
   val leftKeySelector: FieldSelector[LeftIn => Key]
   val rightKeySelector: FieldSelector[RightIn => Key]
   val leftUDT: UDT[LeftIn]
@@ -43,5 +49,5 @@ object CoGroup4sContract {
 
   def getStub[LeftIn, RightIn, Out] = classOf[CoGroup4sStub[LeftIn, RightIn, Out]]
 
-  def unapply(c: CoGroup4sContract[_, _, _, _]) = Some((c.leftKeySelector, c.rightKeySelector, c.leftUDT, c.rightUDT, c.outputUDT, c.coGroupUDF))
+  def unapply(c: CoGroup4sContract[_, _, _, _]) = Some((c.leftInput, c.rightInput, c.leftKeySelector, c.rightKeySelector, c.leftUDT, c.rightUDT, c.outputUDT, c.coGroupUDF))
 }

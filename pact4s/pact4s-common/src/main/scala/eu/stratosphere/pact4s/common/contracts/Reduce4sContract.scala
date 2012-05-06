@@ -8,6 +8,9 @@ import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.Implic
 
 trait Reduce4sContract[Key, In, Out] extends Pact4sContract { this: ReduceContract =>
 
+  def singleInput = this.getInputs().get(0)
+  def singleInput_=(input: Pact4sContract) = this.setInput(singleInput)
+
   val keySelector: FieldSelector[In => Key]
   val inputUDT: UDT[In]
   val outputUDT: UDT[Out]
@@ -45,5 +48,5 @@ object Reduce4sContract {
 
   def getStub[In, Out] = classOf[Reduce4sStub[In, Out]]
 
-  def unapply(c: Reduce4sContract[_, _, _]) = Some((c.keySelector, c.inputUDT, c.outputUDT, c.combineUDF, c.reduceUDF))
+  def unapply(c: Reduce4sContract[_, _, _]) = Some((c.singleInput, c.keySelector, c.inputUDT, c.outputUDT, c.combineUDF, c.reduceUDF))
 }

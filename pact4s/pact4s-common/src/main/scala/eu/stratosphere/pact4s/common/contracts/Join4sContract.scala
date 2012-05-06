@@ -8,6 +8,12 @@ import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.Implic
 
 trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sContract { this: MatchContract =>
 
+  def leftInput = this.getFirstInputs().get(0)
+  def leftInput_=(left: Pact4sContract) = this.setFirstInput(left)
+
+  def rightInput = this.getSecondInputs().get(0)
+  def rightInput_=(right: Pact4sContract) = this.setSecondInput(right)
+
   val leftKeySelector: FieldSelector[LeftIn => Key]
   val rightKeySelector: FieldSelector[RightIn => Key]
   val leftUDT: UDT[LeftIn]
@@ -43,5 +49,5 @@ object Join4sContract {
 
   def getStub[LeftIn, RightIn, Out] = classOf[Join4sStub[LeftIn, RightIn, Out]]
 
-  def unapply(c: Join4sContract[_, _, _, _]) = Some((c.leftKeySelector, c.rightKeySelector, c.leftUDT, c.rightUDT, c.outputUDT, c.joinUDF))
+  def unapply(c: Join4sContract[_, _, _, _]) = Some((c.leftInput, c.rightInput, c.leftKeySelector, c.rightKeySelector, c.leftUDT, c.rightUDT, c.outputUDT, c.joinUDF))
 }

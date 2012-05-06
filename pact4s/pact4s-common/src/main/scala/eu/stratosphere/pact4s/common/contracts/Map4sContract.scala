@@ -10,6 +10,9 @@ import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.Implic
 
 trait Map4sContract[In, Out] extends Pact4sContract { this: MapContract =>
 
+  def singleInput = this.getInputs().get(0)
+  def singleInput_=(input: Pact4sContract) = this.setInput(input)
+
   val inputUDT: UDT[In]
   val outputUDT: UDT[Out]
   val mapUDF: UDF1[In => _]
@@ -40,5 +43,5 @@ object Map4sContract {
 
   def getStub[In, Out] = classOf[Map4sStub[In, Out]]
 
-  def unapply(c: Map4sContract[_, _]) = Some((c.inputUDT, c.outputUDT, c.mapUDF))
+  def unapply(c: Map4sContract[_, _]) = Some((c.singleInput, c.inputUDT, c.outputUDT, c.mapUDF))
 }
