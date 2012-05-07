@@ -7,15 +7,13 @@ import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-trait ReduceOperator[In] { this: WrappedDataStream[In] =>
-
-  private val input = this.inner
+class ReduceOperator[In: UDT](input: DataStream[In]) {
 
   def groupBy[Key, GroupByKeySelector: SelectorBuilder[In, Key]#Selector](keySelector: In => Key) = new {
 
     def reduce[Out: UDT, F: UDF1Builder[Iterator[In], Out]#UDF](reduceFunction: Iterator[In] => Out): DataStream[Out] = {
 
-      implicit val dummyCombinerUDF = new AnalyzedUDF1[Iterable[In], In](0, 0)
+      implicit val dummyCombinerUDF = new AnalyzedUDF1[Iterator[In], In](0, 0)
       new ReduceStream(input, keySelector, None, reduceFunction)
     }
 

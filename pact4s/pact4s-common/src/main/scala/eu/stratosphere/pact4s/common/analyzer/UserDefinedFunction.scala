@@ -12,6 +12,8 @@ trait UDF extends Serializable {
 
   def isGlobalized: Boolean
   def getWriteFields: Array[Int]
+  def getOutputLocation: Int
+  def getOutputFields: Map[Int, Int]
 
   def relocateInputField(oldPosition: Int, newPosition: Int)
 }
@@ -26,7 +28,8 @@ trait UDF1[+F <: _ => _] extends UDF {
   def markInputFieldUnread(inputFieldNum: Int)
   def markInputFieldCopied(fromInputFieldNum: Int, toOutputFieldNum: Int)
 
-  def globalize(inputLocation: Int, outputLocation: Int)
+  def globalize(inputLocations: Map[Int, Int], outputLocation: Int): Int
+  def globalizeInPlace(inputLocations: Map[Int, Int])
   def setAmbientFieldBehavior(position: Int, behavior: AmbientFieldBehavior)
 }
 
@@ -37,10 +40,20 @@ trait UDF2[+F <: (_, _) => _] extends UDF {
   def getForwardedFields: (Array[Int], Array[Int])
   def getDiscardedFields: (Array[Int], Array[Int])
 
+  def getAllForwardedFields = {
+    val (left, right) = getForwardedFields
+    (left ++ right) toArray
+  }
+
+  def getAllDiscardedFields = {
+    val (left, right) = getDiscardedFields
+    (left ++ right) toArray
+  }
+
   def markInputFieldUnread(inputFieldNum: Either[Int, Int])
   def markInputFieldCopied(fromInputFieldNum: Either[Int, Int], toOutputFieldNum: Int)
 
-  def globalize(leftInputLocation: Int, rightInputLocation: Int, outputLocation: Int)
+  def globalize(leftInputLocations: Map[Int, Int], rightInputLocations: Map[Int, Int], outputLocation: Int): Int
   def setAmbientFieldBehavior(position: Either[Int, Int], behavior: AmbientFieldBehavior)
 }
 

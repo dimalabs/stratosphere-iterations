@@ -7,15 +7,26 @@ import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-trait MapOperator[In] { this: WrappedDataStream[In] =>
-
-  private val input = this.inner
+class MapOperator[In: UDT](input: DataStream[In]) {
 
   def map[Out: UDT, F: UDF1Builder[In, Out]#UDF](mapFunction: In => Out) = createStream(Left(mapFunction))
 
   def flatMap[Out: UDT, F: UDF1Builder[In, Iterator[Out]]#UDF](mapFunction: In => Iterator[Out]) = createStream(Right(mapFunction))
 
-  def filter[F: UDF1Builder[In, Boolean]#UDF](predicate: In => Boolean) = input flatMap { x => if (predicate(x)) Iterator.single(x) else Iterator.empty }
+  def filter[F: SelectorBuilder[In, Boolean]#Selector](predicate: In => Boolean) = {
+
+    val reads = implicitly[FieldSelector[In => Boolean]].getFields
+    val udt = implicitly[UDT[In]]
+
+    implicit val udf = new AnalyzedUDF1[In, Iterator[In]](udt.numFields, udt.numFields) {
+      for (i <- 0 until udt.numFields) {
+        if (reads(i) < 0) markInputFieldUnread(i)
+        markInputFieldCopied(i, i)
+      }
+    }
+
+    input flatMap { x => if (predicate(x)) Iterator.single(x) else Iterator.empty }
+  }
 
   private def createStream[Out: UDT, R, F: UDF1Builder[In, R]#UDF](
     mapFunction: Either[In => Out, In => Iterator[Out]]): DataStream[Out] = new DataStream[Out] {

@@ -41,7 +41,7 @@ abstract class DataSourceFormat[Out: UDT] {
 
   val stub: Class[_ <: InputFormat[_]]
   val outputUDT: UDT[Out] = implicitly[UDT[Out]]
-  val fieldSelector: FieldSelector[Unit => Out] = new AnalyzedFieldSelector(outputUDT.fieldTypes.length)
+  val fieldSelector: FieldSelector[Unit => Out] = defaultFieldSelectorR[Unit, Out]
 
   def persistConfiguration(config: Configuration) = {}
 }

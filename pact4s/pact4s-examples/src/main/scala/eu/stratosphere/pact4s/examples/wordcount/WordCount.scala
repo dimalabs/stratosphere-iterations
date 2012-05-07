@@ -49,6 +49,13 @@ trait WordCountGeneratedImplicits {
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
+  implicit val udf1: UDF1[Function1[String, Iterator[String]]] = defaultUDF1IterR[String, String]
+  implicit val udf2: UDF1[Function1[String, Iterator[(String, Int)]]] = defaultUDF1IterR[String, (String, Int)]
+  implicit val udf3: UDF1[Function1[Iterator[(String, Int)], (String, Int)]] = defaultUDF1IterT[(String, Int), (String, Int)]
+
+  implicit val selOutput: FieldSelector[Function1[(String, Int), Unit]] = defaultFieldSelectorT[(String, Int), Unit]
+  implicit val selCounts: FieldSelector[Function1[(String, Int), String]] = getFieldSelector[(String, Int), String](0)
+
   implicit val stringSerializer: UDT[String] = new UDT[String] {
 
     override val fieldTypes = Array[Class[_ <: Value]](classOf[PactString])

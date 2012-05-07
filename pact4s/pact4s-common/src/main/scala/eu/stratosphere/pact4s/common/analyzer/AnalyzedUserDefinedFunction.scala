@@ -4,36 +4,47 @@ import scala.collection.mutable
 
 abstract class AnalyzedUDF(outputLength: Int) extends UDF {
 
-  private var globalized = false
+  private var outputLocation: Option[Int] = None
   private val writeFields = createIdentityMap(outputLength)
-  private val discardedWriteFields = mutable.Map[Int, Int]()
 
-  override def isGlobalized = globalized
+  override def isGlobalized = outputLocation.isDefined
   override def getWriteFields = writeFields
+  override def getOutputLocation = { assertGlobalized(true); outputLocation.get }
 
   protected def getReadFieldSets: Seq[Array[Int]]
 
   protected def createIdentityMap(length: Int) = (0 until length).toArray
 
   protected def assertGlobalized(expectGlobalized: Boolean) = {
-    if (expectGlobalized != globalized)
+    if (expectGlobalized != isGlobalized)
       throw new IllegalStateException()
   }
 
-  protected def globalize(inputLocations: Seq[Int], outputLocation: Int) = {
+  protected def globalize(inputLocations: Seq[Map[Int, Int]], outputLocation: Int): Int = {
     assertGlobalized(false)
 
-    for ((readFields, inputLocation) <- getReadFieldSets zip inputLocations) {
-      for (fieldNum <- 0 to readFields.length if readFields(fieldNum) > -1) {
-        readFields(fieldNum) += inputLocation
+    for ((readFields, inputLocations) <- getReadFieldSets zip inputLocations) {
+      for (fieldNum <- 0 to readFields.length if readFields(fieldNum) >= 0) {
+        readFields(fieldNum) = inputLocations(fieldNum)
       }
     }
 
-    for (fieldNum <- 0 to writeFields.length if writeFields(fieldNum) > -1) {
-      writeFields(fieldNum) += outputLocation
+    if (outputLocation >= 0) {
+
+      for (fieldNum <- 0 to writeFields.length if writeFields(fieldNum) >= 0)
+        writeFields(fieldNum) += outputLocation
+
+    } else {
+
+      if (inputLocations.size > 1)
+        throw new IllegalArgumentException("Attempted to perform in-place globalization on a Function2")
+
+      for (fieldNum <- 0 to writeFields.length if writeFields(fieldNum) >= 0)
+        writeFields(fieldNum) = inputLocations.head(fieldNum)
     }
 
-    globalized = true
+    this.outputLocation = Some(outputLocation)
+    outputLocation + writeFields.length
   }
 
   protected def markInputFieldUnused(readFields: Array[Int], inputFieldNum: Int) = {
@@ -46,6 +57,17 @@ abstract class AnalyzedUDF(outputLength: Int) extends UDF {
     writeFields(outputFieldNum) = -1
   }
 
+  protected def markOutputFieldUsed(outputFieldNum: Int) = {
+    assertGlobalized(true)
+    writeFields(outputFieldNum) = getOutputLocation + outputFieldNum
+  }
+
+  protected def assertAmbience(outputPosition: Int) = {
+    assertGlobalized(true)
+    if (writeFields.contains(outputPosition))
+      throw new IllegalArgumentException("Field is not ambient.")
+  }
+
   override def relocateInputField(oldPosition: Int, newPosition: Int) = {
     assertGlobalized(true)
 
@@ -54,38 +76,6 @@ abstract class AnalyzedUDF(outputLength: Int) extends UDF {
         readFields(fieldNum) = newPosition
       }
     }
-  }
-
-  protected def discardOutputField(position: Int) = {
-    assertGlobalized(true)
-
-    val outputFieldNum = getOutputFieldNumber(position)
-
-    if (outputFieldNum >= 0) {
-      discardedWriteFields(position) = outputFieldNum
-      writeFields(outputFieldNum) = -1
-      true
-    } else {
-      false
-    }
-  }
-
-  protected def restoreOutputField(position: Int): Boolean = {
-    assertGlobalized(true)
-
-    val outputFieldNum = getOutputFieldNumber(position)
-
-    if (outputFieldNum >= 0) {
-      discardedWriteFields.remove(position)
-      writeFields(outputFieldNum) = position
-      true
-    } else {
-      false
-    }
-  }
-
-  private def getOutputFieldNumber(position: Int) = {
-    discardedWriteFields.getOrElse(position, writeFields indexOf position)
   }
 }
 
@@ -101,6 +91,16 @@ class AnalyzedUDF1[T1, R](inputLength: Int, outputLength: Int) extends AnalyzedU
   override def getForwardedFields = (ambientFields filter { case (_, forward) => forward } keys) toArray
   override def getDiscardedFields = (ambientFields filterNot { case (_, forward) => forward } keys) toArray
 
+  override def getOutputFields: Map[Int, Int] = {
+    assertGlobalized(true)
+
+    getWriteFields.zipWithIndex.map {
+
+      case (-1, fieldNum)  => (fieldNum, copiedFields(fieldNum))
+      case (pos, fieldNum) => (fieldNum, pos)
+    } toMap
+  }
+
   override def markInputFieldUnread(inputFieldNum: Int) = {
 
     markInputFieldUnused(readFields, inputFieldNum)
@@ -112,31 +112,44 @@ class AnalyzedUDF1[T1, R](inputLength: Int, outputLength: Int) extends AnalyzedU
     copiedFields(toOutputFieldNum) = fromInputFieldNum
   }
 
-  override def globalize(inputLocation: Int, outputLocation: Int) = {
+  override def globalize(inputLocations: Map[Int, Int], outputLocation: Int): Int = {
 
-    globalize(Seq(inputLocation), outputLocation)
+    var freePos = globalize(Seq(inputLocations), outputLocation)
 
     copiedFields = copiedFields map {
-      case (to, from) => (to + outputLocation, from + inputLocation)
+      case (to, from) => (to, inputLocations(from))
     }
+
+    for (pos <- copiedFields.values)
+      ambientFields(pos) = true
+
+    freePos
   }
 
-  override def setAmbientFieldBehavior(position: Int, behavior: AmbientFieldBehavior) = behavior match {
+  override def globalizeInPlace(inputLocations: Map[Int, Int]) = {
 
-    case AmbientFieldBehavior.Default => {
-      if (!restoreOutputField(position)) {
-        ambientFields.remove(position)
-      }
+    globalize(Seq(inputLocations), -1)
+
+    copiedFields = copiedFields map {
+      case (to, from) => (to, inputLocations(from))
     }
 
-    case AmbientFieldBehavior.Forward => {
-      if (!restoreOutputField(position)) {
-        ambientFields(position) = true
-      }
-    }
+    for (pos <- copiedFields.values)
+      ambientFields(pos) = true
+  }
 
-    case AmbientFieldBehavior.Discard => {
-      if (!discardOutputField(position)) {
+  override def setAmbientFieldBehavior(position: Int, behavior: AmbientFieldBehavior) = {
+    assertAmbience(position)
+
+    behavior match {
+
+      case AmbientFieldBehavior.Default => ambientFields.remove(position)
+      case AmbientFieldBehavior.Forward => ambientFields(position) = true
+      case AmbientFieldBehavior.Discard => {
+
+        for ((lPos, gPos) <- getOutputFields if gPos == position)
+          markOutputFieldUsed(lPos)
+
         ambientFields(position) = false
       }
     }
@@ -156,6 +169,16 @@ class AnalyzedUDF2[T1, T2, R](leftInputLength: Int, rightInputLength: Int, outpu
   override def getForwardedFields = split(ambientFields filter { case (_, forward) => forward } keys)
   override def getDiscardedFields = split(ambientFields filterNot { case (_, forward) => forward } keys)
 
+  override def getOutputFields: Map[Int, Int] = {
+    assertGlobalized(true)
+
+    getWriteFields.zipWithIndex.map {
+
+      case (-1, fieldNum)  => (fieldNum, copiedFields(fieldNum).fold(identity, identity))
+      case (pos, fieldNum) => (fieldNum, pos)
+    } toMap
+  }
+
   override def markInputFieldUnread(inputFieldNum: Either[Int, Int]) = {
 
     inputFieldNum match {
@@ -170,50 +193,39 @@ class AnalyzedUDF2[T1, T2, R](leftInputLength: Int, rightInputLength: Int, outpu
     copiedFields(toOutputFieldNum) = fromInputFieldNum
   }
 
-  override def globalize(leftInputLocation: Int, rightInputLocation: Int, outputLocation: Int) = {
+  override def globalize(leftInputLocations: Map[Int, Int], rightInputLocations: Map[Int, Int], outputLocation: Int): Int = {
 
-    globalize(Seq(leftInputLocation, rightInputLocation), outputLocation)
+    var freePos = globalize(Seq(leftInputLocations, rightInputLocations), outputLocation)
 
     copiedFields = copiedFields map {
-      case (to, Left(from))  => (to + outputLocation, Left(from + leftInputLocation))
-      case (to, Right(from)) => (to + outputLocation, Right(from + rightInputLocation))
+      case (to, Left(from))  => (to, Left(leftInputLocations(from)))
+      case (to, Right(from)) => (to, Right(rightInputLocations(from)))
     }
+
+    freePos
   }
 
   override def setAmbientFieldBehavior(position: Either[Int, Int], behavior: AmbientFieldBehavior) = {
-
-    val pos = unpack(position)
+    val universalPos = position.fold(identity, identity)
+    assertAmbience(universalPos)
 
     behavior match {
 
-      case AmbientFieldBehavior.Default => {
-        if (!restoreOutputField(pos)) {
-          ambientFields.remove(position)
-        }
-      }
-
-      case AmbientFieldBehavior.Forward => {
-        if (!restoreOutputField(pos)) {
-          ambientFields(position) = true
-        }
-      }
-
+      case AmbientFieldBehavior.Default => ambientFields.remove(position)
+      case AmbientFieldBehavior.Forward => ambientFields(position) = true
       case AmbientFieldBehavior.Discard => {
-        if (!discardOutputField(pos)) {
-          ambientFields(position) = false
-        }
+
+        for ((lPos, gPos) <- getOutputFields if gPos == universalPos)
+          markOutputFieldUsed(lPos)
+
+        ambientFields(position) = false
       }
     }
-  }
-
-  private def unpack(item: Either[Int, Int]) = item match {
-    case Left(x)  => x
-    case Right(x) => x
   }
 
   private def split(items: Iterable[Either[Int, Int]]) = {
     val (left, right) = items.partition(_.isLeft)
-    (left map unpack toArray, right map unpack toArray)
+    (left map (_.fold(identity, identity)) toArray, right map (_.fold(identity, identity)) toArray)
   }
 }
 

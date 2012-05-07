@@ -6,13 +6,7 @@ import eu.stratosphere.pact4s.common.stubs._
 import eu.stratosphere.pact.common.contract._
 import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode;
 
-trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sContract { this: MatchContract =>
-
-  def leftInput = this.getFirstInputs().get(0)
-  def leftInput_=(left: Pact4sContract) = this.setFirstInput(left)
-
-  def rightInput = this.getSecondInputs().get(0)
-  def rightInput_=(right: Pact4sContract) = this.setSecondInput(right)
+trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContract { this: MatchContract =>
 
   val leftKeySelector: FieldSelector[LeftIn => Key]
   val rightKeySelector: FieldSelector[RightIn => Key]

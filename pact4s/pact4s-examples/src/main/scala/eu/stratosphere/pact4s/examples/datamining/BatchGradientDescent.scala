@@ -99,6 +99,19 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
+  implicit val udf1: UDF1[Function1[(Int, Array[Double]), (Int, Array[Double], Double)]] = defaultUDF1[(Int, Array[Double]), (Int, Array[Double], Double)]
+  implicit val udf2: UDF1[Function1[Iterator[ValueAndGradient], ValueAndGradient]] = defaultUDF1IterT[ValueAndGradient, ValueAndGradient]
+  implicit val udf3: UDF1[Function1[(Int, Double, Array[Double], Double), (Int, Array[Double], Double)]] = defaultUDF1[(Int, Double, Array[Double], Double), (Int, Array[Double], Double)]
+  implicit val udf4: UDF1[Function1[(Int, Double, Array[Double], Double), (Int, Array[Double])]] = defaultUDF1[(Int, Double, Array[Double], Double), (Int, Array[Double])]
+  implicit val udf5: UDF2[Function2[(Int, Array[Double], Double), (Int, Array[Double]), ValueAndGradient]] = defaultUDF2[(Int, Array[Double], Double), (Int, Array[Double]), ValueAndGradient]
+  implicit val udf6: UDF2[Function2[(Int, Array[Double], Double), ValueAndGradient, (Int, Double, Array[Double], Double)]] = defaultUDF2[(Int, Array[Double], Double), ValueAndGradient, (Int, Double, Array[Double], Double)]
+  implicit val udf7: FieldSelector[Function1[(Int, Double, Array[Double], Double), Boolean]] = defaultFieldSelectorT[(Int, Double, Array[Double], Double), Boolean]
+
+  implicit val selOutput: FieldSelector[Function1[(Int, Array[Double]), Unit]] = defaultFieldSelectorT[(Int, Array[Double]), Unit]
+  implicit val selNewWeights: FieldSelector[Function1[(Int, Array[Double]), Int]] = getFieldSelector[(Int, Array[Double]), Int](0)
+  implicit val selLossAndGradientSums: FieldSelector[Function1[ValueAndGradient, Int]] = getFieldSelector[ValueAndGradient, Int](0)
+  implicit val selGdNewWeightsLeft: FieldSelector[Function1[(Int, Array[Double], Double), Int]] = getFieldSelector[(Int, Array[Double], Double), Int](0)
+
   implicit val intArrayDoubleUDT: UDT[(Int, Array[Double])] = new UDT[(Int, Array[Double])] {
 
     override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactList[PactDouble]])

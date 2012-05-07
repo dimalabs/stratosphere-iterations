@@ -26,10 +26,10 @@ class TransitiveClosureRD(args: String*) extends PactProgram with TransitiveClos
 
   def createClosure(c: DataStream[Path], x: DataStream[Path]) = {
 
-    val cNewPaths = x join c on getTo isEqualTo getFrom map joinPaths
+    val cNewPaths = x.join(c).on(getTo)(selTo).isEqualTo(getFrom)(selFrom) map joinPaths
     val c1 = cNewPaths cogroup cNewPaths on getEdge isEqualTo getEdge map selectShortestDistance
 
-    val xNewPaths = x join x on getTo isEqualTo getFrom map joinPaths
+    val xNewPaths = x.join(x).on(getTo)(selTo).isEqualTo(getFrom)(selFrom) map joinPaths
     val x1 = xNewPaths cogroup c1 on getEdge isEqualTo getEdge flatMap excludeKnownPaths
 
     (c1, x1)
@@ -46,7 +46,7 @@ class TransitiveClosureRD(args: String*) extends PactProgram with TransitiveClos
       x
     else
       Iterable.empty
-  } 
+  }
 
   def getEdge(p: Path): (Int, Int) = (p.from, p.to)
   def getFrom(p: Path): Int = p.from
@@ -89,6 +89,15 @@ trait TransitiveClosureRDGeneratedImplicits { this: TransitiveClosureRD =>
 
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
+
+  implicit val udf1: UDF2[Function2[Path, Path, Path]] = defaultUDF2[Path, Path, Path]
+  implicit val udf2: UDF2[Function2[Iterator[Path], Iterator[Path], Path]] = defaultUDF2IterT[Path, Path, Path]
+  implicit val udf3: UDF2[Function2[Iterator[Path], Iterator[Path], Iterator[Path]]] = defaultUDF2IterTR[Path, Path, Path]
+
+  implicit val selOutput: FieldSelector[Function1[Path, Unit]] = defaultFieldSelectorT[Path, Unit]
+  implicit val selEdge: FieldSelector[Function1[Path, (Int, Int)]] = getFieldSelector[Path, (Int, Int)](0, 1)
+  val selFrom: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](0)
+  val selTo: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](1)
 
   implicit val pathSerializer: UDT[Path] = new UDT[Path] {
 

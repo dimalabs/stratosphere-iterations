@@ -34,9 +34,11 @@ class KMeans(args: String*) extends PactProgram with KMeansGeneratedImplicits {
   }
 
   def sumPointSums(dataPoints: Iterator[(Int, PointSum)]): (Int, PointSum) = {
-    dataPoints.reduce { (z, v) => (z, v) match {
-      case ((id, total), (_, item)) => (id, total + item)
-    } }
+    dataPoints.reduce { (z, v) =>
+      (z, v) match {
+        case ((id, total), (_, item)) => (id, total + item)
+      }
+    }
   }
 
   override def defaultParallelism = params.numSubTasks
@@ -86,6 +88,16 @@ trait KMeansGeneratedImplicits { this: KMeans =>
 
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
+
+  implicit val udf1: UDF1[Function1[Iterator[(Int, Distance)], (Int, Distance)]] = defaultUDF1IterT[(Int, Distance), (Int, Distance)]
+  implicit val udf2: UDF1[Function1[(Int, Distance), (Int, PointSum)]] = defaultUDF1[(Int, Distance), (Int, PointSum)]
+  implicit val udf3: UDF1[Function1[Iterator[(Int, PointSum)], (Int, PointSum)]] = defaultUDF1IterT[(Int, PointSum), (Int, PointSum)]
+  implicit val udf4: UDF1[Function1[(Int, PointSum), (Int, Point)]] = defaultUDF1[(Int, PointSum), (Int, Point)]
+  implicit val udf5: UDF2[Function2[(Int, Point), (Int, Point), (Int, Distance)]] = defaultUDF2[(Int, Point), (Int, Point), (Int, Distance)]
+
+  implicit val selNewClusterPoints: FieldSelector[Function1[(Int, Point), Unit]] = defaultFieldSelectorT[(Int, Point), Unit]
+  implicit val selNearestCenters: FieldSelector[Function1[(Int, Distance), Int]] = getFieldSelector[(Int, Distance), Int](0)
+  implicit val selNewCenters: FieldSelector[Function1[(Int, PointSum), Int]] = getFieldSelector[(Int, PointSum), Int](0)
 
   implicit val intPointSerializer: UDT[(Int, Point)] = new UDT[(Int, Point)] {
 

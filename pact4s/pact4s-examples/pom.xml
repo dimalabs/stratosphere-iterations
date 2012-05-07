@@ -37,6 +37,7 @@
         <artifactId>maven-jar-plugin</artifactId>
         <executions>
         
+          <!-- BatchGradientDescent is abstract...
           <execution>
             <id>BatchGradientDescent</id>
             <phase>package</phase>
@@ -59,6 +60,7 @@
               </includes>
             </configuration>
           </execution>
+          -->
           
           <execution>
             <id>KMeans</id>
@@ -72,7 +74,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.datamining.KMeans</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.datamining.KMeans$</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -95,7 +97,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.ConnectedComponents</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.ConnectedComponents$</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -118,7 +120,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.TransitiveClosureNaive</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.TransitiveClosureNaive$</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -141,7 +143,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.TransitiveClosureRD</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.TransitiveClosureRD$</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -164,7 +166,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.relational.TPCHQuery3</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.relational.TPCHQuery3$</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -187,7 +189,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.wordcount.WordCount</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.wordcount.WordCount$</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 

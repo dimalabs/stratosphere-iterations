@@ -7,9 +7,7 @@ import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-trait CrossOperator[LeftIn] { this: WrappedDataStream[LeftIn] =>
-
-  private val leftInput = this.inner
+class CrossOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) {
 
   def cross[RightIn: UDT](rightInput: DataStream[RightIn]) = new {
 

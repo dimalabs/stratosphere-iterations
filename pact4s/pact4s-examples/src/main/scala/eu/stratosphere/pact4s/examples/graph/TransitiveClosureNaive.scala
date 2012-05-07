@@ -23,7 +23,7 @@ class TransitiveClosureNaive(args: String*) extends PactProgram with TransitiveC
 
   def createClosure(paths: DataStream[Path]) = {
 
-    val allNewPaths = paths join edges on getTo isEqualTo getFrom map joinPaths
+    val allNewPaths = paths.join(edges).on(getTo)(selTo).isEqualTo(getFrom)(selFrom) map joinPaths
     val shortestPaths = allNewPaths groupBy getEdge combine { _ minBy { _.dist } }
 
     shortestPaths
@@ -74,6 +74,14 @@ trait TransitiveClosureNaiveGeneratedImplicits { this: TransitiveClosureNaive =>
 
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
+
+  implicit val udf1: UDF1[Function1[Iterator[Path], Path]] = defaultUDF1IterT[Path, Path]
+  implicit val udf2: UDF2[Function2[Path, Path, Path]] = defaultUDF2[Path, Path, Path]
+
+  implicit val selOutput: FieldSelector[Function1[Path, Unit]] = defaultFieldSelectorT[Path, Unit]
+  implicit val selEdge: FieldSelector[Function1[Path, (Int, Int)]] = getFieldSelector[Path, (Int, Int)](0, 1)
+  val selFrom: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](0)
+  val selTo: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](1)
 
   implicit val pathSerializer: UDT[Path] = new UDT[Path] {
 

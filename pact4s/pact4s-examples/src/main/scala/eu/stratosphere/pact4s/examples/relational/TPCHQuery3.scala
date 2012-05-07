@@ -89,6 +89,15 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
+  implicit val udf1: UDF1[Function1[Iterator[PrioritizedOrder], PrioritizedOrder]] = defaultUDF1IterT[PrioritizedOrder, PrioritizedOrder]
+  implicit val udf2: UDF2[Function2[Order, LineItem, PrioritizedOrder]] = defaultUDF2[Order, LineItem, PrioritizedOrder]
+  implicit val udf3: FieldSelector[Function1[Order, Boolean]] = defaultFieldSelectorT[Order, Boolean]
+
+  implicit val selOutput: FieldSelector[Function1[PrioritizedOrder, Unit]] = defaultFieldSelectorT[PrioritizedOrder, Unit]
+  implicit val selPrioritizedItemsLeft: FieldSelector[Function1[Order, Int]] = getFieldSelector[Order, Int](0)
+  implicit val selPrioritizedItemsRight: FieldSelector[Function1[LineItem, Int]] = getFieldSelector[LineItem, Int](0)
+  implicit val selPrioritizedOrders: FieldSelector[Function1[PrioritizedOrder, (Int, Int)]] = getFieldSelector[PrioritizedOrder, (Int, Int)](0, 1)
+
   implicit val orderSerializer: UDT[Order] = new UDT[Order] {
 
     override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactInteger], classOf[PactInteger], classOf[PactInteger], classOf[PactString], classOf[PactInteger])

@@ -64,7 +64,7 @@ case class SequentialDataSinkFormat[In: UDT](val blockSize: Option[Long] = None)
   override val stub = classOf[SequentialOutputFormat]
 
   override val inputUDT = implicitly[UDT[In]]
-  override val fieldSelector = implicitly[FieldSelector[In => Unit]]
+  override val fieldSelector = defaultFieldSelectorT[In, Unit]
 
   override def persistConfiguration(config: Configuration) {
     if (blockSize.isDefined)
@@ -133,7 +133,7 @@ case class RecordDataSinkFormat[In: UDT](val recordDelimeter: Option[String] = N
   override val stub = classOf[RecordOutputFormat]
 
   override val inputUDT = implicitly[UDT[In]]
-  override val fieldSelector = implicitly[FieldSelector[In => Unit]]
+  override val fieldSelector = defaultFieldSelectorT[In, Unit]
 
   override def persistConfiguration(config: Configuration) {
 

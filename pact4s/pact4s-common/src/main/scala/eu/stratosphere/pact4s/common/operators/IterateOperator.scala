@@ -7,9 +7,7 @@ import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-trait IterateOperator[SolutionItem] { this: WrappedDataStream[SolutionItem] =>
-
-  private val initialSolution = this.inner
+class IterateOperator[SolutionItem: UDT](initialSolution: DataStream[SolutionItem]) {
 
   def iterate(stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]): DataStream[SolutionItem] = new DataStream[SolutionItem] {
 

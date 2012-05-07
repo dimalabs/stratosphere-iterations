@@ -6,13 +6,7 @@ import eu.stratosphere.pact4s.common.stubs._
 import eu.stratosphere.pact.common.contract._
 import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode;
 
-trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sContract { this: CrossContract =>
-
-  def leftInput = this.getFirstInputs().get(0)
-  def leftInput_=(left: Pact4sContract) = this.setFirstInput(left)
-
-  def rightInput = this.getSecondInputs().get(0)
-  def rightInput_=(right: Pact4sContract) = this.setSecondInput(right)
+trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { this: CrossContract =>
 
   val leftUDT: UDT[LeftIn]
   val rightUDT: UDT[RightIn]

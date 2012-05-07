@@ -7,6 +7,7 @@ import eu.stratosphere.pact.common.`type`.PactRecord
 trait UDT[T] extends Serializable {
 
   val fieldTypes: Array[Class[_ <: PactValue]]
+  val numFields = fieldTypes.length
 
   def getKeySet(fields: Seq[Int]): Array[Class[_ <: PactKey]] = {
     fields filter (_ >= 0) map { fieldNum => fieldTypes(fieldNum).asInstanceOf[Class[_ <: PactKey]] } toArray

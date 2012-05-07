@@ -7,15 +7,13 @@ import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-trait CoGroupOperator[LeftIn] { this: WrappedDataStream[LeftIn] =>
-
-  private val leftInput = this.inner
+class CoGroupOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) {
 
   def cogroup[RightIn: UDT](rightInput: DataStream[RightIn]) = new {
 
     def on[Key, LeftKeySelector: SelectorBuilder[LeftIn, Key]#Selector](leftKeySelector: LeftIn => Key) = new {
 
-      def isEqualTo[Key, RightKeySelector: SelectorBuilder[RightIn, Key]#Selector](rightKeySelector: RightIn => Key) = new {
+      def isEqualTo[RightKeySelector: SelectorBuilder[RightIn, Key]#Selector](rightKeySelector: RightIn => Key) = new {
 
         def map[Out: UDT, F: UDF2Builder[Iterator[LeftIn], Iterator[RightIn], Out]#UDF](mapFunction: (Iterator[LeftIn], Iterator[RightIn]) => Out) = createStream(Left(mapFunction))
 

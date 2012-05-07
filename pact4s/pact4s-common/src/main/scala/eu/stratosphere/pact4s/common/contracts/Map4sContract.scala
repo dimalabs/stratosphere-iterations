@@ -8,10 +8,7 @@ import eu.stratosphere.pact4s.common.stubs._
 import eu.stratosphere.pact.common.contract._
 import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode;
 
-trait Map4sContract[In, Out] extends Pact4sContract { this: MapContract =>
-
-  def singleInput = this.getInputs().get(0)
-  def singleInput_=(input: Pact4sContract) = this.setInput(input)
+trait Map4sContract[In, Out] extends Pact4sOneInputContract { this: MapContract =>
 
   val inputUDT: UDT[In]
   val outputUDT: UDT[Out]

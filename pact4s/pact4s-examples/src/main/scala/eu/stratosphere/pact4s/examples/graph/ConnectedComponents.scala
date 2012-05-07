@@ -29,7 +29,7 @@ class ConnectedComponents(args: String*) extends PactProgram with ConnectedCompo
     // updated solution elements == new workset
     val s1 = minNeighbors join s on { _._1 } isEqualTo { _._1 } flatMap {
       case ((v, cNew), (_, cOld)) if cNew < cOld => Some((v, cNew))
-      case _ => None
+      case _                                     => None
     }
 
     (s1, s1)
@@ -69,6 +69,14 @@ trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>
 
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
+
+  implicit val udf1: UDF1[Function1[(Int, Int), Iterator[(Int, Int)]]] = defaultUDF1IterR[(Int, Int), (Int, Int)]
+  implicit val udf2: UDF1[Function1[Iterator[(Int, Int)], (Int, Int)]] = defaultUDF1IterT[(Int, Int), (Int, Int)]
+  implicit val udf3: UDF2[Function2[(Int, Int), (Int, Int), (Int, Int)]] = defaultUDF2[(Int, Int), (Int, Int), (Int, Int)]
+  implicit val udf4: UDF2[Function2[(Int, Int), (Int, Int), Iterator[(Int, Int)]]] = defaultUDF2IterR[(Int, Int), (Int, Int), (Int, Int)]
+
+  implicit val selOutput: FieldSelector[Function1[(Int, Int), Unit]] = defaultFieldSelectorT[(Int, Int), Unit]
+  implicit val selFirst: FieldSelector[Function1[(Int, Int), Int]] = getFieldSelector[(Int, Int), Int](0)
 
   implicit val intIntUDT: UDT[(Int, Int)] = new UDT[(Int, Int)] {
 

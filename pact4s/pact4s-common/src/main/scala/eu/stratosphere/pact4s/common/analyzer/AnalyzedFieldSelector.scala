@@ -1,7 +1,5 @@
 package eu.stratosphere.pact4s.common.analyzer
 
-import eu.stratosphere.pact.common.`type`.{ Key => PactKey }
-
 class AnalyzedFieldSelector[T1, R](fieldCount: Int) extends FieldSelector[T1 => R] {
 
   private var globalized = false
@@ -15,14 +13,21 @@ class AnalyzedFieldSelector[T1, R](fieldCount: Int) extends FieldSelector[T1 => 
       throw new IllegalStateException()
   }
 
-  override def globalize(inputLocation: Int) = {
+  override def markFieldUnused(inputFieldNum: Int) = {
     assertGlobalized(false)
+    fields(inputFieldNum) = -1
+  }
 
-    for (fieldNum <- 0 to fields.length if fields(fieldNum) > -1) {
-      fields(fieldNum) += inputLocation
+  override def globalize(locations: Map[Int, Int]) = {
+
+    if (!globalized) {
+
+      for (fieldNum <- 0 to fields.length if fields(fieldNum) >= 0) {
+        fields(fieldNum) = locations(fieldNum)
+      }
+
+      globalized = true
     }
-
-    globalized = true
   }
 
   override def relocateField(oldPosition: Int, newPosition: Int) = {

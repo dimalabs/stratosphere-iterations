@@ -6,10 +6,7 @@ import eu.stratosphere.pact4s.common.stubs._
 import eu.stratosphere.pact.common.contract._
 import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode;
 
-trait Reduce4sContract[Key, In, Out] extends Pact4sContract { this: ReduceContract =>
-
-  def singleInput = this.getInputs().get(0)
-  def singleInput_=(input: Pact4sContract) = this.setInput(singleInput)
+trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputContract { this: ReduceContract =>
 
   val keySelector: FieldSelector[In => Key]
   val inputUDT: UDT[In]
