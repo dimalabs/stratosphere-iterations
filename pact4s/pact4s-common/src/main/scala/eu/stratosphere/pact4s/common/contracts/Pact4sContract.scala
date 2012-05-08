@@ -25,10 +25,11 @@ trait Pact4sContract { this: Contract =>
 }
 
 object Pact4sContract {
-  implicit def toContract(c: Pact4sContract): Contract = c
+  implicit def toContract(c: Pact4sContract): Contract = c.asInstanceOf[Contract]
 }
 
 trait Pact4sOneInputContract extends Pact4sContract { this: Contract with Pact4sOneInputContract.OneInput =>
+
   def singleInput = this.getInputs().get(0)
   def singleInput_=(input: Pact4sContract) = this.setInput(input)
 }
@@ -60,7 +61,7 @@ trait Pact4sDataSourceContract[Out] extends Pact4sContract { this: GenericDataSo
   val outputUDT: UDT[Out]
   val fieldSelector: FieldSelector[_ => Out]
 
-  override def annotations = Seq(new Annotations.ExplicitModifications(fieldSelector.getFields))
+  override def annotations = Seq(Annotations.getExplicitModifications(fieldSelector.getFields))
 }
 
 object Pact4sDataSourceContract {
@@ -73,12 +74,12 @@ trait Pact4sDataSinkContract[In] extends Pact4sOneInputContract { this: GenericD
   val inputUDT: UDT[In]
   val fieldSelector: FieldSelector[In => _]
 
-  override def annotations = Seq(new Annotations.Reads(fieldSelector.getFields))
+  override def annotations = Seq(Annotations.getReads(fieldSelector.getFields))
 }
 
 object Pact4sDataSinkContract {
-  implicit def toGenericSink(s: Pact4sDataSinkContract[_]): GenericDataSink = s
-  implicit def toGenericSinks(s: Seq[Pact4sDataSinkContract[_]]): JCollection[GenericDataSink] = s
+  implicit def toGenericSink(s: Pact4sDataSinkContract[_]): GenericDataSink = s.asInstanceOf[GenericDataSink]
+  implicit def toGenericSinks(s: Seq[Pact4sDataSinkContract[_]]): JCollection[GenericDataSink] = s.map(_.asInstanceOf[GenericDataSink])
 
   def unapply(c: Pact4sDataSinkContract[_]) = Some((c.singleInput, c.inputUDT, c.fieldSelector))
 }

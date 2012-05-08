@@ -9,9 +9,9 @@ import eu.stratosphere.pact4s.common.stubs._
 import eu.stratosphere.pact.common.io._
 import eu.stratosphere.nephele.configuration.Configuration
 
-case class DataSink[In: UDT](url: String, format: DataSinkFormat[In]) extends Hintable[In]
+class DataSink[In: UDT](val url: String, val format: DataSinkFormat[In]) extends Hintable[In] with Serializable
 
-abstract class DataSinkFormat[In: UDT] {
+abstract class DataSinkFormat[In: UDT] extends Serializable {
 
   val stub: Class[_ <: OutputFormat]
   val inputUDT: UDT[In]

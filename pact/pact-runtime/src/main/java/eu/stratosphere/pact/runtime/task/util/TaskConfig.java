@@ -535,6 +535,11 @@ public class TaskConfig
 		}
 
 		@Override
+		public ClassLoader getClassLoader() {
+			return this.backingConfig.getClassLoader();
+		}
+
+		@Override
 		public <T> Class<T> getClass(String key, Class<? extends T> defaultValue, Class<T> ancestor) {
 			return this.backingConfig.getClass(this.prefix + key, defaultValue, ancestor);
 		}

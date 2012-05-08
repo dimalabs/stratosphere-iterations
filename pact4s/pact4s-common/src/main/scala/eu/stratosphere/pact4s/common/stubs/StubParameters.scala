@@ -1,9 +1,6 @@
 package eu.stratosphere.pact4s.common.stubs
 
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.ObjectInputStream
-import java.io.ObjectOutputStream
+import java.io._
 
 import eu.stratosphere.pact.common.contract.Contract
 import eu.stratosphere.nephele.configuration.Configuration
@@ -19,13 +16,24 @@ object StubParameters {
 
   def getValue[T <: StubParameters](config: Configuration): T = {
 
+    val classLoader = config.getClassLoader()
     val data = config.getString(parameterName, null)
 
     val decoder = new sun.misc.BASE64Decoder
     val byteData = decoder.decodeBuffer(data)
 
     val bais = new ByteArrayInputStream(byteData)
-    val ois = new ObjectInputStream(bais)
+
+    val ois = new ObjectInputStream(bais) {
+
+      override def resolveClass(desc: ObjectStreamClass): Class[_] = {
+        try {
+          classLoader.loadClass(desc.getName());
+        } catch {
+          case e: ClassNotFoundException => super.resolveClass(desc)
+        }
+      }
+    }
 
     try {
       ois.readObject().asInstanceOf[T]

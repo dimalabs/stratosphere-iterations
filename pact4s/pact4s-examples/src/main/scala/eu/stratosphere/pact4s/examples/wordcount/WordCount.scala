@@ -6,7 +6,7 @@ import scala.math.Ordered._
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
-object WordCount extends PactDescriptor[WordCount] {
+class WordCountDescriptor extends PactDescriptor[WordCount] {
   override val name = "Word Count"
   override val description = "Parameters: [noSubStasks] [input] [output]"
 }
@@ -29,10 +29,19 @@ class WordCount(args: String*) extends PactProgram with WordCountGeneratedImplic
 
   override def defaultParallelism = params.numSubTasks
 
-  val params = new {
-    val numSubTasks = args(0).toInt
-    val input = args(1)
-    val output = args(2)
+  input.hints = PactName("Input")
+  output.hints = PactName("Output")
+  words.hints = PactName("Words")
+  counts.hints = PactName("Counts")
+
+  def params = {
+    val argMap = args.zipWithIndex.map (_.swap).toMap
+
+    new {
+      val numSubTasks = argMap.getOrElse(0, "0").toInt
+      val input = argMap.getOrElse(1, "")
+      val output = argMap.getOrElse(2, "")
+    }
   }
 
   def readLine(line: String): String = line
@@ -44,27 +53,22 @@ class WordCount(args: String*) extends PactProgram with WordCountGeneratedImplic
 
 trait WordCountGeneratedImplicits {
 
+  import java.io.ObjectInputStream
+
   import eu.stratosphere.pact4s.common.analyzer._
 
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
-  implicit val udf1: UDF1[Function1[String, Iterator[String]]] = defaultUDF1IterR[String, String]
-  implicit val udf2: UDF1[Function1[String, Iterator[(String, Int)]]] = defaultUDF1IterR[String, (String, Int)]
-  implicit val udf3: UDF1[Function1[Iterator[(String, Int)], (String, Int)]] = defaultUDF1IterT[(String, Int), (String, Int)]
-
-  implicit val selOutput: FieldSelector[Function1[(String, Int), Unit]] = defaultFieldSelectorT[(String, Int), Unit]
-  implicit val selCounts: FieldSelector[Function1[(String, Int), String]] = getFieldSelector[(String, Int), String](0)
-
   implicit val stringSerializer: UDT[String] = new UDT[String] {
 
     override val fieldTypes = Array[Class[_ <: Value]](classOf[PactString])
 
-    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[String] {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[String] with Serializable {
 
       private val ix0 = indexMap(0)
 
-      private val w0 = new PactString()
+      @transient private var w0 = new PactString()
 
       override def serialize(item: String, record: PactRecord) = {
 
@@ -84,6 +88,11 @@ trait WordCountGeneratedImplicits {
 
         v0
       }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactString()
+      }
     }
   }
 
@@ -91,13 +100,13 @@ trait WordCountGeneratedImplicits {
 
     override val fieldTypes = Array[Class[_ <: Value]](classOf[PactString], classOf[PactInteger])
 
-    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(String, Int)] {
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(String, Int)] with Serializable {
 
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)
 
-      private val w0 = new PactString()
-      private val w1 = new PactInteger()
+      @transient private var w0 = new PactString()
+      @transient private var w1 = new PactInteger()
 
       override def serialize(item: (String, Int), record: PactRecord) = {
         val (v0, v1) = item
@@ -129,6 +138,19 @@ trait WordCountGeneratedImplicits {
 
         (v0, v1)
       }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactString()
+        w1 = new PactInteger()
+      }
     }
   }
+
+  implicit val udf1: UDF1[Function1[String, Iterator[String]]] = defaultUDF1IterR[String, String]
+  implicit val udf2: UDF1[Function1[String, Iterator[(String, Int)]]] = defaultUDF1IterR[String, (String, Int)]
+  implicit val udf3: UDF1[Function1[Iterator[(String, Int)], (String, Int)]] = defaultUDF1IterT[(String, Int), (String, Int)]
+
+  implicit val selOutput: FieldSelector[Function1[(String, Int), Unit]] = defaultFieldSelectorT[(String, Int), Unit]
+  implicit val selCounts: FieldSelector[Function1[(String, Int), String]] = getFieldSelector[(String, Int), String](0)
 }

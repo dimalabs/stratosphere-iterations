@@ -100,14 +100,14 @@
 	    
       	<fileSet>
         <!-- copy jar files of pact4s job examples -->
-        	<directory>../pact4s/pact4s-example/target</directory>
+        	<directory>../pact4s/pact4s-examples/target</directory>
         	<outputDirectory>examples/pact4s/</outputDirectory>
         	<fileMode>0644</fileMode>
         	<includes>
           		<include>*.jar</include>
         	</includes>
         	<excludes>
-          		<exclude>pact4s-example-${project.version}.jar</exclude>
+          		<exclude>pact4s-examples-${project.version}.jar</exclude>
         	</excludes>
 	    </fileSet>
     </fileSets>

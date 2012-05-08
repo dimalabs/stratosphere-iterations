@@ -20,9 +20,9 @@ import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.pact.common.`type`.base.PactInteger
 import eu.stratosphere.pact.common.`type`.base.PactString
 
-class WordCountScalaPlain extends PlanAssembler with PlanAssemblerDescription {
+class WordCountPlain extends PlanAssembler with PlanAssemblerDescription {
 
-  import WordCountScalaPlain._
+  import WordCountPlain._
 
   override def getPlan(args: String*): Plan = {
     val numSubTasks = if (args.length > 0) args(0).toInt else 1
@@ -43,7 +43,7 @@ class WordCountScalaPlain extends PlanAssembler with PlanAssemblerDescription {
   override def getDescription() = "Parameters: [noSubStasks] [input] [output]"
 }
 
-object WordCountScalaPlain {
+object WordCountPlain {
 
   class TokenizeLine extends MapStub {
 

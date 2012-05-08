@@ -57,6 +57,7 @@ class Map4sStub[In, Out] extends MapStub {
         record.setNull(field)
 
       for (item <- output) {
+
         serializer.serialize(item, record)
         out.collect(record)
       }

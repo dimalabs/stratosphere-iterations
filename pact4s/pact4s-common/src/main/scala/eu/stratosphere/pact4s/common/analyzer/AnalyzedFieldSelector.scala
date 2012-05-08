@@ -22,7 +22,7 @@ class AnalyzedFieldSelector[T1, R](fieldCount: Int) extends FieldSelector[T1 => 
 
     if (!globalized) {
 
-      for (fieldNum <- 0 to fields.length if fields(fieldNum) >= 0) {
+      for (fieldNum <- 0 until fields.length if fields(fieldNum) >= 0) {
         fields(fieldNum) = locations(fieldNum)
       }
 
@@ -33,7 +33,7 @@ class AnalyzedFieldSelector[T1, R](fieldCount: Int) extends FieldSelector[T1 => 
   override def relocateField(oldPosition: Int, newPosition: Int) = {
     assertGlobalized(true)
 
-    for (fieldNum <- 0 to fields.length if fields(fieldNum) == oldPosition) {
+    for (fieldNum <- 0 until fields.length if fields(fieldNum) == oldPosition) {
       fields(fieldNum) = newPosition
     }
   }

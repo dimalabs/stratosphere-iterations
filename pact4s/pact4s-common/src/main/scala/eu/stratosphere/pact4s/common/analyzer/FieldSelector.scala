@@ -1,6 +1,6 @@
 package eu.stratosphere.pact4s.common.analyzer
 
-trait FieldSelector[+F <: _ => _] {
+trait FieldSelector[+F <: _ => _] extends Serializable {
 
   def isGlobalized: Boolean
   def getFields: Array[Int]

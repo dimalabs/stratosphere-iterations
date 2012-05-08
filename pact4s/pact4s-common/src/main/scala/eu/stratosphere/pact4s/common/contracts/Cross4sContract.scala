@@ -15,13 +15,13 @@ trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { thi
   val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
 
   override def annotations = Seq(
-    new Annotations.ReadsFirst(crossUDF.getReadFields._1),
-    new Annotations.ReadsSecond(crossUDF.getReadFields._2),
-    new Annotations.ExplicitModifications(crossUDF.getWriteFields),
-    new Annotations.ImplicitOperationFirst(ImplicitOperationMode.Copy),
-    new Annotations.ImplicitOperationSecond(ImplicitOperationMode.Copy),
-    new Annotations.ExplicitProjectionsFirst(crossUDF.getDiscardedFields._1),
-    new Annotations.ExplicitProjectionsSecond(crossUDF.getDiscardedFields._2)
+    Annotations.getReadsFirst(crossUDF.getReadFields._1),
+    Annotations.getReadsSecond(crossUDF.getReadFields._2),
+    Annotations.getExplicitModifications(crossUDF.getWriteFields),
+    Annotations.getImplicitOperationFirst(ImplicitOperationMode.Copy),
+    Annotations.getImplicitOperationSecond(ImplicitOperationMode.Copy),
+    Annotations.getExplicitProjectionsFirst(crossUDF.getDiscardedFields._1),
+    Annotations.getExplicitProjectionsSecond(crossUDF.getDiscardedFields._2)
   )
 
   override def persistConfiguration() = {

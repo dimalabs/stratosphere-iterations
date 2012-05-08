@@ -21,9 +21,9 @@ import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.pact.common.`type`.base.PactInteger
 import eu.stratosphere.pact.common.`type`.base.PactDouble
 
-class KMeansScalaPlain extends PlanAssembler with PlanAssemblerDescription {
+class KMeansPlain extends PlanAssembler with PlanAssemblerDescription {
 
-  import KMeansScalaPlain._
+  import KMeansPlain._
 
   override def getPlan(args: String*): Plan = {
     val delimeter = "\n"
@@ -59,7 +59,7 @@ class KMeansScalaPlain extends PlanAssembler with PlanAssemblerDescription {
   override def getDescription() = "Parameters: [noSubStasks] [dataPoints] [clusterCenters] [output]"
 }
 
-object KMeansScalaPlain {
+object KMeansPlain {
 
   class ComputeDistance extends CrossStub {
 

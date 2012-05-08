@@ -21,7 +21,7 @@ import eu.stratosphere.pact4s.common.operators._
  *     AND o_orderpriority LIKE "Z%"
  *   GROUP BY l_orderkey, o_shippriority;
  */
-object TPCHQuery3 extends PactDescriptor[TPCHQuery3] {
+class TPCHQuery3Descriptor extends PactDescriptor[TPCHQuery3] {
   override val name = "TCPH Query 3"
   override val description = "Parameters: [noSubStasks] [orders] [lineItems] [output]"
 }
@@ -46,20 +46,26 @@ class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImpl
 
   override def defaultParallelism = params.numSubTasks
 
-  orders.hints = UniqueKey({ o: Order => o.orderId })
-  filteredOrders.hints = RecordSize(32) +: RecordsEmitted(0.05f)
-  prioritizedItems.hints = RecordSize(64)
-  prioritizedOrders.hints = RecordSize(64) +: RecordsEmitted(1f)
+  orders.hints = UniqueKey({ o: Order => o.orderId }) +: PactName("Orders")
+  lineItems.hints = PactName("Line Items")
+  output.hints = PactName("Output")
+  filteredOrders.hints = RecordSize(32) +: RecordsEmitted(0.05f) +: PactName("Filtered Orders")
+  prioritizedItems.hints = RecordSize(64) +: PactName("Prioritized Items")
+  prioritizedOrders.hints = RecordSize(64) +: RecordsEmitted(1f) +: PactName("Prioritized Orders")
 
-  val params = new {
-    val status = 'F'
-    val minYear = 1993
-    val priority = "5"
+  def params = {
+    val argMap = args.zipWithIndex.map (_.swap).toMap
 
-    val numSubTasks = args(0).toInt
-    val ordersInput = args(1)
-    val lineItemsInput = args(2)
-    val output = args(3)
+    new {
+      val status = 'F'
+      val minYear = 1993
+      val priority = "5"
+
+      val numSubTasks = argMap.getOrElse(0, "0").toInt
+      val ordersInput = argMap.getOrElse(1, "")
+      val lineItemsInput = argMap.getOrElse(2, "")
+      val output = argMap.getOrElse(3, "")
+    }
   }
 
   case class Order(orderId: Int, status: Char, year: Int, month: Int, day: Int, orderPriority: String, shipPriority: Int)
@@ -84,19 +90,12 @@ class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImpl
 
 trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
 
+  import java.io.ObjectInputStream
+
   import eu.stratosphere.pact4s.common.analyzer._
 
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
-
-  implicit val udf1: UDF1[Function1[Iterator[PrioritizedOrder], PrioritizedOrder]] = defaultUDF1IterT[PrioritizedOrder, PrioritizedOrder]
-  implicit val udf2: UDF2[Function2[Order, LineItem, PrioritizedOrder]] = defaultUDF2[Order, LineItem, PrioritizedOrder]
-  implicit val udf3: FieldSelector[Function1[Order, Boolean]] = defaultFieldSelectorT[Order, Boolean]
-
-  implicit val selOutput: FieldSelector[Function1[PrioritizedOrder, Unit]] = defaultFieldSelectorT[PrioritizedOrder, Unit]
-  implicit val selPrioritizedItemsLeft: FieldSelector[Function1[Order, Int]] = getFieldSelector[Order, Int](0)
-  implicit val selPrioritizedItemsRight: FieldSelector[Function1[LineItem, Int]] = getFieldSelector[LineItem, Int](0)
-  implicit val selPrioritizedOrders: FieldSelector[Function1[PrioritizedOrder, (Int, Int)]] = getFieldSelector[PrioritizedOrder, (Int, Int)](0, 1)
 
   implicit val orderSerializer: UDT[Order] = new UDT[Order] {
 
@@ -112,13 +111,13 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
       private val ix5 = indexMap(5)
       private val ix6 = indexMap(6)
 
-      private val w0 = new PactInteger()
-      private val w1 = new PactInteger()
-      private val w2 = new PactInteger()
-      private val w3 = new PactInteger()
-      private val w4 = new PactInteger()
-      private val w5 = new PactString()
-      private val w6 = new PactInteger()
+      @transient private var w0 = new PactInteger()
+      @transient private var w1 = new PactInteger()
+      @transient private var w2 = new PactInteger()
+      @transient private var w3 = new PactInteger()
+      @transient private var w4 = new PactInteger()
+      @transient private var w5 = new PactString()
+      @transient private var w6 = new PactInteger()
 
       override def serialize(item: Order, record: PactRecord) = {
         val Order(v0, v1, v2, v3, v4, v5, v6) = item
@@ -205,6 +204,17 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
 
         Order(v0, v1, v2, v3, v4, v5, v6)
       }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactInteger()
+        w1 = new PactInteger()
+        w2 = new PactInteger()
+        w3 = new PactInteger()
+        w4 = new PactInteger()
+        w5 = new PactString()
+        w6 = new PactInteger()
+      }
     }
   }
 
@@ -217,8 +227,8 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)
 
-      private val w0 = new PactInteger()
-      private val w1 = new PactDouble()
+      @transient private var w0 = new PactInteger()
+      @transient private var w1 = new PactDouble()
 
       override def serialize(item: LineItem, record: PactRecord) = {
         val LineItem(v0, v1) = item
@@ -250,6 +260,12 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
 
         LineItem(v0, v1)
       }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactInteger()
+        w1 = new PactDouble()
+      }
     }
   }
 
@@ -263,9 +279,9 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
       private val ix1 = indexMap(1)
       private val ix2 = indexMap(2)
 
-      private val w0 = new PactInteger()
-      private val w1 = new PactInteger()
-      private val w2 = new PactDouble()
+      @transient private var w0 = new PactInteger()
+      @transient private var w1 = new PactInteger()
+      @transient private var w2 = new PactDouble()
 
       override def serialize(item: PrioritizedOrder, record: PactRecord) = {
         val PrioritizedOrder(v0, v1, v2) = item
@@ -308,6 +324,22 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
 
         PrioritizedOrder(v0, v1, v2)
       }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactInteger()
+        w1 = new PactInteger()
+        w2 = new PactDouble()
+      }
     }
   }
+
+  implicit val udf1: UDF1[Function1[Iterator[PrioritizedOrder], PrioritizedOrder]] = defaultUDF1IterT[PrioritizedOrder, PrioritizedOrder]
+  implicit val udf2: UDF2[Function2[Order, LineItem, PrioritizedOrder]] = defaultUDF2[Order, LineItem, PrioritizedOrder]
+  implicit val udf3: FieldSelector[Function1[Order, Boolean]] = defaultFieldSelectorT[Order, Boolean]
+
+  implicit val selOutput: FieldSelector[Function1[PrioritizedOrder, Unit]] = defaultFieldSelectorT[PrioritizedOrder, Unit]
+  implicit val selPrioritizedItemsLeft: FieldSelector[Function1[Order, Int]] = getFieldSelector[Order, Int](0)
+  implicit val selPrioritizedItemsRight: FieldSelector[Function1[LineItem, Int]] = getFieldSelector[LineItem, Int](0)
+  implicit val selPrioritizedOrders: FieldSelector[Function1[PrioritizedOrder, (Int, Int)]] = getFieldSelector[PrioritizedOrder, (Int, Int)](0, 1)
 }

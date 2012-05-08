@@ -10,7 +10,77 @@ import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.Implic
 @SuppressWarnings("all")
 public class Annotations {
 
-	public static abstract class ImplicitOperations<T extends Annotation> implements Annotation {
+	public static final int CARD_UNKNOWN = StubAnnotation.OutCardBounds.UNKNOWN;
+
+	public static final int CARD_UNBOUNDED = StubAnnotation.OutCardBounds.UNBOUNDED;
+
+	public static final int CARD_INPUTCARD = StubAnnotation.OutCardBounds.INPUTCARD;
+
+	public static final int CARD_FIRSTINPUTCARD = StubAnnotation.OutCardBounds.FIRSTINPUTCARD;
+
+	public static final int CARD_SECONDINPUTCARD = StubAnnotation.OutCardBounds.SECONDINPUTCARD;
+
+	public static Annotation getImplicitOperation(ImplicitOperationMode implicitOperation) {
+		return new ImplicitOperation(implicitOperation);
+	}
+
+	public static Annotation getImplicitOperationFirst(ImplicitOperationMode implicitOperation) {
+		return new ImplicitOperationFirst(implicitOperation);
+	}
+
+	public static Annotation getImplicitOperationSecond(ImplicitOperationMode implicitOperation) {
+		return new ImplicitOperationSecond(implicitOperation);
+	}
+
+	public static Annotation getReads(int[] fields) {
+		return new Reads(fields);
+	}
+
+	public static Annotation getReadsFirst(int[] fields) {
+		return new ReadsFirst(fields);
+	}
+
+	public static Annotation getReadsSecond(int[] fields) {
+		return new ReadsSecond(fields);
+	}
+
+	public static Annotation getExplicitCopies(int[] fields) {
+		return new ExplicitCopies(fields);
+	}
+
+	public static Annotation getExplicitCopiesFirst(int[] fields) {
+		return new ExplicitCopiesFirst(fields);
+	}
+
+	public static Annotation getExplicitCopiesSecond(int[] fields) {
+		return new ExplicitCopiesSecond(fields);
+	}
+
+	public static Annotation getExplicitProjections(int[] fields) {
+		return new ExplicitProjections(fields);
+	}
+
+	public static Annotation getExplicitProjectionsFirst(int[] fields) {
+		return new ExplicitProjectionsFirst(fields);
+	}
+
+	public static Annotation getExplicitProjectionsSecond(int[] fields) {
+		return new ExplicitProjectionsSecond(fields);
+	}
+
+	public static Annotation getExplicitModifications(int[] fields) {
+		return new ExplicitModifications(fields);
+	}
+
+	public static Annotation getOutCardBounds(int lowerBound, int upperBound) {
+		return new OutCardBounds(lowerBound, upperBound);
+	}
+
+	public static Annotation getCombinable() {
+		return new Combinable();
+	}
+
+	private static abstract class ImplicitOperations<T extends Annotation> implements Annotation {
 
 		private final Class<T> clazz;
 
@@ -50,7 +120,7 @@ public class Annotations {
 		}
 	}
 
-	public static abstract class Fields<T extends Annotation> implements Annotation {
+	private static abstract class Fields<T extends Annotation> implements Annotation {
 
 		private final Class<T> clazz;
 
@@ -90,7 +160,7 @@ public class Annotations {
 		}
 	}
 
-	public static class ImplicitOperation extends ImplicitOperations<StubAnnotation.ImplicitOperation> implements
+	private static class ImplicitOperation extends ImplicitOperations<StubAnnotation.ImplicitOperation> implements
 			StubAnnotation.ImplicitOperation {
 
 		public ImplicitOperation(ImplicitOperationMode implicitOperation) {
@@ -103,7 +173,7 @@ public class Annotations {
 		}
 	}
 
-	public static class ImplicitOperationFirst extends ImplicitOperations<StubAnnotation.ImplicitOperationFirst>
+	private static class ImplicitOperationFirst extends ImplicitOperations<StubAnnotation.ImplicitOperationFirst>
 			implements StubAnnotation.ImplicitOperationFirst {
 
 		public ImplicitOperationFirst(ImplicitOperationMode implicitOperation) {
@@ -116,7 +186,7 @@ public class Annotations {
 		}
 	}
 
-	public static class ImplicitOperationSecond extends ImplicitOperations<StubAnnotation.ImplicitOperationSecond>
+	private static class ImplicitOperationSecond extends ImplicitOperations<StubAnnotation.ImplicitOperationSecond>
 			implements StubAnnotation.ImplicitOperationSecond {
 
 		public ImplicitOperationSecond(ImplicitOperationMode implicitOperation) {
@@ -129,7 +199,7 @@ public class Annotations {
 		}
 	}
 
-	public static class Reads extends Fields<StubAnnotation.Reads> implements StubAnnotation.Reads {
+	private static class Reads extends Fields<StubAnnotation.Reads> implements StubAnnotation.Reads {
 
 		public Reads(int[] fields) {
 			super(StubAnnotation.Reads.class, fields);
@@ -141,7 +211,7 @@ public class Annotations {
 		}
 	}
 
-	public static class ReadsFirst extends Fields<StubAnnotation.ReadsFirst> implements StubAnnotation.ReadsFirst {
+	private static class ReadsFirst extends Fields<StubAnnotation.ReadsFirst> implements StubAnnotation.ReadsFirst {
 
 		public ReadsFirst(int[] fields) {
 			super(StubAnnotation.ReadsFirst.class, fields);
@@ -153,7 +223,7 @@ public class Annotations {
 		}
 	}
 
-	public static class ReadsSecond extends Fields<StubAnnotation.ReadsSecond> implements StubAnnotation.ReadsSecond {
+	private static class ReadsSecond extends Fields<StubAnnotation.ReadsSecond> implements StubAnnotation.ReadsSecond {
 
 		public ReadsSecond(int[] fields) {
 			super(StubAnnotation.ReadsSecond.class, fields);
@@ -165,7 +235,7 @@ public class Annotations {
 		}
 	}
 
-	public static class ExplicitCopies extends Fields<StubAnnotation.ExplicitCopies> implements
+	private static class ExplicitCopies extends Fields<StubAnnotation.ExplicitCopies> implements
 			StubAnnotation.ExplicitCopies {
 
 		public ExplicitCopies(int[] fields) {
@@ -178,7 +248,7 @@ public class Annotations {
 		}
 	}
 
-	public static class ExplicitCopiesFirst extends Fields<StubAnnotation.ExplicitCopiesFirst> implements
+	private static class ExplicitCopiesFirst extends Fields<StubAnnotation.ExplicitCopiesFirst> implements
 			StubAnnotation.ExplicitCopiesFirst {
 
 		public ExplicitCopiesFirst(int[] fields) {
@@ -191,7 +261,7 @@ public class Annotations {
 		}
 	}
 
-	public static class ExplicitCopiesSecond extends Fields<StubAnnotation.ExplicitCopiesSecond> implements
+	private static class ExplicitCopiesSecond extends Fields<StubAnnotation.ExplicitCopiesSecond> implements
 			StubAnnotation.ExplicitCopiesSecond {
 
 		public ExplicitCopiesSecond(int[] fields) {
@@ -204,7 +274,7 @@ public class Annotations {
 		}
 	}
 
-	public static class ExplicitProjections extends Fields<StubAnnotation.ExplicitProjections> implements
+	private static class ExplicitProjections extends Fields<StubAnnotation.ExplicitProjections> implements
 			StubAnnotation.ExplicitProjections {
 
 		public ExplicitProjections(int[] fields) {
@@ -217,7 +287,7 @@ public class Annotations {
 		}
 	}
 
-	public static class ExplicitProjectionsFirst extends Fields<StubAnnotation.ExplicitProjectionsFirst> implements
+	private static class ExplicitProjectionsFirst extends Fields<StubAnnotation.ExplicitProjectionsFirst> implements
 			StubAnnotation.ExplicitProjectionsFirst {
 
 		public ExplicitProjectionsFirst(int[] fields) {
@@ -230,7 +300,7 @@ public class Annotations {
 		}
 	}
 
-	public static class ExplicitProjectionsSecond extends Fields<StubAnnotation.ExplicitProjectionsSecond> implements
+	private static class ExplicitProjectionsSecond extends Fields<StubAnnotation.ExplicitProjectionsSecond> implements
 			StubAnnotation.ExplicitProjectionsSecond {
 
 		public ExplicitProjectionsSecond(int[] fields) {
@@ -243,7 +313,7 @@ public class Annotations {
 		}
 	}
 
-	public static class ExplicitModifications extends Fields<StubAnnotation.ExplicitModifications> implements
+	private static class ExplicitModifications extends Fields<StubAnnotation.ExplicitModifications> implements
 			StubAnnotation.ExplicitModifications {
 
 		public ExplicitModifications(int[] fields) {
@@ -256,17 +326,7 @@ public class Annotations {
 		}
 	}
 
-	public static class OutCardBounds implements Annotation, StubAnnotation.OutCardBounds {
-
-		public static final int UNKNOWN = StubAnnotation.OutCardBounds.UNKNOWN;
-
-		public static final int UNBOUNDED = StubAnnotation.OutCardBounds.UNBOUNDED;
-
-		public static final int INPUTCARD = StubAnnotation.OutCardBounds.INPUTCARD;
-
-		public static final int FIRSTINPUTCARD = StubAnnotation.OutCardBounds.FIRSTINPUTCARD;
-
-		public static final int SECONDINPUTCARD = StubAnnotation.OutCardBounds.SECONDINPUTCARD;
+	private static class OutCardBounds implements Annotation, StubAnnotation.OutCardBounds {
 
 		private final int lowerBound;
 
@@ -314,7 +374,7 @@ public class Annotations {
 		}
 	}
 
-	public static class Combinable implements Annotation, ReduceContract.Combinable {
+	private static class Combinable implements Annotation, ReduceContract.Combinable {
 
 		public Combinable() {
 		}

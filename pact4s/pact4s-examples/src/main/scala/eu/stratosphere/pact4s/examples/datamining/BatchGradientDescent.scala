@@ -5,7 +5,7 @@ import scala.math._
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
-trait BatchGradientDescentDescriptor[T <: BatchGradientDescent] extends PactDescriptor[T] {
+class BatchGradientDescentDescriptor[T <: BatchGradientDescent: Manifest] extends PactDescriptor[T] {
   override val name = "Batch Gradient Descent"
   override val description = "Parameters: [noSubStasks] [eps] [eta] [lambda] [examples] [weights] [output]"
 }
@@ -49,14 +49,18 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
 
   override def defaultParallelism = params.numSubTasks
 
-  val params = new {
-    val numSubTasks = args(0).toInt
-    val eps = args(1).toDouble
-    val eta = args(2).toDouble
-    val lambda = args(3).toDouble
-    val examples = args(4)
-    val weights = args(5)
-    val output = args(6)
+  def params = {
+    val argMap = args.zipWithIndex.map (_.swap).toMap
+
+    new {
+      val numSubTasks = argMap.getOrElse(0, "0").toInt
+      val eps = argMap.getOrElse(1, "0").toDouble
+      val eta = argMap.getOrElse(2, "0").toDouble
+      val lambda = argMap.getOrElse(3, "0").toDouble
+      val examples = argMap.getOrElse(4, "")
+      val weights = argMap.getOrElse(5, "")
+      val output = argMap.getOrElse(6, "")
+    }
   }
 
   class WeightVector(vector: Array[Double]) {
@@ -92,25 +96,14 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
 
 trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
 
+  import java.io.ObjectInputStream
+
   import scala.collection.JavaConversions._
 
   import eu.stratosphere.pact4s.common.analyzer._
 
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
-
-  implicit val udf1: UDF1[Function1[(Int, Array[Double]), (Int, Array[Double], Double)]] = defaultUDF1[(Int, Array[Double]), (Int, Array[Double], Double)]
-  implicit val udf2: UDF1[Function1[Iterator[ValueAndGradient], ValueAndGradient]] = defaultUDF1IterT[ValueAndGradient, ValueAndGradient]
-  implicit val udf3: UDF1[Function1[(Int, Double, Array[Double], Double), (Int, Array[Double], Double)]] = defaultUDF1[(Int, Double, Array[Double], Double), (Int, Array[Double], Double)]
-  implicit val udf4: UDF1[Function1[(Int, Double, Array[Double], Double), (Int, Array[Double])]] = defaultUDF1[(Int, Double, Array[Double], Double), (Int, Array[Double])]
-  implicit val udf5: UDF2[Function2[(Int, Array[Double], Double), (Int, Array[Double]), ValueAndGradient]] = defaultUDF2[(Int, Array[Double], Double), (Int, Array[Double]), ValueAndGradient]
-  implicit val udf6: UDF2[Function2[(Int, Array[Double], Double), ValueAndGradient, (Int, Double, Array[Double], Double)]] = defaultUDF2[(Int, Array[Double], Double), ValueAndGradient, (Int, Double, Array[Double], Double)]
-  implicit val udf7: FieldSelector[Function1[(Int, Double, Array[Double], Double), Boolean]] = defaultFieldSelectorT[(Int, Double, Array[Double], Double), Boolean]
-
-  implicit val selOutput: FieldSelector[Function1[(Int, Array[Double]), Unit]] = defaultFieldSelectorT[(Int, Array[Double]), Unit]
-  implicit val selNewWeights: FieldSelector[Function1[(Int, Array[Double]), Int]] = getFieldSelector[(Int, Array[Double]), Int](0)
-  implicit val selLossAndGradientSums: FieldSelector[Function1[ValueAndGradient, Int]] = getFieldSelector[ValueAndGradient, Int](0)
-  implicit val selGdNewWeightsLeft: FieldSelector[Function1[(Int, Array[Double], Double), Int]] = getFieldSelector[(Int, Array[Double], Double), Int](0)
 
   implicit val intArrayDoubleUDT: UDT[(Int, Array[Double])] = new UDT[(Int, Array[Double])] {
 
@@ -121,8 +114,8 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)
 
-      private val w0 = new PactInteger()
-      private val w1 = new PactList[PactDouble]() {}
+      @transient private var w0 = new PactInteger()
+      @transient private var w1 = new PactList[PactDouble]() {}
 
       override def serialize(item: (Int, Array[Double]), record: PactRecord) = {
         val (v0, v1) = item
@@ -155,6 +148,12 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
 
         (v0, v1)
       }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactInteger()
+        w1 = new PactList[PactDouble]() {}
+      }
     }
   }
 
@@ -168,9 +167,9 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
       private val ix1 = indexMap(1)
       private val ix2 = indexMap(2)
 
-      private val w0 = new PactInteger()
-      private val w1 = new PactList[PactDouble]() {}
-      private val w2 = new PactDouble()
+      @transient private var w0 = new PactInteger()
+      @transient private var w1 = new PactList[PactDouble]() {}
+      @transient private var w2 = new PactDouble()
 
       override def serialize(item: (Int, Array[Double], Double), record: PactRecord) = {
         val (v0, v1, v2) = item
@@ -214,6 +213,13 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
 
         (v0, v1, v2)
       }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactInteger()
+        w1 = new PactList[PactDouble]() {}
+        w2 = new PactDouble()
+      }
     }
   }
 
@@ -228,10 +234,10 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
       private val ix2 = indexMap(2)
       private val ix3 = indexMap(3)
 
-      private val w0 = new PactInteger()
-      private val w1 = new PactDouble()
-      private val w2 = new PactList[PactDouble]() {}
-      private val w3 = new PactDouble()
+      @transient private var w0 = new PactInteger()
+      @transient private var w1 = new PactDouble()
+      @transient private var w2 = new PactList[PactDouble]() {}
+      @transient private var w3 = new PactDouble()
 
       override def serialize(item: (Int, Double, Array[Double], Double), record: PactRecord) = {
         val (v0, v1, v2, v3) = item
@@ -286,6 +292,14 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
 
         (v0, v1, v2, v3)
       }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactInteger()
+        w1 = new PactDouble()
+        w2 = new PactList[PactDouble]() {}
+        w3 = new PactDouble()
+      }
     }
   }
 
@@ -299,9 +313,9 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
       private val ix1 = indexMap(1)
       private val ix2 = indexMap(2)
 
-      private val w0 = new PactInteger()
-      private val w1 = new PactDouble()
-      private val w2 = new PactList[PactDouble]() {}
+      @transient private var w0 = new PactInteger()
+      @transient private var w1 = new PactDouble()
+      @transient private var w2 = new PactList[PactDouble]() {}
 
       override def serialize(item: ValueAndGradient, record: PactRecord) = {
         val ValueAndGradient(v0, v1, v2) = item
@@ -345,6 +359,26 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
 
         ValueAndGradient(v0, v1, v2)
       }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactInteger()
+        w1 = new PactDouble()
+        w2 = new PactList[PactDouble]() {}
+      }
     }
   }
+
+  implicit val udf1: UDF1[Function1[(Int, Array[Double]), (Int, Array[Double], Double)]] = defaultUDF1[(Int, Array[Double]), (Int, Array[Double], Double)]
+  implicit val udf2: UDF1[Function1[Iterator[ValueAndGradient], ValueAndGradient]] = defaultUDF1IterT[ValueAndGradient, ValueAndGradient]
+  implicit val udf3: UDF1[Function1[(Int, Double, Array[Double], Double), (Int, Array[Double], Double)]] = defaultUDF1[(Int, Double, Array[Double], Double), (Int, Array[Double], Double)]
+  implicit val udf4: UDF1[Function1[(Int, Double, Array[Double], Double), (Int, Array[Double])]] = defaultUDF1[(Int, Double, Array[Double], Double), (Int, Array[Double])]
+  implicit val udf5: UDF2[Function2[(Int, Array[Double], Double), (Int, Array[Double]), ValueAndGradient]] = defaultUDF2[(Int, Array[Double], Double), (Int, Array[Double]), ValueAndGradient]
+  implicit val udf6: UDF2[Function2[(Int, Array[Double], Double), ValueAndGradient, (Int, Double, Array[Double], Double)]] = defaultUDF2[(Int, Array[Double], Double), ValueAndGradient, (Int, Double, Array[Double], Double)]
+  implicit val udf7: FieldSelector[Function1[(Int, Double, Array[Double], Double), Boolean]] = defaultFieldSelectorT[(Int, Double, Array[Double], Double), Boolean]
+
+  implicit val selOutput: FieldSelector[Function1[(Int, Array[Double]), Unit]] = defaultFieldSelectorT[(Int, Array[Double]), Unit]
+  implicit val selNewWeights: FieldSelector[Function1[(Int, Array[Double]), Int]] = getFieldSelector[(Int, Array[Double]), Int](0)
+  implicit val selLossAndGradientSums: FieldSelector[Function1[ValueAndGradient, Int]] = getFieldSelector[ValueAndGradient, Int](0)
+  implicit val selGdNewWeightsLeft: FieldSelector[Function1[(Int, Array[Double], Double), Int]] = getFieldSelector[(Int, Array[Double], Double), Int](0)
 }

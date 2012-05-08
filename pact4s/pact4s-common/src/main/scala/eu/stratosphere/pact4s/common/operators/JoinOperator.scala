@@ -7,13 +7,13 @@ import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-class JoinOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) {
+class JoinOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) extends Serializable {
 
-  def join[RightIn: UDT](rightInput: DataStream[RightIn]) = new {
+  def join[RightIn: UDT](rightInput: DataStream[RightIn]) = new Serializable {
 
-    def on[Key, LeftKeySelector: SelectorBuilder[LeftIn, Key]#Selector](leftKeySelector: LeftIn => Key) = new {
+    def on[Key, LeftKeySelector: SelectorBuilder[LeftIn, Key]#Selector](leftKeySelector: LeftIn => Key) = new Serializable {
 
-      def isEqualTo[RightKeySelector: SelectorBuilder[RightIn, Key]#Selector](rightKeySelector: RightIn => Key) = new {
+      def isEqualTo[RightKeySelector: SelectorBuilder[RightIn, Key]#Selector](rightKeySelector: RightIn => Key) = new Serializable {
 
         def map[Out: UDT, F: UDF2Builder[LeftIn, RightIn, Out]#UDF](mapFunction: (LeftIn, RightIn) => Out) = createStream(Left(mapFunction))
 
@@ -26,9 +26,11 @@ class JoinOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) {
 
             val leftKey = implicitly[FieldSelector[LeftIn => Key]]
             val rightKey = implicitly[FieldSelector[RightIn => Key]]
-            val keyFieldTypes = implicitly[UDT[LeftIn]].getKeySet(leftKey.getFields)
+            val leftKeyFields = leftKey.getFields filter { _ >= 0 }
+            val rightKeyFields = rightKey.getFields filter { _ >= 0 }
+            val keyFieldTypes = implicitly[UDT[LeftIn]].getKeySet(leftKeyFields)
 
-            new MatchContract(Join4sContract.getStub, keyFieldTypes, leftKey.getFields, rightKey.getFields, leftInput.getContract, rightInput.getContract) with Join4sContract[Key, LeftIn, RightIn, Out] {
+            new MatchContract(Join4sContract.getStub, keyFieldTypes, leftKeyFields, rightKeyFields, leftInput.getContract, rightInput.getContract) with Join4sContract[Key, LeftIn, RightIn, Out] {
 
               override val leftKeySelector = leftKey
               override val rightKeySelector = rightKey

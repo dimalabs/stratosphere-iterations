@@ -17,13 +17,13 @@ trait CoGroup4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContrac
   val userFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]
 
   override def annotations = Seq(
-    new Annotations.ReadsFirst(coGroupUDF.getReadFields._1),
-    new Annotations.ReadsSecond(coGroupUDF.getReadFields._2),
-    new Annotations.ExplicitModifications(coGroupUDF.getWriteFields),
-    new Annotations.ImplicitOperationFirst(ImplicitOperationMode.Projection),
-    new Annotations.ImplicitOperationSecond(ImplicitOperationMode.Projection),
-    new Annotations.ExplicitProjectionsFirst(coGroupUDF.getForwardedFields._1),
-    new Annotations.ExplicitProjectionsSecond(coGroupUDF.getForwardedFields._2)
+    Annotations.getReadsFirst(coGroupUDF.getReadFields._1),
+    Annotations.getReadsSecond(coGroupUDF.getReadFields._2),
+    Annotations.getExplicitModifications(coGroupUDF.getWriteFields),
+    Annotations.getImplicitOperationFirst(ImplicitOperationMode.Projection),
+    Annotations.getImplicitOperationSecond(ImplicitOperationMode.Projection),
+    Annotations.getExplicitProjectionsFirst(coGroupUDF.getForwardedFields._1),
+    Annotations.getExplicitProjectionsSecond(coGroupUDF.getForwardedFields._2)
   )
 
   override def persistConfiguration() = {

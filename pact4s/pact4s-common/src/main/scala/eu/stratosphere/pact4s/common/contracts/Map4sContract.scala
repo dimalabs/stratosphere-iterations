@@ -16,14 +16,14 @@ trait Map4sContract[In, Out] extends Pact4sOneInputContract { this: MapContract 
   val userFunction: Either[In => Out, In => Iterator[Out]]
 
   override def annotations = Seq(
-    new Annotations.Reads(mapUDF.getReadFields),
-    new Annotations.ExplicitModifications(mapUDF.getWriteFields),
-    new Annotations.ImplicitOperation(ImplicitOperationMode.Copy),
-    new Annotations.ExplicitProjections(mapUDF.getDiscardedFields),
-    new Annotations.OutCardBounds(outCardBound, outCardBound)
+    Annotations.getReads(mapUDF.getReadFields),
+    Annotations.getExplicitModifications(mapUDF.getWriteFields),
+    Annotations.getImplicitOperation(ImplicitOperationMode.Copy),
+    Annotations.getExplicitProjections(mapUDF.getDiscardedFields),
+    Annotations.getOutCardBounds(outCardBound, outCardBound)
   )
 
-  private val outCardBound = userFunction.fold({ _ => Annotations.OutCardBounds.INPUTCARD }, { _ => Annotations.OutCardBounds.UNKNOWN })
+  private def outCardBound = userFunction.fold({ _ => Annotations.CARD_INPUTCARD }, { _ => Annotations.CARD_UNKNOWN })
 
   override def persistConfiguration() = {
 

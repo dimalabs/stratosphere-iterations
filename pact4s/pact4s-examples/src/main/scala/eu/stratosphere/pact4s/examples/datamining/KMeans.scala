@@ -5,7 +5,7 @@ import scala.math._
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
-object KMeans extends PactDescriptor[KMeans] {
+class KMeansDescriptor extends PactDescriptor[KMeans] {
   override val name = "KMeans Iteration"
   override val description = "Parameters: [noSubStasks] [dataPoints] [clusterCenters] [output]"
 }
@@ -43,61 +43,59 @@ class KMeans(args: String*) extends PactProgram with KMeansGeneratedImplicits {
 
   override def defaultParallelism = params.numSubTasks
 
-  clusterPoints.hints = Degree(1)
-  distances.hints = RecordSize(48)
-  nearestCenters.hints = RecordSize(48)
-  newCenters.hints = RecordSize(36)
+  dataPoints.hints = PactName("Data Points")
+  clusterPoints.hints = Degree(1) +: PactName("Cluster Points")
+  newClusterPoints.hints = PactName("New ClusterPoints")
+  distances.hints = RecordSize(48) +: PactName("Distances")
+  nearestCenters.hints = RecordSize(48) +: PactName("Nearest Centers")
+  newCenters.hints = RecordSize(36) +: PactName("New Centers")
 
-  val params = new {
-    val numSubTasks = args(0).toInt
-    val dataPointInput = args(1)
-    val clusterInput = args(2)
-    val output = args(3)
+  def params = {
+    val argMap = args.zipWithIndex.map (_.swap).toMap
+
+    new {
+      val numSubTasks = argMap.getOrElse(0, "0").toInt
+      val dataPointInput = argMap.getOrElse(1, "")
+      val clusterInput = argMap.getOrElse(2, "")
+      val output = argMap.getOrElse(3, "")
+    }
   }
 
-  val PointInputPattern = """(\d+)|(\d+\.\d+)|(\d+\.\d+)|(\d+\.\d+)|""".r
+  val PointInputPattern = """(\d+)\|(\d+\.\d+)\|(\d+\.\d+)\|""".r
 
   def parseInput(line: String): (Int, Point) = line match {
-    case PointInputPattern(id, x, y, z) => id.toInt -> Point(x.toDouble, y.toDouble, z.toDouble)
+    case PointInputPattern(id, x, y) => id.toInt -> Point(x.toDouble, y.toDouble)
   }
 
   def formatOutput(value: (Int, Point)): String = value match {
-    case (cid, Point(x, y, z)) => "%d|%.2f|%.2f|%.2f|".format(cid, x, y, z)
-  }
-}
-
-case class Point(x: Double, y: Double, z: Double) {
-  def computeEuclidianDistance(other: Point) = other match {
-    case Point(x2, y2, z2) => sqrt(pow(x - x2, 2) + pow(y - y2, 2) + pow(z - z2, 2))
-  }
-}
-
-case class Distance(dataPoint: Point, clusterId: Int, distance: Double)
-
-case class PointSum(count: Int, pointSum: Point) {
-  def +(that: PointSum) = that match {
-    case PointSum(c, Point(x, y, z)) => PointSum(count + c, Point(x + pointSum.x, y + pointSum.y, z + pointSum.z))
+    case (cid, Point(x, y)) => "%d|%.2f|%.2f|".format(cid, x, y)
   }
 
-  def toPoint() = Point(pointSum.x / count, pointSum.y / count, pointSum.z / count)
+  case class Point(x: Double, y: Double) {
+    def computeEuclidianDistance(other: Point) = other match {
+      case Point(x2, y2) => sqrt(pow(x - x2, 2) + pow(y - y2, 2))
+    }
+  }
+
+  case class Distance(dataPoint: Point, clusterId: Int, distance: Double)
+
+  case class PointSum(count: Int, pointSum: Point) {
+    def +(that: PointSum) = that match {
+      case PointSum(c, Point(x, y)) => PointSum(count + c, Point(x + pointSum.x, y + pointSum.y))
+    }
+
+    def toPoint() = Point(pointSum.x / count, pointSum.y / count)
+  }
 }
 
 trait KMeansGeneratedImplicits { this: KMeans =>
+
+  import java.io.ObjectInputStream
 
   import eu.stratosphere.pact4s.common.analyzer._
 
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
-
-  implicit val udf1: UDF1[Function1[Iterator[(Int, Distance)], (Int, Distance)]] = defaultUDF1IterT[(Int, Distance), (Int, Distance)]
-  implicit val udf2: UDF1[Function1[(Int, Distance), (Int, PointSum)]] = defaultUDF1[(Int, Distance), (Int, PointSum)]
-  implicit val udf3: UDF1[Function1[Iterator[(Int, PointSum)], (Int, PointSum)]] = defaultUDF1IterT[(Int, PointSum), (Int, PointSum)]
-  implicit val udf4: UDF1[Function1[(Int, PointSum), (Int, Point)]] = defaultUDF1[(Int, PointSum), (Int, Point)]
-  implicit val udf5: UDF2[Function2[(Int, Point), (Int, Point), (Int, Distance)]] = defaultUDF2[(Int, Point), (Int, Point), (Int, Distance)]
-
-  implicit val selNewClusterPoints: FieldSelector[Function1[(Int, Point), Unit]] = defaultFieldSelectorT[(Int, Point), Unit]
-  implicit val selNearestCenters: FieldSelector[Function1[(Int, Distance), Int]] = getFieldSelector[(Int, Distance), Int](0)
-  implicit val selNewCenters: FieldSelector[Function1[(Int, PointSum), Int]] = getFieldSelector[(Int, PointSum), Int](0)
 
   implicit val intPointSerializer: UDT[(Int, Point)] = new UDT[(Int, Point)] {
 
@@ -108,15 +106,13 @@ trait KMeansGeneratedImplicits { this: KMeans =>
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)
       private val ix2 = indexMap(2)
-      private val ix3 = indexMap(3)
 
-      private val w0 = new PactInteger()
-      private val w1 = new PactDouble()
-      private val w2 = new PactDouble()
-      private val w3 = new PactDouble()
+      @transient private var w0 = new PactInteger()
+      @transient private var w1 = new PactDouble()
+      @transient private var w2 = new PactDouble()
 
       override def serialize(item: (Int, Point), record: PactRecord) = {
-        val (v0, Point(v1, v2, v3)) = item
+        val (v0, Point(v1, v2)) = item
 
         if (ix0 >= 0) {
           w0.setValue(v0)
@@ -132,18 +128,12 @@ trait KMeansGeneratedImplicits { this: KMeans =>
           w2.setValue(v2)
           record.setField(ix2, w2)
         }
-
-        if (ix3 >= 0) {
-          w3.setValue(v3)
-          record.setField(ix3, w3)
-        }
       }
 
       override def deserialize(record: PactRecord): (Int, Point) = {
         var v0: Int = 0
         var v1: Double = 0
         var v2: Double = 0
-        var v3: Double = 0
 
         if (ix0 >= 0) {
           record.getFieldInto(ix0, w0)
@@ -160,12 +150,14 @@ trait KMeansGeneratedImplicits { this: KMeans =>
           v2 = w2.getValue()
         }
 
-        if (ix3 >= 0) {
-          record.getFieldInto(ix3, w3)
-          v3 = w3.getValue()
-        }
+        (v0, Point(v1, v2))
+      }
 
-        (v0, Point(v1, v2, v3))
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactInteger()
+        w1 = new PactDouble()
+        w2 = new PactDouble()
       }
     }
   }
@@ -181,17 +173,15 @@ trait KMeansGeneratedImplicits { this: KMeans =>
       private val ix2 = indexMap(2)
       private val ix3 = indexMap(3)
       private val ix4 = indexMap(4)
-      private val ix5 = indexMap(5)
 
-      private val w0 = new PactInteger()
-      private val w1 = new PactDouble()
-      private val w2 = new PactDouble()
-      private val w3 = new PactDouble()
-      private val w4 = new PactInteger()
-      private val w5 = new PactDouble()
+      @transient private var w0 = new PactInteger()
+      @transient private var w1 = new PactDouble()
+      @transient private var w2 = new PactDouble()
+      @transient private var w3 = new PactInteger()
+      @transient private var w4 = new PactDouble()
 
       override def serialize(item: (Int, Distance), record: PactRecord) = {
-        val (v0, Distance(Point(v1, v2, v3), v4, v5)) = item
+        val (v0, Distance(Point(v1, v2), v3, v4)) = item
 
         if (ix0 >= 0) {
           w0.setValue(v0)
@@ -216,11 +206,6 @@ trait KMeansGeneratedImplicits { this: KMeans =>
         if (ix4 >= 0) {
           w4.setValue(v4)
           record.setField(ix4, w4)
-        }
-
-        if (ix5 >= 0) {
-          w5.setValue(v5)
-          record.setField(ix5, w5)
         }
       }
 
@@ -228,97 +213,7 @@ trait KMeansGeneratedImplicits { this: KMeans =>
         var v0: Int = 0
         var v1: Double = 0
         var v2: Double = 0
-        var v3: Double = 0
-        var v4: Int = 0
-        var v5: Double = 0
-
-        if (ix0 >= 0) {
-          record.getFieldInto(ix0, w0)
-          v0 = w0.getValue()
-        }
-
-        if (ix1 >= 0) {
-          record.getFieldInto(ix1, w1)
-          v1 = w1.getValue()
-        }
-
-        if (ix2 >= 0) {
-          record.getFieldInto(ix2, w2)
-          v2 = w2.getValue()
-        }
-
-        if (ix3 >= 0) {
-          record.getFieldInto(ix3, w3)
-          v3 = w3.getValue()
-        }
-
-        if (ix4 >= 0) {
-          record.getFieldInto(ix4, w4)
-          v4 = w4.getValue()
-        }
-
-        if (ix5 >= 0) {
-          record.getFieldInto(ix5, w5)
-          v5 = w5.getValue()
-        }
-
-        (v0, Distance(Point(v1, v2, v3), v4, v5))
-      }
-    }
-  }
-
-  implicit val intPointSumSerializer: UDT[(Int, PointSum)] = new UDT[(Int, PointSum)] {
-
-    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactDouble], classOf[PactDouble], classOf[PactDouble])
-
-    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, PointSum)] {
-
-      private val ix0 = indexMap(0)
-      private val ix1 = indexMap(1)
-      private val ix2 = indexMap(2)
-      private val ix3 = indexMap(3)
-      private val ix4 = indexMap(4)
-
-      private val w0 = new PactInteger()
-      private val w1 = new PactInteger()
-      private val w2 = new PactDouble()
-      private val w3 = new PactDouble()
-      private val w4 = new PactDouble()
-
-      override def serialize(item: (Int, PointSum), record: PactRecord) = {
-        val (v0, PointSum(v1, Point(v2, v3, v4))) = item
-
-        if (ix0 >= 0) {
-          w0.setValue(v0)
-          record.setField(ix0, w0)
-        }
-
-        if (ix1 >= 0) {
-          w1.setValue(v1)
-          record.setField(ix1, w1)
-        }
-
-        if (ix2 >= 0) {
-          w2.setValue(v2)
-          record.setField(ix2, w2)
-        }
-
-        if (ix3 >= 0) {
-          w3.setValue(v3)
-          record.setField(ix3, w3)
-        }
-
-        if (ix4 >= 0) {
-          w4.setValue(v4)
-          record.setField(ix4, w4)
-        }
-      }
-
-      override def deserialize(record: PactRecord): (Int, PointSum) = {
-        var v0: Int = 0
-        var v1: Int = 0
-        var v2: Double = 0
-        var v3: Double = 0
+        var v3: Int = 0
         var v4: Double = 0
 
         if (ix0 >= 0) {
@@ -346,8 +241,106 @@ trait KMeansGeneratedImplicits { this: KMeans =>
           v4 = w4.getValue()
         }
 
-        (v0, PointSum(v1, Point(v2, v3, v4)))
+        (v0, Distance(Point(v1, v2), v3, v4))
+      }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactInteger()
+        w1 = new PactDouble()
+        w2 = new PactDouble()
+        w3 = new PactInteger()
+        w4 = new PactDouble()
       }
     }
   }
+
+  implicit val intPointSumSerializer: UDT[(Int, PointSum)] = new UDT[(Int, PointSum)] {
+
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactDouble], classOf[PactDouble], classOf[PactDouble])
+
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, PointSum)] {
+
+      private val ix0 = indexMap(0)
+      private val ix1 = indexMap(1)
+      private val ix2 = indexMap(2)
+      private val ix3 = indexMap(3)
+
+      @transient private var w0 = new PactInteger()
+      @transient private var w1 = new PactInteger()
+      @transient private var w2 = new PactDouble()
+      @transient private var w3 = new PactDouble()
+
+      override def serialize(item: (Int, PointSum), record: PactRecord) = {
+        val (v0, PointSum(v1, Point(v2, v3))) = item
+
+        if (ix0 >= 0) {
+          w0.setValue(v0)
+          record.setField(ix0, w0)
+        }
+
+        if (ix1 >= 0) {
+          w1.setValue(v1)
+          record.setField(ix1, w1)
+        }
+
+        if (ix2 >= 0) {
+          w2.setValue(v2)
+          record.setField(ix2, w2)
+        }
+
+        if (ix3 >= 0) {
+          w3.setValue(v3)
+          record.setField(ix3, w3)
+        }
+      }
+
+      override def deserialize(record: PactRecord): (Int, PointSum) = {
+        var v0: Int = 0
+        var v1: Int = 0
+        var v2: Double = 0
+        var v3: Double = 0
+
+        if (ix0 >= 0) {
+          record.getFieldInto(ix0, w0)
+          v0 = w0.getValue()
+        }
+
+        if (ix1 >= 0) {
+          record.getFieldInto(ix1, w1)
+          v1 = w1.getValue()
+        }
+
+        if (ix2 >= 0) {
+          record.getFieldInto(ix2, w2)
+          v2 = w2.getValue()
+        }
+
+        if (ix3 >= 0) {
+          record.getFieldInto(ix3, w3)
+          v3 = w3.getValue()
+        }
+
+        (v0, PointSum(v1, Point(v2, v3)))
+      }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactInteger()
+        w1 = new PactInteger()
+        w2 = new PactDouble()
+        w3 = new PactDouble()
+      }
+    }
+  }
+
+  implicit val udf1: UDF1[Function1[Iterator[(Int, Distance)], (Int, Distance)]] = defaultUDF1IterT[(Int, Distance), (Int, Distance)]
+  implicit val udf2: UDF1[Function1[(Int, Distance), (Int, PointSum)]] = defaultUDF1[(Int, Distance), (Int, PointSum)]
+  implicit val udf3: UDF1[Function1[Iterator[(Int, PointSum)], (Int, PointSum)]] = defaultUDF1IterT[(Int, PointSum), (Int, PointSum)]
+  implicit val udf4: UDF1[Function1[(Int, PointSum), (Int, Point)]] = defaultUDF1[(Int, PointSum), (Int, Point)]
+  implicit val udf5: UDF2[Function2[(Int, Point), (Int, Point), (Int, Distance)]] = defaultUDF2[(Int, Point), (Int, Point), (Int, Distance)]
+
+  implicit val selNewClusterPoints: FieldSelector[Function1[(Int, Point), Unit]] = defaultFieldSelectorT[(Int, Point), Unit]
+  implicit val selNearestCenters: FieldSelector[Function1[(Int, Distance), Int]] = getFieldSelector[(Int, Distance), Int](0)
+  implicit val selNewCenters: FieldSelector[Function1[(Int, PointSum), Int]] = getFieldSelector[(Int, PointSum), Int](0)
 }

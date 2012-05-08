@@ -17,13 +17,13 @@ trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContract {
   val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
 
   override def annotations = Seq(
-    new Annotations.ReadsFirst(joinUDF.getReadFields._1),
-    new Annotations.ReadsSecond(joinUDF.getReadFields._2),
-    new Annotations.ExplicitModifications(joinUDF.getWriteFields),
-    new Annotations.ImplicitOperationFirst(ImplicitOperationMode.Copy),
-    new Annotations.ImplicitOperationSecond(ImplicitOperationMode.Copy),
-    new Annotations.ExplicitProjectionsFirst(joinUDF.getDiscardedFields._1),
-    new Annotations.ExplicitProjectionsSecond(joinUDF.getDiscardedFields._2)
+    Annotations.getReadsFirst(joinUDF.getReadFields._1),
+    Annotations.getReadsSecond(joinUDF.getReadFields._2),
+    Annotations.getExplicitModifications(joinUDF.getWriteFields),
+    Annotations.getImplicitOperationFirst(ImplicitOperationMode.Copy),
+    Annotations.getImplicitOperationSecond(ImplicitOperationMode.Copy),
+    Annotations.getExplicitProjectionsFirst(joinUDF.getDiscardedFields._1),
+    Annotations.getExplicitProjectionsSecond(joinUDF.getDiscardedFields._2)
   )
 
   override def persistConfiguration() = {

@@ -15,7 +15,7 @@ import eu.stratosphere.pact.common.`type`.base._
 import eu.stratosphere.pact.common.`type`.base.parser._
 import eu.stratosphere.nephele.configuration.Configuration
 
-case class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends DataStream[Out] {
+class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends DataStream[Out] {
 
   override def createContract = new URI(url).getScheme match {
 
@@ -37,7 +37,7 @@ case class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) exte
   }
 }
 
-abstract class DataSourceFormat[Out: UDT] {
+abstract class DataSourceFormat[Out: UDT] extends Serializable {
 
   val stub: Class[_ <: InputFormat[_]]
   val outputUDT: UDT[Out] = implicitly[UDT[Out]]

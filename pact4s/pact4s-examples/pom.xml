@@ -50,13 +50,17 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.datamining.BatchGradientDescent</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.datamining.BatchGradientDescentDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
               <includes>
                 <include>**/datamining/BatchGradientDescent.class</include>
                 <include>**/datamining/BatchGradientDescent$*.class</include>
+                <include>**/datamining/BatchGradientDescentDescriptor.class</include>
+                <include>**/datamining/BatchGradientDescentDescriptor$*.class</include>
+                <include>**/datamining/BatchGradientDescentGeneratedImplicits.class</include>
+                <include>**/datamining/BatchGradientDescentGeneratedImplicits$*.class</include>
               </includes>
             </configuration>
           </execution>
@@ -74,13 +78,17 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.datamining.KMeans$</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.datamining.KMeansDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
               <includes>
                 <include>**/datamining/KMeans.class</include>
                 <include>**/datamining/KMeans$*.class</include>
+                <include>**/datamining/KMeansDescriptor.class</include>
+                <include>**/datamining/KMeansDescriptor$*.class</include>
+                <include>**/datamining/KMeansGeneratedImplicits.class</include>
+                <include>**/datamining/KMeansGeneratedImplicits$*.class</include>
               </includes>
             </configuration>
           </execution>
@@ -97,13 +105,17 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.ConnectedComponents$</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.ConnectedComponentsDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
               <includes>
                 <include>**/graph/ConnectedComponents.class</include>
                 <include>**/graph/ConnectedComponents$*.class</include>
+                <include>**/graph/ConnectedComponentsDescriptor.class</include>
+                <include>**/graph/ConnectedComponentsDescriptor$*.class</include>
+                <include>**/graph/ConnectedComponentsGeneratedImplicits.class</include>
+                <include>**/graph/ConnectedComponentsGeneratedImplicits$*.class</include>
               </includes>
             </configuration>
           </execution>
@@ -120,13 +132,17 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.TransitiveClosureNaive$</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.TransitiveClosureNaiveDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
               <includes>
                 <include>**/graph/TransitiveClosureNaive.class</include>
                 <include>**/graph/TransitiveClosureNaive$*.class</include>
+                <include>**/graph/TransitiveClosureNaiveDescriptor.class</include>
+                <include>**/graph/TransitiveClosureNaiveDescriptor$*.class</include>
+                <include>**/graph/TransitiveClosureNaiveGeneratedImplicits.class</include>
+                <include>**/graph/TransitiveClosureNaiveGeneratedImplicits$*.class</include>
               </includes>
             </configuration>
           </execution>
@@ -143,13 +159,17 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.TransitiveClosureRD$</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.graph.TransitiveClosureRDDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
               <includes>
                 <include>**/graph/TransitiveClosureRD.class</include>
                 <include>**/graph/TransitiveClosureRD$*.class</include>
+                <include>**/graph/TransitiveClosureRDDescriptor.class</include>
+                <include>**/graph/TransitiveClosureRDDescriptor$*.class</include>
+                <include>**/graph/TransitiveClosureRDGeneratedImplicits.class</include>
+                <include>**/graph/TransitiveClosureRDGeneratedImplicits$*.class</include>
               </includes>
             </configuration>
           </execution>
@@ -166,13 +186,17 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.relational.TPCHQuery3$</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.relational.TPCHQuery3Descriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
               <includes>
                 <include>**/relational/TPCHQuery3.class</include>
                 <include>**/relational/TPCHQuery3$*.class</include>
+                <include>**/relational/TPCHQuery3Descriptor.class</include>
+                <include>**/relational/TPCHQuery3Descriptor$*.class</include>
+                <include>**/relational/TPCHQuery3GeneratedImplicits.class</include>
+                <include>**/relational/TPCHQuery3GeneratedImplicits$*.class</include>
               </includes>
             </configuration>
           </execution>
@@ -189,13 +213,17 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.wordcount.WordCount$</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.wordcount.WordCountDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
               <includes>
                 <include>**/wordcount/WordCount.class</include>
                 <include>**/wordcount/WordCount$*.class</include>
+                <include>**/wordcount/WordCountDescriptor.class</include>
+                <include>**/wordcount/WordCountDescriptor$*.class</include>
+                <include>**/wordcount/WordCountGeneratedImplicits.class</include>
+                <include>**/wordcount/WordCountGeneratedImplicits$*.class</include>
               </includes>
             </configuration>
           </execution>

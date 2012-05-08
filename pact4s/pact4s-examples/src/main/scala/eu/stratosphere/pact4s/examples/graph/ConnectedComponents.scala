@@ -5,7 +5,7 @@ import scala.math._
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
-object ConnectedComponents extends PactDescriptor[ConnectedComponents] {
+class ConnectedComponentsDescriptor extends PactDescriptor[ConnectedComponents] {
   override val name = "Connected Components"
   override val description = "Parameters: [noSubStasks] [vertices] [edges] [output]"
 }
@@ -42,11 +42,15 @@ class ConnectedComponents(args: String*) extends PactProgram with ConnectedCompo
   undirectedEdges.hints = RecordSize(8) +: RecordsEmitted(2.0f)
   output.hints = RecordSize(8)
 
-  val params = new {
-    val numSubTasks = args(0).toInt
-    val verticesInput = args(1)
-    val edgesInput = args(2)
-    val output = args(3)
+  def params = {
+    val argMap = args.zipWithIndex.map (_.swap).toMap
+
+    new {
+      val numSubTasks = argMap.getOrElse(0, "0").toInt
+      val verticesInput = argMap.getOrElse(1, "")
+      val edgesInput = argMap.getOrElse(2, "")
+      val output = argMap.getOrElse(3, "")
+    }
   }
 
   def parseVertex(line: String): (Int, Int) = {
@@ -65,18 +69,12 @@ class ConnectedComponents(args: String*) extends PactProgram with ConnectedCompo
 
 trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>
 
+  import java.io.ObjectInputStream
+
   import eu.stratosphere.pact4s.common.analyzer._
 
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
-
-  implicit val udf1: UDF1[Function1[(Int, Int), Iterator[(Int, Int)]]] = defaultUDF1IterR[(Int, Int), (Int, Int)]
-  implicit val udf2: UDF1[Function1[Iterator[(Int, Int)], (Int, Int)]] = defaultUDF1IterT[(Int, Int), (Int, Int)]
-  implicit val udf3: UDF2[Function2[(Int, Int), (Int, Int), (Int, Int)]] = defaultUDF2[(Int, Int), (Int, Int), (Int, Int)]
-  implicit val udf4: UDF2[Function2[(Int, Int), (Int, Int), Iterator[(Int, Int)]]] = defaultUDF2IterR[(Int, Int), (Int, Int), (Int, Int)]
-
-  implicit val selOutput: FieldSelector[Function1[(Int, Int), Unit]] = defaultFieldSelectorT[(Int, Int), Unit]
-  implicit val selFirst: FieldSelector[Function1[(Int, Int), Int]] = getFieldSelector[(Int, Int), Int](0)
 
   implicit val intIntUDT: UDT[(Int, Int)] = new UDT[(Int, Int)] {
 
@@ -87,8 +85,8 @@ trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>
       private val ix0 = indexMap(0)
       private val ix1 = indexMap(1)
 
-      private val w0 = new PactInteger()
-      private val w1 = new PactInteger()
+      @transient private var w0 = new PactInteger()
+      @transient private var w1 = new PactInteger()
 
       override def serialize(item: (Int, Int), record: PactRecord) = {
         val (v0, v1) = item
@@ -120,6 +118,20 @@ trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>
 
         (v0, v1)
       }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactInteger()
+        w1 = new PactInteger()
+      }
     }
   }
+
+  implicit val udf1: UDF1[Function1[(Int, Int), Iterator[(Int, Int)]]] = defaultUDF1IterR[(Int, Int), (Int, Int)]
+  implicit val udf2: UDF1[Function1[Iterator[(Int, Int)], (Int, Int)]] = defaultUDF1IterT[(Int, Int), (Int, Int)]
+  implicit val udf3: UDF2[Function2[(Int, Int), (Int, Int), (Int, Int)]] = defaultUDF2[(Int, Int), (Int, Int), (Int, Int)]
+  implicit val udf4: UDF2[Function2[(Int, Int), (Int, Int), Iterator[(Int, Int)]]] = defaultUDF2IterR[(Int, Int), (Int, Int), (Int, Int)]
+
+  implicit val selOutput: FieldSelector[Function1[(Int, Int), Unit]] = defaultFieldSelectorT[(Int, Int), Unit]
+  implicit val selFirst: FieldSelector[Function1[(Int, Int), Int]] = getFieldSelector[(Int, Int), Int](0)
 }

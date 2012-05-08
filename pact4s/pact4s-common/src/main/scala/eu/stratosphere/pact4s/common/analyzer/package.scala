@@ -32,8 +32,11 @@ package object analyzer {
       markFieldUnused(field)
   }
 
-  implicit object StringUDT extends UDT[String] {
+  implicit val stringUdt = new StringUDT
 
+  class StringUDT extends UDT[String] {
+
+    import java.io.ObjectInputStream
     import eu.stratosphere.pact.common.`type`.PactRecord
     import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
     import eu.stratosphere.pact.common.`type`.base.PactString
@@ -44,7 +47,7 @@ package object analyzer {
 
       private val ix0 = indexMap(0)
 
-      private val w0 = new PactString()
+      @transient private var w0 = new PactString()
 
       override def serialize(item: String, record: PactRecord) = {
         val v0 = item
@@ -64,6 +67,11 @@ package object analyzer {
         }
 
         v0
+      }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactString()
       }
     }
   }

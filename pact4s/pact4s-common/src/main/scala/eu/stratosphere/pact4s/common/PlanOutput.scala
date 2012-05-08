@@ -11,7 +11,7 @@ import eu.stratosphere.pact.common.io.OutputFormat
 import eu.stratosphere.pact.common.contract.FileDataSink
 import eu.stratosphere.pact.common.contract.GenericDataSink
 
-case class PlanOutput[In: UDT](source: DataStream[In], sink: DataSink[In]) extends Pact4sContractFactory {
+class PlanOutput[In: UDT](val source: DataStream[In], val sink: DataSink[In]) extends Pact4sContractFactory with Serializable {
 
   override def getHints = sink.getHints
 

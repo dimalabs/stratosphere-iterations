@@ -22,7 +22,8 @@ case class ReduceParameters[In, Out](
 
 class Reduce4sStub[In, Out] extends ReduceStub {
 
-  private val outputRecord = new PactRecord()
+  private val combineRecord = new PactRecord()
+  private val reduceRecord = new PactRecord()
 
   private var combineIterator: DeserializingIterator[In] = null
   private var combineForward: Array[Int] = _
@@ -53,13 +54,12 @@ class Reduce4sStub[In, Out] extends ReduceStub {
 
     combineIterator.initialize(records)
 
-    val outputRecord = combineIterator.getFirstRecord
     val output = combineFunction.apply(combineIterator)
 
-    outputRecord.copyFrom(combineIterator.getFirstRecord, combineForward, combineForward);
+    combineRecord.copyFrom(combineIterator.getFirstRecord, combineForward, combineForward);
 
-    combineSerializer.serialize(output, outputRecord)
-    out.collect(outputRecord)
+    combineSerializer.serialize(output, combineRecord)
+    out.collect(combineRecord)
   }
 
   override def reduce(records: JIterator[PactRecord], out: Collector) = {
@@ -68,9 +68,9 @@ class Reduce4sStub[In, Out] extends ReduceStub {
 
     val output = reduceFunction.apply(reduceIterator)
 
-    outputRecord.copyFrom(reduceIterator.getFirstRecord, reduceForward, reduceForward);
+    reduceRecord.copyFrom(reduceIterator.getFirstRecord, reduceForward, reduceForward);
 
-    reduceSerializer.serialize(output, outputRecord)
-    out.collect(outputRecord)
+    reduceSerializer.serialize(output, reduceRecord)
+    out.collect(reduceRecord)
   }
 }

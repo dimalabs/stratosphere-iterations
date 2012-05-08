@@ -865,9 +865,8 @@ public final class PactRecord implements Value
 	 */
 	public boolean copyFrom(final PactRecord source, final int sourceFieldNum, final int targetFieldNum) {
 		// range check
-		if (targetFieldNum < 0 || targetFieldNum >= this.numFields) {
+		if (targetFieldNum < 0)
 			throw new IndexOutOfBoundsException();
-		}
 
 		// get offset and check for null
 		final int offset = source == null ? NULL_INDICATOR_OFFSET : source.offsets[sourceFieldNum];

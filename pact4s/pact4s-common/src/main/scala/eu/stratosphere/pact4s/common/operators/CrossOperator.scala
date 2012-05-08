@@ -7,9 +7,9 @@ import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-class CrossOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) {
+class CrossOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) extends Serializable {
 
-  def cross[RightIn: UDT](rightInput: DataStream[RightIn]) = new {
+  def cross[RightIn: UDT](rightInput: DataStream[RightIn]) = new Serializable {
 
     def map[Out: UDT, F: UDF2Builder[LeftIn, RightIn, Out]#UDF](mapFunction: (LeftIn, RightIn) => Out) = createStream(Left(mapFunction))
 

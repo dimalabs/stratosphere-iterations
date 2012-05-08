@@ -16,14 +16,15 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputContract { this: Redu
   val userCombineFunction: Option[Iterator[In] => In]
   val userReduceFunction: Iterator[In] => Out
 
-  private val combinableAnnotation = userCombineFunction map { _ => new Annotations.Combinable() }
+  private def combinableAnnotation = userCombineFunction map { _ => Annotations.getCombinable() } toSeq
+  private def getAllReadFields = (combineUDF.getReadFields ++ reduceUDF.getReadFields).distinct.toArray
 
-  override def annotations = (combinableAnnotation toSeq) ++ Seq(
-    new Annotations.Reads((combineUDF.getReadFields.toSet union reduceUDF.getReadFields.toSet).toArray),
-    new Annotations.ExplicitModifications(reduceUDF.getWriteFields),
-    new Annotations.ImplicitOperation(ImplicitOperationMode.Projection),
-    new Annotations.ExplicitCopies(reduceUDF.getForwardedFields),
-    new Annotations.OutCardBounds(Annotations.OutCardBounds.UNBOUNDED, Annotations.OutCardBounds.INPUTCARD)
+  override def annotations = combinableAnnotation ++ Seq(
+    Annotations.getReads(getAllReadFields),
+    Annotations.getExplicitModifications(reduceUDF.getWriteFields),
+    Annotations.getImplicitOperation(ImplicitOperationMode.Projection),
+    Annotations.getExplicitCopies(reduceUDF.getForwardedFields),
+    Annotations.getOutCardBounds(Annotations.CARD_UNBOUNDED, Annotations.CARD_INPUTCARD)
   )
 
   override def persistConfiguration() = {

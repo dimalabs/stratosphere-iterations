@@ -25,6 +25,7 @@ trait UDF1[+F <: _ => _] extends UDF {
   def getForwardedFields: Array[Int]
   def getDiscardedFields: Array[Int]
 
+  def copy(): UDF1[F]
   def markInputFieldUnread(inputFieldNum: Int)
   def markInputFieldCopied(fromInputFieldNum: Int, toOutputFieldNum: Int)
 

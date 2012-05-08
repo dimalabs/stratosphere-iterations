@@ -7,7 +7,7 @@ import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-class MapOperator[In: UDT](input: DataStream[In]) {
+class MapOperator[In: UDT](input: DataStream[In]) extends Serializable {
 
   def map[Out: UDT, F: UDF1Builder[In, Out]#UDF](mapFunction: In => Out) = createStream(Left(mapFunction))
 

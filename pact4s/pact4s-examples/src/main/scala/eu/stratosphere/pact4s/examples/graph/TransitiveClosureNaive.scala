@@ -6,7 +6,7 @@ import scala.math.Ordered._
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
-object TransitiveClosureNaive extends PactDescriptor[TransitiveClosureNaive] {
+class TransitiveClosureNaiveDescriptor extends PactDescriptor[TransitiveClosureNaive] {
   override val name = "Transitive Closure (Naive)"
   override val description = "Parameters: [noSubStasks] [vertices] [edges] [output]"
 }
@@ -43,11 +43,15 @@ class TransitiveClosureNaive(args: String*) extends PactProgram with TransitiveC
   edges.hints = RecordSize(16)
   output.hints = RecordSize(16)
 
-  val params = new {
-    val numSubTasks = args(0).toInt
-    val verticesInput = args(1)
-    val edgesInput = args(2)
-    val output = args(3)
+  def params = {
+    val argMap = args.zipWithIndex.map (_.swap).toMap
+
+    new {
+      val numSubTasks = argMap.getOrElse(0, "0").toInt
+      val verticesInput = argMap.getOrElse(1, "")
+      val edgesInput = argMap.getOrElse(2, "")
+      val output = argMap.getOrElse(3, "")
+    }
   }
 
   case class Path(from: Int, to: Int, dist: Int)
@@ -70,18 +74,12 @@ class TransitiveClosureNaive(args: String*) extends PactProgram with TransitiveC
 
 trait TransitiveClosureNaiveGeneratedImplicits { this: TransitiveClosureNaive =>
 
+  import java.io.ObjectInputStream
+
   import eu.stratosphere.pact4s.common.analyzer._
 
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
-
-  implicit val udf1: UDF1[Function1[Iterator[Path], Path]] = defaultUDF1IterT[Path, Path]
-  implicit val udf2: UDF2[Function2[Path, Path, Path]] = defaultUDF2[Path, Path, Path]
-
-  implicit val selOutput: FieldSelector[Function1[Path, Unit]] = defaultFieldSelectorT[Path, Unit]
-  implicit val selEdge: FieldSelector[Function1[Path, (Int, Int)]] = getFieldSelector[Path, (Int, Int)](0, 1)
-  val selFrom: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](0)
-  val selTo: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](1)
 
   implicit val pathSerializer: UDT[Path] = new UDT[Path] {
 
@@ -93,9 +91,9 @@ trait TransitiveClosureNaiveGeneratedImplicits { this: TransitiveClosureNaive =>
       private val ix1 = indexMap(1)
       private val ix2 = indexMap(2)
 
-      private val w0 = new PactInteger()
-      private val w1 = new PactInteger()
-      private val w2 = new PactInteger()
+      @transient private var w0 = new PactInteger()
+      @transient private var w1 = new PactInteger()
+      @transient private var w2 = new PactInteger()
 
       override def serialize(item: Path, record: PactRecord) = {
         val Path(v0, v1, v2) = item
@@ -139,6 +137,21 @@ trait TransitiveClosureNaiveGeneratedImplicits { this: TransitiveClosureNaive =>
 
         Path(v0, v1, v2)
       }
+
+      private def readObject(in: ObjectInputStream) = {
+        in.defaultReadObject()
+        w0 = new PactInteger()
+        w1 = new PactInteger()
+        w2 = new PactInteger()
+      }
     }
   }
+
+  implicit val udf1: UDF1[Function1[Iterator[Path], Path]] = defaultUDF1IterT[Path, Path]
+  implicit val udf2: UDF2[Function2[Path, Path, Path]] = defaultUDF2[Path, Path, Path]
+
+  implicit val selOutput: FieldSelector[Function1[Path, Unit]] = defaultFieldSelectorT[Path, Unit]
+  implicit val selEdge: FieldSelector[Function1[Path, (Int, Int)]] = getFieldSelector[Path, (Int, Int)](0, 1)
+  val selFrom: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](0)
+  val selTo: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](1)
 }

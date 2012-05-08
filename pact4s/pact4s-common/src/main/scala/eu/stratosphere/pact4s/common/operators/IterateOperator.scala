@@ -7,21 +7,21 @@ import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-class IterateOperator[SolutionItem: UDT](initialSolution: DataStream[SolutionItem]) {
+class IterateOperator[SolutionItem: UDT](initialSolution: DataStream[SolutionItem]) extends Serializable {
 
   def iterate(stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]): DataStream[SolutionItem] = new DataStream[SolutionItem] {
 
     override def createContract = throw new UnsupportedOperationException("Not implemented yet")
   }
 
-  def keyBy[Key, SolutionKeySelector: SelectorBuilder[SolutionItem, Key]#Selector](keySelector: SolutionItem => Key) = new {
+  def keyBy[Key, SolutionKeySelector: SelectorBuilder[SolutionItem, Key]#Selector](keySelector: SolutionItem => Key) = new Serializable {
 
     def iterate(stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]): DataStream[SolutionItem] = new DataStream[SolutionItem] {
 
       override def createContract = throw new UnsupportedOperationException("Not implemented yet")
     }
 
-    def untilEmpty[WorksetItem: UDT](initialWorkset: DataStream[WorksetItem]) = new {
+    def untilEmpty[WorksetItem: UDT](initialWorkset: DataStream[WorksetItem]) = new Serializable {
 
       def iterate(stepFunction: (DataStream[SolutionItem], DataStream[WorksetItem]) => (DataStream[SolutionItem], DataStream[WorksetItem])): DataStream[SolutionItem] = new DataStream[SolutionItem] {
 

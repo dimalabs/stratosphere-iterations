@@ -17,21 +17,21 @@ abstract class AnalyzedUDF(outputLength: Int) extends UDF {
 
   protected def assertGlobalized(expectGlobalized: Boolean) = {
     if (expectGlobalized != isGlobalized)
-      throw new IllegalStateException()
+      throw new IllegalStateException("ExpectGlobalized: " + expectGlobalized + ", Globalized: " + isGlobalized + ", OutputLocation: " + outputLocation)
   }
 
   protected def globalize(inputLocations: Seq[Map[Int, Int]], outputLocation: Int): Int = {
     assertGlobalized(false)
 
     for ((readFields, inputLocations) <- getReadFieldSets zip inputLocations) {
-      for (fieldNum <- 0 to readFields.length if readFields(fieldNum) >= 0) {
+      for (fieldNum <- 0 until readFields.length if readFields(fieldNum) >= 0) {
         readFields(fieldNum) = inputLocations(fieldNum)
       }
     }
 
     if (outputLocation >= 0) {
 
-      for (fieldNum <- 0 to writeFields.length if writeFields(fieldNum) >= 0)
+      for (fieldNum <- 0 until writeFields.length if writeFields(fieldNum) >= 0)
         writeFields(fieldNum) += outputLocation
 
     } else {
@@ -39,7 +39,7 @@ abstract class AnalyzedUDF(outputLength: Int) extends UDF {
       if (inputLocations.size > 1)
         throw new IllegalArgumentException("Attempted to perform in-place globalization on a Function2")
 
-      for (fieldNum <- 0 to writeFields.length if writeFields(fieldNum) >= 0)
+      for (fieldNum <- 0 until writeFields.length if writeFields(fieldNum) >= 0)
         writeFields(fieldNum) = inputLocations.head(fieldNum)
     }
 
@@ -72,7 +72,7 @@ abstract class AnalyzedUDF(outputLength: Int) extends UDF {
     assertGlobalized(true)
 
     for (readFields <- getReadFieldSets) {
-      for (fieldNum <- 0 to readFields.length if readFields(fieldNum) == oldPosition) {
+      for (fieldNum <- 0 until readFields.length if readFields(fieldNum) == oldPosition) {
         readFields(fieldNum) = newPosition
       }
     }
@@ -99,6 +99,20 @@ class AnalyzedUDF1[T1, R](inputLength: Int, outputLength: Int) extends AnalyzedU
       case (-1, fieldNum)  => (fieldNum, copiedFields(fieldNum))
       case (pos, fieldNum) => (fieldNum, pos)
     } toMap
+  }
+
+  def copy(): AnalyzedUDF1[T1, R] = {
+    assertGlobalized(false)
+
+    val udf = new AnalyzedUDF1[T1, R](inputLength, outputLength)
+
+    for (field <- 0 until inputLength if readFields(field) < 0)
+      udf.markInputFieldUnread(field)
+
+    for ((to, from) <- copiedFields)
+      udf.markInputFieldCopied(from, to)
+
+    udf
   }
 
   override def markInputFieldUnread(inputFieldNum: Int) = {

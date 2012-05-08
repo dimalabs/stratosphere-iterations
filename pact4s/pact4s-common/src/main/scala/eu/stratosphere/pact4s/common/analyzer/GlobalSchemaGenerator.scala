@@ -12,7 +12,14 @@ trait GlobalSchemaGenerator {
 
   case class GlobalizeResult(freePos: Int, outputs: Map[Int, Int], forwards: Set[Int])
 
-  def globalizeContract(freePos: Int, contract: Pact4sContract): GlobalizeResult = contract match {
+  def globalizeContract(freePos: Int, contract: Pact4sContract): GlobalizeResult = {
+    val result = globalizeContractInner(freePos, contract)
+    contract.getParameters().setClassLoader(this.getClass.getClassLoader)
+    contract.persistConfiguration()
+    result
+  }
+
+  def globalizeContractInner(freePos: Int, contract: Pact4sContract): GlobalizeResult = contract match {
 
     case Pact4sDataSinkContract(input: Pact4sContract, udt, fieldSelector) => {
 
@@ -24,6 +31,8 @@ trait GlobalSchemaGenerator {
         fieldSelector.globalize(inputLocations)
 
         newFreePos = freePos1
+
+        printContract(contract)
       }
 
       GlobalizeResult(newFreePos, Map(), Set())
@@ -39,6 +48,8 @@ trait GlobalSchemaGenerator {
         fieldSelector.globalize(outputLocations)
 
         newFreePos = freePos + udt.numFields
+
+        printContract(contract)
       }
 
       GlobalizeResult(newFreePos, fieldSelector.getGlobalFields, Set())
@@ -55,6 +66,8 @@ trait GlobalSchemaGenerator {
 
         leftKey.globalize(leftInputLocations)
         rightKey.globalize(rightInputLocations)
+        setKeyColumns(contract, leftKey, rightKey)
+
         newFreePos = udf.globalize(leftInputLocations, rightInputLocations, freePos2)
 
         val leftFields = leftInputLocations.values.toSet union leftForwards
@@ -73,6 +86,8 @@ trait GlobalSchemaGenerator {
 
         for (pos <- rightKeyFields)
           udf.setAmbientFieldBehavior(Right(pos), AmbientFieldBehavior.Forward)
+
+        printContract(contract)
       }
 
       GlobalizeResult(newFreePos, udf.getOutputFields, udf.getAllForwardedFields.toSet)
@@ -103,6 +118,8 @@ trait GlobalSchemaGenerator {
 
         for (pos <- rightFields diff conflicts)
           udf.setAmbientFieldBehavior(Right(pos), AmbientFieldBehavior.Forward)
+
+        printContract(contract)
       }
 
       GlobalizeResult(newFreePos, udf.getOutputFields, udf.getAllForwardedFields.toSet)
@@ -119,6 +136,8 @@ trait GlobalSchemaGenerator {
 
         leftKey.globalize(leftInputLocations)
         rightKey.globalize(rightInputLocations)
+        setKeyColumns(contract, leftKey, rightKey)
+
         newFreePos = udf.globalize(leftInputLocations, rightInputLocations, freePos2)
 
         val leftFields = leftInputLocations.values.toSet union leftForwards
@@ -137,6 +156,8 @@ trait GlobalSchemaGenerator {
 
         for (pos <- rightKeyFields)
           udf.setAmbientFieldBehavior(Right(pos), AmbientFieldBehavior.Forward)
+
+        printContract(contract)
       }
 
       GlobalizeResult(newFreePos, udf.getOutputFields, udf.getAllForwardedFields.toSet)
@@ -156,6 +177,8 @@ trait GlobalSchemaGenerator {
 
         for (pos <- inputFields)
           udf.setAmbientFieldBehavior(pos, AmbientFieldBehavior.Forward)
+
+        printContract(contract)
       }
 
       GlobalizeResult(newFreePos, udf.getOutputFields, udf.getForwardedFields.toSet)
@@ -170,6 +193,8 @@ trait GlobalSchemaGenerator {
         val GlobalizeResult(freePos1, inputLocations, forwards) = globalizeContract(freePos, input)
 
         key.globalize(inputLocations)
+        setKeyColumns(contract, key)
+
         cUDF.globalizeInPlace(inputLocations)
         newFreePos = rUDF.globalize(inputLocations, freePos1)
 
@@ -181,9 +206,63 @@ trait GlobalSchemaGenerator {
 
         for (pos <- keyFields)
           rUDF.setAmbientFieldBehavior(pos, AmbientFieldBehavior.Forward)
+
+        printContract(contract)
       }
 
       GlobalizeResult(newFreePos, rUDF.getOutputFields, rUDF.getForwardedFields.toSet)
+    }
+  }
+
+  private def printContract(contract: Pact4sContract) = {
+
+    contract match {
+
+      case Pact4sDataSinkContract(input: Pact4sContract, udt, fieldSelector) => {
+        println(contract.getName() + " (Sink): [" + fieldSelector.getFields.mkString(", ") + "] -> Format")
+      }
+
+      case Pact4sDataSourceContract(udt, fieldSelector) => {
+        println(contract.getName() + " (Source): Parse -> [" + fieldSelector.getFields.mkString(", ") + "]")
+      }
+
+      case CoGroup4sContract(left: Pact4sContract, right: Pact4sContract, leftKey, rightKey, leftUdt, rightUdt, udt, udf) => {
+        val keyFields = leftKey.getFields.filter(_ >= 0).map("L" + _) ++ rightKey.getFields.filter(_ >= 0).map("R" + _)
+        val readFields = udf.getReadFields._1.map("L" + _) ++ udf.getReadFields._2.map("R" + _)
+        val forwardedFields = (udf.getForwardedFields._1.map("L" + _) ++ udf.getForwardedFields._2.map("R" + _)).sorted
+        println(contract.getName() + " (CoGroup) {" + keyFields.mkString(", ") + "}: [" + readFields.mkString(", ") + "] -> [" + forwardedFields.mkString(", ") + "] ++ [" + udf.getWriteFields.mkString(", ") + "]")
+      }
+
+      case Cross4sContract(left: Pact4sContract, right: Pact4sContract, leftUdt, rightUdt, udt, udf) => {
+        val readFields = udf.getReadFields._1.map("L" + _) ++ udf.getReadFields._2.map("R" + _)
+        val forwardedFields = (udf.getForwardedFields._1.map("L" + _) ++ udf.getForwardedFields._2.map("R" + _)).sorted
+        println(contract.getName() + " (Cross): [" + readFields.mkString(", ") + "] -> [" + forwardedFields.mkString(", ") + "] ++ [" + udf.getWriteFields.mkString(", ") + "]")
+      }
+
+      case Join4sContract(left: Pact4sContract, right: Pact4sContract, leftKey, rightKey, leftUdt, rightUdt, udt, udf) => {
+        val keyFields = leftKey.getFields.filter(_ >= 0).map("L" + _) ++ rightKey.getFields.filter(_ >= 0).map("R" + _)
+        val readFields = udf.getReadFields._1.map("L" + _) ++ udf.getReadFields._2.map("R" + _)
+        val forwardedFields = (udf.getForwardedFields._1.map("L" + _) ++ udf.getForwardedFields._2.map("R" + _)).sorted
+        println(contract.getName() + " (Join) {" + keyFields.mkString(", ") + "}: [" + readFields.mkString(", ") + "] -> [" + forwardedFields.mkString(", ") + "] ++ [" + udf.getWriteFields.mkString(", ") + "]")
+      }
+
+      case Map4sContract(input: Pact4sContract, inputUdt, udt, udf) => {
+        println(contract.getName() + " (Map): [" + udf.getReadFields.mkString(", ") + "] -> [" + udf.getForwardedFields.sorted.mkString(", ") + "] ++ [" + udf.getWriteFields.mkString(", ") + "]")
+      }
+
+      case Reduce4sContract(input: Pact4sContract, key, inputUdt, udt, cUDF, rUDF) => {
+        println(contract.getName() + " (Combine) {" + key.getFields.filter(_ >= 0).mkString(", ") + "}: [" + cUDF.getReadFields.mkString(", ") + "] -> [" + cUDF.getWriteFields.mkString(", ") + "]")
+        println((" " * contract.getName().length) + " (Reduce) {" + key.getFields.filter(_ >= 0).mkString(", ") + "}: [" + rUDF.getReadFields.mkString(", ") + "] -> [" + rUDF.getForwardedFields.sorted.mkString(", ") + "] ++ [" + rUDF.getWriteFields.mkString(", ") + "]")
+      }
+    }
+  }
+
+  private def setKeyColumns(contract: Pact4sContract, keys: FieldSelector[_]*) = {
+
+    for ((key, inputNum) <- keys.zipWithIndex) {
+      val oldKeyColumns = contract.asInstanceOf[SingleInputContract[_]].getKeyColumnNumbers(inputNum)
+      val newKeyColumns = key.getFields.filter(_ >= 0).toArray
+      System.arraycopy(newKeyColumns, 0, oldKeyColumns, 0, newKeyColumns.length)
     }
   }
 
