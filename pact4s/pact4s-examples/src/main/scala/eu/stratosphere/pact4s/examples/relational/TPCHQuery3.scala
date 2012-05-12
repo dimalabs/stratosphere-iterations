@@ -32,7 +32,7 @@ class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImpl
   val lineItems = new DataSource(params.lineItemsInput, DelimetedDataSourceFormat(parseLineItem _))
   val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
 
-  val filteredOrders = orders filter { o => o.status == params.status && o.year >= params.minYear && o.orderPriority.startsWith(params.priority) }
+  val filteredOrders = orders filter { o => o.status == params.status && o.year > params.minYear && o.orderPriority.startsWith(params.priority) }
   val prioritizedItems = filteredOrders join lineItems on { _.orderId } isEqualTo { _.orderId } map { (o: Order, li: LineItem) => PrioritizedOrder(o.orderId, o.shipPriority, li.extendedPrice) }
   val prioritizedOrders = prioritizedItems groupBy { pi => (pi.orderId, pi.shipPriority) } combine { items =>
     items.reduce { (z, s) =>
@@ -72,8 +72,8 @@ class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImpl
   case class LineItem(orderId: Int, extendedPrice: Double)
   case class PrioritizedOrder(orderId: Int, shipPriority: Int, revenue: Double)
 
-  val OrderInputPattern = """(\d+)|(.)|(\d\d\d\d)-(\d\d)-(\d\d)|(.+)|(\d+)""".r
-  val LineItemInputPattern = """(\d+)|(\d+\.\d\d)""".r
+  val OrderInputPattern = """(\d+)\|[^\|]+\|([^\|])\|[^\|]+\|(\d\d\d\d)-(\d\d)-(\d\d)\|([^\|]+)\|[^\|]+\|(\d+)\|[^\|]+\|""".r
+  val LineItemInputPattern = """(\d+)\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|(\d+\.\d\d)\|[^\|]+\|[^\|]+\|[^\|]\|[^\|]\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|""".r
 
   def parseOrder(line: String): Order = line match {
     case OrderInputPattern(orderId, status, year, month, day, oPr, sPr) => Order(orderId.toInt, status(0), year.toInt, month.toInt, day.toInt, oPr, sPr.toInt)

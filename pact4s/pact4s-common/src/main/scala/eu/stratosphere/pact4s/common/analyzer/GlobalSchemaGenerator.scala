@@ -140,21 +140,22 @@ trait GlobalSchemaGenerator {
 
         newFreePos = udf.globalize(leftInputLocations, rightInputLocations, freePos2)
 
-        val leftFields = leftInputLocations.values.toSet union leftForwards
-        val rightFields = rightInputLocations.values.toSet union rightForwards
         val leftKeyFields = leftKey.getGlobalFields.values.toSet
         val rightKeyFields = rightKey.getGlobalFields.values.toSet
 
-        for (pos <- leftFields diff leftKeyFields)
+        val leftFields = leftInputLocations.values.toSet union leftForwards
+        val rightFields = rightInputLocations.values.toSet union rightForwards
+        val conflicts = leftFields intersect rightFields
+
+        for (pos <- conflicts) {
           udf.setAmbientFieldBehavior(Left(pos), AmbientFieldBehavior.Discard)
-
-        for (pos <- rightFields diff rightKeyFields)
           udf.setAmbientFieldBehavior(Right(pos), AmbientFieldBehavior.Discard)
+        }
 
-        for (pos <- leftKeyFields)
+        for (pos <- leftFields diff conflicts union leftKeyFields)
           udf.setAmbientFieldBehavior(Left(pos), AmbientFieldBehavior.Forward)
 
-        for (pos <- rightKeyFields)
+        for (pos <- rightFields diff conflicts union rightKeyFields)
           udf.setAmbientFieldBehavior(Right(pos), AmbientFieldBehavior.Forward)
 
         printContract(contract)
@@ -230,29 +231,35 @@ trait GlobalSchemaGenerator {
         val keyFields = leftKey.getFields.filter(_ >= 0).map("L" + _) ++ rightKey.getFields.filter(_ >= 0).map("R" + _)
         val readFields = udf.getReadFields._1.map("L" + _) ++ udf.getReadFields._2.map("R" + _)
         val forwardedFields = (udf.getForwardedFields._1.map("L" + _) ++ udf.getForwardedFields._2.map("R" + _)).sorted
-        println(contract.getName() + " (CoGroup) {" + keyFields.mkString(", ") + "}: [" + readFields.mkString(", ") + "] -> [" + forwardedFields.mkString(", ") + "] ++ [" + udf.getWriteFields.mkString(", ") + "]")
+        val writeFields = udf.getWriteFields.filter(_ >= 0)
+        println(contract.getName() + " (CoGroup) {" + keyFields.mkString(", ") + "}: [" + readFields.mkString(", ") + "] -> [" + forwardedFields.mkString(", ") + "] ++ [" + writeFields.mkString(", ") + "]")
       }
 
       case Cross4sContract(left: Pact4sContract, right: Pact4sContract, leftUdt, rightUdt, udt, udf) => {
         val readFields = udf.getReadFields._1.map("L" + _) ++ udf.getReadFields._2.map("R" + _)
         val forwardedFields = (udf.getForwardedFields._1.map("L" + _) ++ udf.getForwardedFields._2.map("R" + _)).sorted
-        println(contract.getName() + " (Cross): [" + readFields.mkString(", ") + "] -> [" + forwardedFields.mkString(", ") + "] ++ [" + udf.getWriteFields.mkString(", ") + "]")
+        val writeFields = udf.getWriteFields.filter(_ >= 0)
+        println(contract.getName() + " (Cross): [" + readFields.mkString(", ") + "] -> [" + forwardedFields.mkString(", ") + "] ++ [" + writeFields.mkString(", ") + "]")
       }
 
       case Join4sContract(left: Pact4sContract, right: Pact4sContract, leftKey, rightKey, leftUdt, rightUdt, udt, udf) => {
         val keyFields = leftKey.getFields.filter(_ >= 0).map("L" + _) ++ rightKey.getFields.filter(_ >= 0).map("R" + _)
         val readFields = udf.getReadFields._1.map("L" + _) ++ udf.getReadFields._2.map("R" + _)
         val forwardedFields = (udf.getForwardedFields._1.map("L" + _) ++ udf.getForwardedFields._2.map("R" + _)).sorted
-        println(contract.getName() + " (Join) {" + keyFields.mkString(", ") + "}: [" + readFields.mkString(", ") + "] -> [" + forwardedFields.mkString(", ") + "] ++ [" + udf.getWriteFields.mkString(", ") + "]")
+        val writeFields = udf.getWriteFields.filter(_ >= 0)
+        println(contract.getName() + " (Join) {" + keyFields.mkString(", ") + "}: [" + readFields.mkString(", ") + "] -> [" + forwardedFields.mkString(", ") + "] ++ [" + writeFields.mkString(", ") + "]")
       }
 
       case Map4sContract(input: Pact4sContract, inputUdt, udt, udf) => {
-        println(contract.getName() + " (Map): [" + udf.getReadFields.mkString(", ") + "] -> [" + udf.getForwardedFields.sorted.mkString(", ") + "] ++ [" + udf.getWriteFields.mkString(", ") + "]")
+        val writeFields = udf.getWriteFields.filter(_ >= 0)
+        println(contract.getName() + " (Map): [" + udf.getReadFields.mkString(", ") + "] -> [" + udf.getForwardedFields.sorted.mkString(", ") + "] ++ [" + writeFields.mkString(", ") + "]")
       }
 
       case Reduce4sContract(input: Pact4sContract, key, inputUdt, udt, cUDF, rUDF) => {
-        println(contract.getName() + " (Combine) {" + key.getFields.filter(_ >= 0).mkString(", ") + "}: [" + cUDF.getReadFields.mkString(", ") + "] -> [" + cUDF.getWriteFields.mkString(", ") + "]")
-        println((" " * contract.getName().length) + " (Reduce) {" + key.getFields.filter(_ >= 0).mkString(", ") + "}: [" + rUDF.getReadFields.mkString(", ") + "] -> [" + rUDF.getForwardedFields.sorted.mkString(", ") + "] ++ [" + rUDF.getWriteFields.mkString(", ") + "]")
+        val cWriteFields = cUDF.getWriteFields.filter(_ >= 0)
+        val rWriteFields = rUDF.getWriteFields.filter(_ >= 0)
+        println(contract.getName() + " (Combine) {" + key.getFields.filter(_ >= 0).mkString(", ") + "}: [" + cUDF.getReadFields.mkString(", ") + "] -> [" + cWriteFields.mkString(", ") + "]")
+        println((" " * contract.getName().length) + " (Reduce) {" + key.getFields.filter(_ >= 0).mkString(", ") + "}: [" + rUDF.getReadFields.mkString(", ") + "] -> [" + rUDF.getForwardedFields.sorted.mkString(", ") + "] ++ [" + rWriteFields.mkString(", ") + "]")
       }
     }
   }
@@ -260,7 +267,7 @@ trait GlobalSchemaGenerator {
   private def setKeyColumns(contract: Pact4sContract, keys: FieldSelector[_]*) = {
 
     for ((key, inputNum) <- keys.zipWithIndex) {
-      val oldKeyColumns = contract.asInstanceOf[SingleInputContract[_]].getKeyColumnNumbers(inputNum)
+      val oldKeyColumns = contract.asInstanceOf[AbstractPact[_]].getKeyColumnNumbers(inputNum)
       val newKeyColumns = key.getFields.filter(_ >= 0).toArray
       System.arraycopy(newKeyColumns, 0, oldKeyColumns, 0, newKeyColumns.length)
     }

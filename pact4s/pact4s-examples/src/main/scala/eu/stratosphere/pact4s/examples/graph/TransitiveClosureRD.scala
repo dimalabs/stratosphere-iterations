@@ -76,7 +76,7 @@ class TransitiveClosureRD(args: String*) extends PactProgram with TransitiveClos
     Path(v, v, 0)
   }
 
-  val EdgeInputPattern = """(\d+)|(\d+)""".r
+  val EdgeInputPattern = """(\d+)\|(\d+)\|""".r
 
   def parseEdge(line: String): Path = line match {
     case EdgeInputPattern(from, to) => Path(from.toInt, to.toInt, 1)

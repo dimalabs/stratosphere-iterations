@@ -58,7 +58,7 @@ class ConnectedComponents(args: String*) extends PactProgram with ConnectedCompo
     v -> v
   }
 
-  val EdgeInputPattern = """(\d+)|(\d+)""".r
+  val EdgeInputPattern = """(\d+)\|(\d+)\|""".r
 
   def parseEdge(line: String): (Int, Int) = line match {
     case EdgeInputPattern(from, to) => from.toInt -> to.toInt
