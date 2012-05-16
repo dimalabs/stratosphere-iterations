@@ -63,7 +63,6 @@ import eu.stratosphere.pact.compiler.plan.ReduceNode;
 import eu.stratosphere.pact.compiler.plan.SingleInputNode;
 import eu.stratosphere.pact.compiler.plan.SinkJoiner;
 import eu.stratosphere.pact.compiler.plan.TwoInputNode;
-import eu.stratosphere.pact.runtime.task.HistogramTask;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 
 /**
@@ -866,7 +865,7 @@ public class PactCompiler {
 			return this.id;
 		}
 
-	};
+	}
 
 	/**
 	 * Visitor that computes the interesting properties for each node in the plan. On its recursive
@@ -921,7 +920,7 @@ public class PactCompiler {
 		public void postVisit(OptimizerNode node) {
 			node.computeUnclosedBranchStack();
 		}
-	};
+	}
 
 	/**
 	 * Utility class that traverses a plan to connect all nodes.
@@ -1026,9 +1025,11 @@ public class PactCompiler {
 					}
 					
 					for (PactConnection conn : node.getOutgoingConnections()) {
-						if(conn.getShipStrategy() == ShipStrategy.PARTITION_RANGE) {
-							node.getPactContract().getParameters().setInteger(HistogramTask.HISTOGRAM_MEMORY, memoryPerTask);
-							LOG.debug("Assigned "+(memoryPerTask)+" MB for histogram building during range partitioning");
+						if (conn.getShipStrategy() == ShipStrategy.PARTITION_RANGE) {
+							throw new RuntimeException("Range Partitioning currently not implemented.");
+//							node.getPactContract().getParameters().setInteger(HistogramTask.HISTOGRAM_MEMORY, memoryPerTask);
+//							if (LOG.isDebugEnabled())
+//								LOG.debug("Assigned "+(memoryPerTask)+" MB for histogram building during range partitioning");
 						}
 					}
 				}
@@ -1223,41 +1224,29 @@ public class PactCompiler {
 				switch (conn.getTargetPact().getLocalStrategy()) {
 				case HYBRIDHASH_FIRST:
 					// first input is build side
-					if (inConnIdx == 1)
-						return true;
-					
-					return false;
-				case HYBRIDHASH_SECOND:
-					// second input is build side
-					if (inConnIdx == 0)
-						return true;
+          return inConnIdx == 1;
 
-					return false;
-				case MMHASH_FIRST:
+          case HYBRIDHASH_SECOND:
+					// second input is build side
+            return inConnIdx == 0;
+
+          case MMHASH_FIRST:
 					// first input is build side
-					if (inConnIdx == 1)
-						return true;
+            return inConnIdx == 1;
 
-					return false;
-				case MMHASH_SECOND:
+          case MMHASH_SECOND:
 					// second input is build side
-					if (inConnIdx == 0)
-						return true;
+            return inConnIdx == 0;
 
-					return false;
-				case SORT_FIRST_MERGE:
+          case SORT_FIRST_MERGE:
 					// first input is sorted
-					if (inConnIdx == 1)
-						return true;
+            return inConnIdx == 1;
 
-					return false;
-				case SORT_SECOND_MERGE:
+          case SORT_SECOND_MERGE:
 					// second input is sorted
-					if (inConnIdx == 0)
-						return true;
+            return inConnIdx == 0;
 
-					return false;
-				default:
+          default:
 					return false;
 				}
 			case Cogroup:
@@ -1265,17 +1254,13 @@ public class PactCompiler {
 				switch (conn.getTargetPact().getLocalStrategy()) {
 				case SORT_FIRST_MERGE:
 					// first input is sorted
-					if (inConnIdx == 1)
-						return true;
+          return inConnIdx == 1;
 
-					return false;
-				case SORT_SECOND_MERGE:
+          case SORT_SECOND_MERGE:
 					// second input is sorted
-					if (inConnIdx == 0)
-						return true;
+            return inConnIdx == 0;
 
-					return false;
-				default:
+          default:
 					return false;
 				}
 			case Cross:
@@ -1283,29 +1268,21 @@ public class PactCompiler {
 				switch (conn.getTargetPact().getLocalStrategy()) {
 				case NESTEDLOOP_BLOCKED_OUTER_SECOND:
 					// first input is fully read before processing (inner side)
-					if (inConnIdx == 1)
-						return true;
+          return inConnIdx == 1;
 
-					return false;
-				case NESTEDLOOP_STREAMED_OUTER_SECOND:
+          case NESTEDLOOP_STREAMED_OUTER_SECOND:
 					// first input is fully read before processing (inner side)
-					if (inConnIdx == 1)
-						return true;
+            return inConnIdx == 1;
 
-					return false;
-				case NESTEDLOOP_BLOCKED_OUTER_FIRST:
+          case NESTEDLOOP_BLOCKED_OUTER_FIRST:
 					// second input is fully read before processing (inner side)
-					if (inConnIdx == 0)
-						return true;
+            return inConnIdx == 0;
 
-					return false;
-				case NESTEDLOOP_STREAMED_OUTER_FIRST:
+          case NESTEDLOOP_STREAMED_OUTER_FIRST:
 					// second input is fully read before processing (inner side)
-					if (inConnIdx == 0)
-						return true;
+            return inConnIdx == 0;
 
-					return false;
-				default:
+          default:
 					return false;
 				}
 			default:
@@ -1480,7 +1457,7 @@ public class PactCompiler {
 			
 			for (List<PactConnection> inConnList : conn.getSourcePact().getIncomingConnections()) {
 				for(PactConnection inConn : inConnList) {
-					if (mayCauseDeadlock(inConn) == true) {
+					if (mayCauseDeadlock(inConn)) {
 						return true;
 					}
 				}

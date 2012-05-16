@@ -15,23 +15,13 @@
 
 package eu.stratosphere.pact.runtime.test.util;
 
-import java.io.IOException;
 import java.util.List;
 
 import junit.framework.Assert;
 
 import org.junit.After;
-import org.junit.runner.RunWith;
-import org.mockito.Matchers;
-import org.mockito.Mockito;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
 import eu.stratosphere.nephele.configuration.Configuration;
-import eu.stratosphere.nephele.execution.librarycache.LibraryCacheManager;
-import eu.stratosphere.nephele.jobgraph.JobID;
 import eu.stratosphere.nephele.services.memorymanager.MemoryManager;
 import eu.stratosphere.nephele.template.AbstractInputTask;
 import eu.stratosphere.nephele.template.AbstractOutputTask;
@@ -42,36 +32,26 @@ import eu.stratosphere.pact.common.io.FileOutputFormat;
 import eu.stratosphere.pact.common.stubs.Stub;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
+import eu.stratosphere.pact.runtime.task.AbstractPactTask;
+import eu.stratosphere.pact.runtime.task.DataSinkTask;
+import eu.stratosphere.pact.runtime.task.DataSourceTask;
 import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
 import eu.stratosphere.pact.runtime.task.util.TaskConfig;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest(LibraryCacheManager.class)
-@PowerMockIgnore("org.apache.log4j.*")
-public abstract class TaskTestBase {
+public abstract class TaskTestBase
+{
+	protected long memorySize = 0;
 
-	long memorySize = 0;
+	protected MockEnvironment mockEnv;
 
-	MockEnvironment mockEnv;
-
-	public void initEnvironment(long memorySize) {
-
+	public void initEnvironment(long memorySize)
+	{
 		this.memorySize = memorySize;
 		this.mockEnv = new MockEnvironment(this.memorySize);
-
-		PowerMockito.mockStatic(LibraryCacheManager.class);
-		try {
-			Mockito.when(LibraryCacheManager.getClassLoader(Matchers.any(JobID.class))).thenReturn(
-				Thread.currentThread().getContextClassLoader());
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-
 	}
 
 	public void addInput(MutableObjectIterator<PactRecord> input, int groupId) {
 		this.mockEnv.addInput(input);
-		new TaskConfig(this.mockEnv.getTaskConfiguration()).addInputShipStrategy(ShipStrategy.FORWARD, groupId);
 	}
 
 	public void addOutput(List<PactRecord> output) {
@@ -87,9 +67,15 @@ public abstract class TaskTestBase {
 		return this.mockEnv.getTaskConfiguration();
 	}
 
-	public void registerTask(AbstractTask task, Class<? extends Stub> stubClass) {
+	public void registerTask(AbstractTask task, Class<? extends Stub> stubClass)
+	{
 		new TaskConfig(this.mockEnv.getTaskConfiguration()).setStubClass(stubClass);
 		task.setEnvironment(this.mockEnv);
+		
+		if (task instanceof AbstractPactTask<?, ?>) {
+			((AbstractPactTask<?, ?>) task).setUserCodeClassLoader(getClass().getClassLoader());
+		}
+		
 		task.registerInputOutput();
 	}
 
@@ -107,6 +93,11 @@ public abstract class TaskTestBase {
 		dsConfig.setStubParameter(FileOutputFormat.FILE_PARAMETER_KEY, outPath);
 	
 		outTask.setEnvironment(this.mockEnv);
+		
+		if (outTask instanceof DataSinkTask<?>) {
+			((DataSinkTask<?>) outTask).setUserCodeClassLoader(getClass().getClassLoader());
+		}
+		
 		outTask.registerInputOutput();
 	}
 
@@ -122,6 +113,10 @@ public abstract class TaskTestBase {
 		this.mockEnv.setInputSplitProvider(inputSplitProvider);
 
 		inTask.setEnvironment(this.mockEnv);
+		
+		if (inTask instanceof DataSourceTask<?>) {
+			((DataSourceTask<?>) inTask).setUserCodeClassLoader(getClass().getClassLoader());
+		}
 		inTask.registerInputOutput();
 	}
 
@@ -130,13 +125,15 @@ public abstract class TaskTestBase {
 	}
 
 	@After
-	public void shutdownIOManager() throws Exception {
+	public void shutdownIOManager() throws Exception
+	{
 		this.mockEnv.getIOManager().shutdown();
 		Assert.assertTrue("IO Manager has not properly shut down.", this.mockEnv.getIOManager().isProperlyShutDown());
 	}
 
 	@After
-	public void shutdownMemoryManager() throws Exception {
+	public void shutdownMemoryManager() throws Exception
+	{
 		if (this.memorySize > 0) {
 			MemoryManager memMan = getMemoryManager();
 			if (memMan != null) {

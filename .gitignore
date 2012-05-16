@@ -8,6 +8,7 @@ target
 .cache
 .metadata/*
 *.class
+*.iml
 filter.properties
 tmp/*
 pact/pact-tests/tmp/*

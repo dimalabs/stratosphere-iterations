@@ -193,7 +193,7 @@ class MultiLevelHashTester {
 	public void runTest(BucketBoundaries[] boundaries) {
 		addValues();
 		collectStatistics(rootMap, 0);
-		if (LOG.isDebugEnabled() == true) {
+		if (LOG.isDebugEnabled()) {
 			printStatistics();
 		}
 		checkBoundaries(boundaries);
@@ -252,7 +252,7 @@ class MultiLevelHashTester {
 			HashMap<Integer, Object> mapForCurrentLevel = rootMap;
 
 			for (int i = 0; i < maxLevel - 1; i++) {
-				int hashValue = HashJoin.hash(nextValue, i);
+				int hashValue = MutableHashTable.hash(nextValue, i);
 				int bucket = rangeCalculators[i].getBucket(hashValue);
 				Object nextObject = mapForCurrentLevel.get(bucket);
 				if (nextObject == null) {
@@ -265,7 +265,7 @@ class MultiLevelHashTester {
 				}
 			}
 
-			int lastHashValue = HashJoin.hash(nextValue, maxLevel - 1);
+			int lastHashValue = MutableHashTable.hash(nextValue, maxLevel - 1);
 			int deepestBucketNr = rangeCalculators[maxLevel - 1]
 					.getBucket(lastHashValue);
 			Object countOnDeepestLevel = mapForCurrentLevel
