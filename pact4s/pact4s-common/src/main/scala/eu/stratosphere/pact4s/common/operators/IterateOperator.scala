@@ -11,21 +11,40 @@ class IterateOperator[SolutionItem: UDT](initialSolution: DataStream[SolutionIte
 
   def iterate(stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]): DataStream[SolutionItem] = new DataStream[SolutionItem] {
 
-    override def createContract = throw new UnsupportedOperationException("Not implemented yet")
+    override def createContract = new Iteration with Pact4sContract {
+      
+      private val solutionInput = new DataStream[SolutionItem] {
+        override def createContract = getPartialSolution()
+      }
+      
+      this.setInitialPartialSolution(initialSolution.getContract)
+      this.setNextPartialSolution(stepFunction(solutionInput).getContract)
+    } 
   }
 
   def keyBy[Key, SolutionKeySelector: SelectorBuilder[SolutionItem, Key]#Selector](keySelector: SolutionItem => Key) = new Serializable {
-
-    def iterate(stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]): DataStream[SolutionItem] = new DataStream[SolutionItem] {
-
-      override def createContract = throw new UnsupportedOperationException("Not implemented yet")
-    }
 
     def untilEmpty[WorksetItem: UDT](initialWorkset: DataStream[WorksetItem]) = new Serializable {
 
       def iterate(stepFunction: (DataStream[SolutionItem], DataStream[WorksetItem]) => (DataStream[SolutionItem], DataStream[WorksetItem])): DataStream[SolutionItem] = new DataStream[SolutionItem] {
 
-        override def createContract = throw new UnsupportedOperationException("Not implemented yet")
+        override def createContract = new WorksetIteration with Pact4sContract {
+          
+          private val solutionInput = new DataStream[SolutionItem] {
+            override def createContract = getPartialSolution()
+          }
+
+          private val worksetInput = new DataStream[WorksetItem] {
+            override def createContract = getWorkset()
+          }
+          
+          this.setInitialPartialSolution(initialSolution.getContract)
+          this.setInitialWorkset(initialWorkset.getContract)
+          
+          val (delta, nextWorkset) = stepFunction(solutionInput, worksetInput)
+          this.setPartialSolutionDelta(delta.getContract)
+          this.setNextWorkset(nextWorkset.getContract)
+        }
       }
     }
   }
