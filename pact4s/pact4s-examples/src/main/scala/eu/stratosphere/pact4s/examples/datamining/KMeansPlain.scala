@@ -64,7 +64,7 @@ object KMeansPlain {
   class ComputeDistance extends CrossStub {
 
     // (Int, Point) ** (Int, Point) -> (Int, Distance)
-    override def cross(dataPointRecord: PactRecord, clusterCenterRecord: PactRecord, out: Collector) = {
+    override def cross(dataPointRecord: PactRecord, clusterCenterRecord: PactRecord, out: Collector[PactRecord]) = {
       val dataPoint = Point.deserialize(1, dataPointRecord)
       val clusterId = clusterCenterRecord.getField(0, classOf[PactInteger])
       val clusterPoint = Point.deserialize(1, clusterCenterRecord)
@@ -82,7 +82,7 @@ object KMeansPlain {
   class FindNearestCenter extends ReduceStub {
 
     // [(Int, Distance)] -> (Int, PointSum)
-    override def reduce(distanceRecords: Iterator[PactRecord], out: Collector) = {
+    override def reduce(distanceRecords: Iterator[PactRecord], out: Collector[PactRecord]) = {
       val Distance(dataPoint, clusterId, _) = distanceRecords map { Distance.deserialize(1, _) } minBy { _.distance }
 
       val res = new PactRecord(2 + Point.width)
@@ -94,7 +94,7 @@ object KMeansPlain {
     }
 
     // [(Int, Distance)] -> (Int, Distance)
-    override def combine(distanceRecords: Iterator[PactRecord], out: Collector) = {
+    override def combine(distanceRecords: Iterator[PactRecord], out: Collector[PactRecord]) = {
       val min = distanceRecords minBy { _.getField[PactDouble](3, classOf[PactDouble]).getValue() }
 
       out.collect(min)
@@ -105,7 +105,7 @@ object KMeansPlain {
   class RecomputeClusterCenter extends ReduceStub {
 
     // [(Int, PointSum)] -> (Int, Point)
-    override def reduce(pointSumRecords: Iterator[PactRecord], out: Collector) = {
+    override def reduce(pointSumRecords: Iterator[PactRecord], out: Collector[PactRecord]) = {
       val res = pointSumRecords.next()
       val pSum = sumPointSums(pointSumRecords)
 
@@ -115,7 +115,7 @@ object KMeansPlain {
     }
 
     // [(Int, PointSum)] -> (Int, PointSum)
-    override def combine(pointSumRecords: Iterator[PactRecord], out: Collector) = {
+    override def combine(pointSumRecords: Iterator[PactRecord], out: Collector[PactRecord]) = {
       val res = pointSumRecords.next()
       val pSum = sumPointSums(pointSumRecords)
 

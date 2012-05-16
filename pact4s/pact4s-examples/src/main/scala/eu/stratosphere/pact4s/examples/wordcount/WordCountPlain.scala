@@ -48,7 +48,7 @@ object WordCountPlain {
   class TokenizeLine extends MapStub {
 
     // String -> [(String, Int)]
-    override def map(lineRecord: PactRecord, out: Collector) = {
+    override def map(lineRecord: PactRecord, out: Collector[PactRecord]) = {
       val res = new PactRecord(2)
       val line = lineRecord.getField(0, classOf[PactString]).getValue()
 
@@ -64,7 +64,7 @@ object WordCountPlain {
   class CountWords extends ReduceStub {
 
     // [(String, Int)] -> (String, Int)
-    override def reduce(counts: Iterator[PactRecord], out: Collector) = {
+    override def reduce(counts: Iterator[PactRecord], out: Collector[PactRecord]) = {
       val res = counts.next()
       val sum = counts map { _.getField(1, classOf[PactInteger]).getValue() } sum
 
@@ -73,7 +73,7 @@ object WordCountPlain {
     }
 
     // [(String, Int)] -> (String, Int)
-    override def combine(counts: Iterator[PactRecord], out: Collector) = {
+    override def combine(counts: Iterator[PactRecord], out: Collector[PactRecord]) = {
       reduce(counts, out)
     }
   }

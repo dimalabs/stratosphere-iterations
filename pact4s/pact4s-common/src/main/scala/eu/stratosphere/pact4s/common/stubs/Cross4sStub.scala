@@ -23,7 +23,7 @@ class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub {
   private var rightDiscard: Array[Int] = _
   private var serializer: UDTSerializer[Out] = _
 
-  private var userFunction: (PactRecord, PactRecord, Collector) => Unit = _
+  private var userFunction: (PactRecord, PactRecord, Collector[PactRecord]) => Unit = _
 
   override def open(config: Configuration) = {
     super.open(config)
@@ -38,9 +38,9 @@ class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub {
     this.userFunction = parameters.userFunction.fold(doCross _, doFlatCross _)
   }
 
-  override def cross(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) = userFunction(leftRecord, rightRecord, out)
+  override def cross(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) = userFunction(leftRecord, rightRecord, out)
 
-  private def doCross(userFunction: (LeftIn, RightIn) => Out)(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) {
+  private def doCross(userFunction: (LeftIn, RightIn) => Out)(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) {
 
     val left = leftDeserializer.deserialize(leftRecord)
     val right = rightDeserializer.deserialize(rightRecord)
@@ -58,7 +58,7 @@ class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub {
     out.collect(leftRecord)
   }
 
-  private def doFlatCross(userFunction: (LeftIn, RightIn) => Iterator[Out])(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector) {
+  private def doFlatCross(userFunction: (LeftIn, RightIn) => Iterator[Out])(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) {
 
     val left = leftDeserializer.deserialize(leftRecord)
     val right = rightDeserializer.deserialize(rightRecord)

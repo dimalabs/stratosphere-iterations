@@ -7,13 +7,14 @@ import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.io._
+import eu.stratosphere.pact.common.generic.io._
 import eu.stratosphere.nephele.configuration.Configuration
 
 class DataSink[In: UDT](val url: String, val format: DataSinkFormat[In]) extends Hintable[In] with Serializable
 
 abstract class DataSinkFormat[In: UDT] extends Serializable {
 
-  val stub: Class[_ <: OutputFormat]
+  val stub: Class[_ <: OutputFormat[_]]
   val inputUDT: UDT[In]
   val fieldSelector: FieldSelector[In => Unit]
 

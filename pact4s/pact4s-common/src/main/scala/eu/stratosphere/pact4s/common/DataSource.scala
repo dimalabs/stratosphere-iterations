@@ -10,6 +10,7 @@ import eu.stratosphere.pact4s.common.stubs._
 import eu.stratosphere.pact.common.contract.FileDataSource
 import eu.stratosphere.pact.common.contract.GenericDataSource
 import eu.stratosphere.pact.common.io._
+import eu.stratosphere.pact.common.generic.io._
 import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
 import eu.stratosphere.pact.common.`type`.base._
 import eu.stratosphere.pact.common.`type`.base.parser._
@@ -27,7 +28,7 @@ class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends D
       override def persistConfiguration() = format.persistConfiguration(this.getParameters())
     }
 
-    case "ext" => new GenericDataSource(format.stub.asInstanceOf[Class[InputFormat[_]]]) with Pact4sDataSourceContract[Out] {
+    case "ext" => new GenericDataSource(format.stub.asInstanceOf[Class[InputFormat[_, _]]]) with Pact4sDataSourceContract[Out] {
 
       override val outputUDT = format.outputUDT
       override val fieldSelector = format.fieldSelector
@@ -39,7 +40,7 @@ class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends D
 
 abstract class DataSourceFormat[Out: UDT] extends Serializable {
 
-  val stub: Class[_ <: InputFormat[_]]
+  val stub: Class[_ <: InputFormat[_, _]]
   val outputUDT: UDT[Out] = implicitly[UDT[Out]]
   val fieldSelector: FieldSelector[Unit => Out] = defaultFieldSelectorR[Unit, Out]
 

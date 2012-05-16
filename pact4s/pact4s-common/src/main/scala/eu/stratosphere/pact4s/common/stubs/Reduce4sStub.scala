@@ -50,7 +50,7 @@ class Reduce4sStub[In, Out] extends ReduceStub {
     this.reduceSerializer = parameters.reduceSerializer
   }
 
-  override def combine(records: JIterator[PactRecord], out: Collector) = {
+  override def combine(records: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
     combineIterator.initialize(records)
 
@@ -62,7 +62,7 @@ class Reduce4sStub[In, Out] extends ReduceStub {
     out.collect(combineRecord)
   }
 
-  override def reduce(records: JIterator[PactRecord], out: Collector) = {
+  override def reduce(records: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
     reduceIterator.initialize(records)
 

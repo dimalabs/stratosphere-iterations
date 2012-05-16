@@ -27,7 +27,7 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
   private var rightForward: Array[Int] = _
   private var serializer: UDTSerializer[Out] = _
 
-  private var userFunction: (JIterator[PactRecord], JIterator[PactRecord], Collector) => Unit = _
+  private var userFunction: (JIterator[PactRecord], JIterator[PactRecord], Collector[PactRecord]) => Unit = _
 
   override def open(config: Configuration) = {
     super.open(config)
@@ -42,9 +42,9 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
     this.userFunction = parameters.userFunction.fold(doCoGroup _, doFlatCoGroup _)
   }
 
-  override def coGroup(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = userFunction(leftRecords, rightRecords, out)
+  override def coGroup(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector[PactRecord]) = userFunction(leftRecords, rightRecords, out)
 
-  private def doCoGroup(userFunction: (Iterator[LeftIn], Iterator[RightIn]) => Out)(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = {
+  private def doCoGroup(userFunction: (Iterator[LeftIn], Iterator[RightIn]) => Out)(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
     leftIterator.initialize(leftRecords)
     rightIterator.initialize(rightRecords)
@@ -58,7 +58,7 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
     out.collect(outputRecord)
   }
 
-  private def doFlatCoGroup(userFunction: (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out])(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector) = {
+  private def doFlatCoGroup(userFunction: (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out])(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
     leftIterator.initialize(leftRecords)
     rightIterator.initialize(rightRecords)

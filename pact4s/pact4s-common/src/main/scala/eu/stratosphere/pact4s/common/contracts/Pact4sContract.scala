@@ -10,6 +10,7 @@ import eu.stratosphere.pact4s.common.analyzer._
 
 import eu.stratosphere.pact.common.contract._
 import eu.stratosphere.pact.common.io._
+import eu.stratosphere.pact.common.generic.io._
 
 trait Pact4sContract { this: Contract =>
 
@@ -56,7 +57,7 @@ object Pact4sTwoInputContract {
   def unapply(c: Pact4sTwoInputContract) = Some((c.leftInput, c.rightInput))
 }
 
-trait Pact4sDataSourceContract[Out] extends Pact4sContract { this: GenericDataSource[_ <: InputFormat[_]] =>
+trait Pact4sDataSourceContract[Out] extends Pact4sContract { this: GenericDataSource[_ <: InputFormat[_,_]] =>
 
   val outputUDT: UDT[Out]
   val fieldSelector: FieldSelector[_ => Out]

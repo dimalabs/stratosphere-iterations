@@ -7,7 +7,7 @@ import eu.stratosphere.pact4s.common.contracts.Pact4sContractFactory
 import eu.stratosphere.pact4s.common.contracts.Pact4sDataSinkContract
 
 import eu.stratosphere.pact.common.io.FileOutputFormat
-import eu.stratosphere.pact.common.io.OutputFormat
+import eu.stratosphere.pact.common.generic.io.OutputFormat
 import eu.stratosphere.pact.common.contract.FileDataSink
 import eu.stratosphere.pact.common.contract.GenericDataSink
 

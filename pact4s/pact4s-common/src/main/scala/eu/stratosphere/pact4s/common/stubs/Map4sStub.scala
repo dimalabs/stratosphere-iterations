@@ -19,7 +19,7 @@ class Map4sStub[In, Out] extends MapStub {
   private var serializer: UDTSerializer[Out] = _
   private var discard: Array[Int] = _
 
-  private var userFunction: (PactRecord, Collector) => Unit = _
+  private var userFunction: (PactRecord, Collector[PactRecord]) => Unit = _
 
   override def open(config: Configuration) = {
     super.open(config)
@@ -32,9 +32,9 @@ class Map4sStub[In, Out] extends MapStub {
     this.userFunction = parameters.userFunction.fold(doMap _, doFlatMap _)
   }
 
-  override def map(record: PactRecord, out: Collector) = userFunction(record, out)
+  override def map(record: PactRecord, out: Collector[PactRecord]) = userFunction(record, out)
 
-  private def doMap(userFunction: In => Out)(record: PactRecord, out: Collector) = {
+  private def doMap(userFunction: In => Out)(record: PactRecord, out: Collector[PactRecord]) = {
 
     val input = deserializer.deserialize(record)
     val output = userFunction.apply(input)
@@ -46,7 +46,7 @@ class Map4sStub[In, Out] extends MapStub {
     out.collect(record)
   }
 
-  private def doFlatMap(userFunction: In => Iterator[Out])(record: PactRecord, out: Collector) = {
+  private def doFlatMap(userFunction: In => Iterator[Out])(record: PactRecord, out: Collector[PactRecord]) = {
 
     val input = deserializer.deserialize(record)
     val output = userFunction.apply(input)
