@@ -7,21 +7,26 @@ import eu.stratosphere.pact4s.common.operators._
 
 class ConnectedComponentsDescriptor extends PactDescriptor[ConnectedComponents] {
   override val name = "Connected Components"
-  override val description = "Parameters: [noSubStasks] [vertices] [edges] [output]"
+  override val description = "Parameters: [numSubTasks] [vertices] [edges] [output]"
+  override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
+
+  override def createInstance(args: Map[Int, String]) = new ConnectedComponents(args.getOrElse(1, ""), args.getOrElse(2, ""), args.getOrElse(3, ""))
 }
 
-class ConnectedComponents(args: String*) extends PactProgram with ConnectedComponentsGeneratedImplicits {
+class ConnectedComponents(verticesInput: String, edgesInput: String, componentsOutput: String) extends PactProgram with ConnectedComponentsGeneratedImplicits {
 
-  val vertices = new DataSource(params.verticesInput, DelimetedDataSourceFormat(parseVertex _))
-  val directedEdges = new DataSource(params.edgesInput, DelimetedDataSourceFormat(parseEdge _))
-  val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
+  val vertices = new DataSource(verticesInput, DelimetedDataSourceFormat(parseVertex))
+  val directedEdges = new DataSource(edgesInput, DelimetedDataSourceFormat(parseEdge))
+  val output = new DataSink(componentsOutput, DelimetedDataSinkFormat(formatOutput.tupled))
 
   val undirectedEdges = directedEdges flatMap { case (from, to) => Seq(from -> to, to -> from) }
-  val components = vertices keyBy { _._1 } untilEmpty vertices iterate propagateComponent
+
+  //val components = vertices distinctBy { _._1 } untilEmpty vertices iterate propagateComponent
+  val components = propagateComponent iterate (s0 = vertices distinctBy { _._1 }, ws0 = vertices)
 
   override def outputs = output <~ components
 
-  def propagateComponent(s: DataStream[(Int, Int)], ws: DataStream[(Int, Int)]) = {
+  val propagateComponent = (s: DataStream[(Int, Int)], ws: DataStream[(Int, Int)]) => {
 
     val allNeighbors = ws join undirectedEdges on { case (v, _) => v } isEqualTo { case (from, _) => from } map { case ((_, c), (_, to)) => to -> c }
     val minNeighbors = allNeighbors groupBy { case (to, _) => to } combine { cs => cs minBy { _._2 } }
@@ -35,36 +40,23 @@ class ConnectedComponents(args: String*) extends PactProgram with ConnectedCompo
     (s1, s1)
   }
 
-  override def defaultParallelism = params.numSubTasks
-
   vertices.hints = RecordSize(8)
   directedEdges.hints = RecordSize(8)
   undirectedEdges.hints = RecordSize(8) +: RecordsEmitted(2.0f)
   output.hints = RecordSize(8)
 
-  def params = {
-    val argMap = args.zipWithIndex.map (_.swap).toMap
-
-    new {
-      val numSubTasks = argMap.getOrElse(0, "0").toInt
-      val verticesInput = argMap.getOrElse(1, "")
-      val edgesInput = argMap.getOrElse(2, "")
-      val output = argMap.getOrElse(3, "")
-    }
-  }
-
-  def parseVertex(line: String): (Int, Int) = {
+  val parseVertex = (line: String) => {
     val v = line.toInt
     v -> v
   }
 
   val EdgeInputPattern = """(\d+)\|(\d+)\|""".r
 
-  def parseEdge(line: String): (Int, Int) = line match {
+  val parseEdge = (line: String) => line match {
     case EdgeInputPattern(from, to) => from.toInt -> to.toInt
   }
 
-  def formatOutput(value: (Int, Int)): String = "%d|%d".format(value._1, value._2)
+  val formatOutput = (vertex: Int, component: Int) => "%d|%d".format(vertex, component)
 }
 
 trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>

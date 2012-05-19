@@ -23,28 +23,26 @@ import eu.stratosphere.pact4s.common.operators._
  */
 class TPCHQuery3Descriptor extends PactDescriptor[TPCHQuery3] {
   override val name = "TCPH Query 3"
-  override val description = "Parameters: [noSubStasks] [orders] [lineItems] [output]"
+  override val description = "Parameters: [numSubTasks] [orders] [lineItems] [output]"
+  override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
+
+  override def createInstance(args: Map[Int, String]) = new TPCHQuery3(args.getOrElse(1, ""), args.getOrElse(2, ""), args.getOrElse(3, ""))
 }
 
-class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImplicits {
+class TPCHQuery3(ordersInput: String, lineItemsInput: String, ordersOutput: String, status: Char = 'F', minYear: Int = 1993, priority: String = "5") extends PactProgram with TPCHQuery3GeneratedImplicits {
 
-  val orders = new DataSource(params.ordersInput, DelimetedDataSourceFormat(parseOrder _))
-  val lineItems = new DataSource(params.lineItemsInput, DelimetedDataSourceFormat(parseLineItem _))
-  val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
+  val orders = new DataSource(ordersInput, DelimetedDataSourceFormat(parseOrder))
+  val lineItems = new DataSource(lineItemsInput, DelimetedDataSourceFormat(parseLineItem))
+  val output = new DataSink(ordersOutput, DelimetedDataSinkFormat(formatOutput))
 
-  val filteredOrders = orders filter { o => o.status == params.status && o.year > params.minYear && o.orderPriority.startsWith(params.priority) }
+  val filteredOrders = orders filter { o => o.status == status && o.year > minYear && o.orderPriority.startsWith(priority) }
   val prioritizedItems = filteredOrders join lineItems on { _.orderId } isEqualTo { _.orderId } map { (o: Order, li: LineItem) => PrioritizedOrder(o.orderId, o.shipPriority, li.extendedPrice) }
-  val prioritizedOrders = prioritizedItems groupBy { pi => (pi.orderId, pi.shipPriority) } combine { items =>
-    items.reduce { (z, s) =>
-      (z, s) match {
-        case (PrioritizedOrder(orderId, shipPriority, revenue), PrioritizedOrder(_, _, price)) => PrioritizedOrder(orderId, shipPriority, revenue + price)
-      }
-    }
+
+  val prioritizedOrders = prioritizedItems groupBy { pi => (pi.orderId, pi.shipPriority) } combine {
+    _.reduce { (z, s) => z.copy(revenue = z.revenue + s.revenue) }
   }
 
   override def outputs = output <~ prioritizedOrders
-
-  override def defaultParallelism = params.numSubTasks
 
   orders.hints = UniqueKey({ o: Order => o.orderId }) +: PactName("Orders")
   lineItems.hints = PactName("Line Items")
@@ -53,21 +51,6 @@ class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImpl
   prioritizedItems.hints = RecordSize(64) +: PactName("Prioritized Items")
   prioritizedOrders.hints = RecordSize(64) +: RecordsEmitted(1f) +: PactName("Prioritized Orders")
 
-  def params = {
-    val argMap = args.zipWithIndex.map (_.swap).toMap
-
-    new {
-      val status = 'F'
-      val minYear = 1993
-      val priority = "5"
-
-      val numSubTasks = argMap.getOrElse(0, "0").toInt
-      val ordersInput = argMap.getOrElse(1, "")
-      val lineItemsInput = argMap.getOrElse(2, "")
-      val output = argMap.getOrElse(3, "")
-    }
-  }
-
   case class Order(orderId: Int, status: Char, year: Int, month: Int, day: Int, orderPriority: String, shipPriority: Int)
   case class LineItem(orderId: Int, extendedPrice: Double)
   case class PrioritizedOrder(orderId: Int, shipPriority: Int, revenue: Double)
@@ -75,17 +58,15 @@ class TPCHQuery3(args: String*) extends PactProgram with TPCHQuery3GeneratedImpl
   val OrderInputPattern = """(\d+)\|[^\|]+\|([^\|])\|[^\|]+\|(\d\d\d\d)-(\d\d)-(\d\d)\|([^\|]+)\|[^\|]+\|(\d+)\|[^\|]+\|""".r
   val LineItemInputPattern = """(\d+)\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|(\d+\.\d\d)\|[^\|]+\|[^\|]+\|[^\|]\|[^\|]\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|""".r
 
-  def parseOrder(line: String): Order = line match {
+  val parseOrder = (line: String) => line match {
     case OrderInputPattern(orderId, status, year, month, day, oPr, sPr) => Order(orderId.toInt, status(0), year.toInt, month.toInt, day.toInt, oPr, sPr.toInt)
   }
 
-  def parseLineItem(line: String): LineItem = line match {
+  val parseLineItem = (line: String) => line match {
     case LineItemInputPattern(orderId, price) => LineItem(orderId.toInt, price.toDouble)
   }
 
-  def formatOutput(item: PrioritizedOrder): String = item match {
-    case PrioritizedOrder(orderId, sPr, revenue) => "%d|%d|%.2f".format(orderId, sPr, revenue)
-  }
+  val formatOutput = (item: PrioritizedOrder) => "%d|%d|%.2f".format(item.orderId, item.shipPriority, item.revenue)
 }
 
 trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>

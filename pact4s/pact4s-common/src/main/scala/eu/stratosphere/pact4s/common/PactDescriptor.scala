@@ -12,30 +12,32 @@ abstract class PactDescriptor[T <: PactProgram: Manifest] extends PlanAssembler 
   val name: String = implicitly[Manifest[T]].toString
   val description: String
 
-  def getName(args: String*) = name
+  def getName(args: Map[Int, String]) = name
+  def getDefaultParallelism(args: Map[Int, String]) = 1
   override def getDescription = description
 
   override def getPlan(args: String*): Plan = {
 
     implicit val env = new Environment
+    val argsMap = args.zipWithIndex.map (_.swap).toMap
 
-    val program = createInstance(args: _*)
+    val program = createInstance(argsMap)
     val sinks = program.outputs map { _.getContract.asInstanceOf[Pact4sDataSinkContract[_]] }
 
     initGlobalSchema(sinks)
 
-    new Plan(sinks, getName(args: _*)) {
-      this.setDefaultParallelism(program.defaultParallelism)
-    }
+    val plan = new Plan(sinks, getName(argsMap))
+    plan.setDefaultParallelism(getDefaultParallelism(argsMap))
+    plan
   }
 
-  def createInstance(args: String*): T = {
+  def createInstance(args: Map[Int, String]): T = {
 
     val clazz = implicitly[Manifest[T]].erasure
 
     try {
 
-      val constr = optionally { clazz.getConstructor(classOf[Seq[String]]).asInstanceOf[Constructor[Any]] }
+      val constr = optionally { clazz.getConstructor(classOf[Map[Int, String]]).asInstanceOf[Constructor[Any]] }
       val inst = constr map { _.newInstance(args) } getOrElse { clazz.newInstance }
 
       inst.asInstanceOf[T]

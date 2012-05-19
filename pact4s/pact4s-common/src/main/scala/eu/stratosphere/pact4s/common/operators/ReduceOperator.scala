@@ -41,25 +41,25 @@ class ReduceOperator[In: UDT](input: DataStream[In]) extends Serializable {
       val keyFields = keyFieldSelector.getFields filter { _ >= 0 }
       val keyFieldTypes = implicitly[UDT[In]].getKeySet(keyFields)
 
+      val udfs = {
+
+        val combineUDF = implicitly[UDF1[Iterator[In] => In]]
+        val reduceUDF = implicitly[UDF1[Iterator[In] => Out]]
+
+        if (combineUDF eq reduceUDF)
+          (combineUDF, combineUDF.copy().asInstanceOf[UDF1[Iterator[In] => Out]])
+        else
+          (combineUDF, reduceUDF)
+      }
+
       new ReduceContract(Reduce4sContract.getStub, keyFieldTypes, keyFields, input.getContract) with Reduce4sContract[Key, In, Out] {
 
         override val keySelector = keyFieldSelector
         override val inputUDT = implicitly[UDT[In]]
         override val outputUDT = implicitly[UDT[Out]]
-        override val (combineUDF, reduceUDF) = reifyUDFs
+        override val (combineUDF, reduceUDF) = udfs
         override val userCombineFunction = combineFunction
         override val userReduceFunction = reduceFunction
-
-        def reifyUDFs: (UDF1[Iterator[In] => In], UDF1[Iterator[In] => Out]) = {
-
-          val combineUDF = implicitly[UDF1[Iterator[In] => In]]
-          val reduceUDF = implicitly[UDF1[Iterator[In] => Out]]
-
-          if (combineUDF eq reduceUDF)
-            (combineUDF, combineUDF.copy().asInstanceOf[UDF1[Iterator[In] => Out]])
-          else
-            (combineUDF, reduceUDF)
-        }
       }
     }
   }

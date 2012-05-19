@@ -8,47 +8,31 @@ import eu.stratosphere.pact4s.common.operators._
 
 class WordCountDescriptor extends PactDescriptor[WordCount] {
   override val name = "Word Count"
-  override val description = "Parameters: [noSubStasks] [input] [output]"
+  override val description = "Parameters: [numSubTasks] [input] [output]"
+  override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
+
+  override def createInstance(args: Map[Int, String]) = new WordCount(args.getOrElse(1, ""), args.getOrElse(2, ""))
 }
 
-class WordCount(args: String*) extends PactProgram with WordCountGeneratedImplicits {
+class WordCount(textInput: String, wordsOutput: String) extends PactProgram with WordCountGeneratedImplicits {
 
-  val input = new DataSource(params.input, DelimetedDataSourceFormat(readLine _))
-  val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
+  val input = new DataSource(textInput, DelimetedDataSourceFormat(identity[String] _))
+  val output = new DataSink(wordsOutput, DelimetedDataSinkFormat(formatOutput.tupled))
 
   val words = input flatMap { line => line.toLowerCase().split("""\W+""") map { (_, 1) } }
-  val counts = words groupBy { case (word, _) => word } combine { values =>
-    values.reduce { (z, s) =>
-      (z, s) match {
-        case ((word, sum), (_, count)) => (word, sum + count)
-      }
-    }
+
+  val counts = words groupBy { case (word, _) => word } combine {
+    _.reduce { (z, s) => z.copy(_2 = z._2 + s._2) }
   }
 
   override def outputs = output <~ counts
-
-  override def defaultParallelism = params.numSubTasks
 
   input.hints = PactName("Input")
   output.hints = PactName("Output")
   words.hints = PactName("Words")
   counts.hints = PactName("Counts")
 
-  def params = {
-    val argMap = args.zipWithIndex.map (_.swap).toMap
-
-    new {
-      val numSubTasks = argMap.getOrElse(0, "0").toInt
-      val input = argMap.getOrElse(1, "")
-      val output = argMap.getOrElse(2, "")
-    }
-  }
-
-  def readLine(line: String): String = line
-
-  def formatOutput(wordWithCount: (String, Int)): String = wordWithCount match {
-    case (word, count) => "%s %d".format(word, count)
-  }
+  val formatOutput = (word: String, count: Int) => "%s %d".format(word, count)
 }
 
 trait WordCountGeneratedImplicits {

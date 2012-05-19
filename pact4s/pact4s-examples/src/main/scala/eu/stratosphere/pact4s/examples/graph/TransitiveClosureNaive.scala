@@ -8,68 +8,64 @@ import eu.stratosphere.pact4s.common.operators._
 
 class TransitiveClosureNaiveDescriptor extends PactDescriptor[TransitiveClosureNaive] {
   override val name = "Transitive Closure (Naive)"
-  override val description = "Parameters: [noSubStasks] [vertices] [edges] [output]"
+  override val description = "Parameters: [numSubTasks] [vertices] [edges] [output]"
+  override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
+
+  override def createInstance(args: Map[Int, String]) = new TransitiveClosureNaive(args.getOrElse(1, ""), args.getOrElse(2, ""), args.getOrElse(3, ""))
 }
 
-class TransitiveClosureNaive(args: String*) extends PactProgram with TransitiveClosureNaiveGeneratedImplicits {
+class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOutput: String) extends PactProgram with TransitiveClosureNaiveGeneratedImplicits {
 
-  val vertices = new DataSource(params.verticesInput, DelimetedDataSourceFormat(parseVertex _))
-  val edges = new DataSource(params.edgesInput, DelimetedDataSourceFormat(parseEdge _))
-  val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
+  val vertices = new DataSource(verticesInput, DelimetedDataSourceFormat(parseVertex))
+  val edges = new DataSource(edgesInput, DelimetedDataSourceFormat(parseEdge))
+  val output = new DataSink(pathsOutput, DelimetedDataSinkFormat(formatOutput))
 
-  val transitiveClosure = vertices iterate createClosure
+  //val transitiveClosure = vertices iterate createClosure
+  val transitiveClosure = createClosure iterate (s0 = vertices)
 
   override def outputs = output <~ transitiveClosure
 
-  def createClosure(paths: DataStream[Path]) = {
+  val createClosure = (paths: DataStream[Path]) => {
 
     val allNewPaths = paths.join(edges).on(getTo)(selTo).isEqualTo(getFrom)(selFrom) map joinPaths
     val shortestPaths = allNewPaths groupBy getEdge combine { _ minBy { _.dist } }
 
-    shortestPaths
+    val delta = paths cogroup shortestPaths on getEdge isEqualTo getEdge flatMap { (oldPaths, newPaths) =>
+      (oldPaths.toSeq.headOption, newPaths.next) match {
+        case (Some(Path(_, _, oldDist)), Path(_, _, newDist)) if oldDist <= newDist => None
+        case (_, p) => Some(p)
+      }
+    }
+
+    (shortestPaths, delta)
   }
 
-  def joinPaths(p1: Path, p2: Path) = (p1, p2) match {
+  val joinPaths = (p1: Path, p2: Path) => (p1, p2) match {
     case (Path(from, _, dist1), Path(_, to, dist2)) => Path(from, to, dist1 + dist2)
   }
 
-  def getEdge(p: Path): (Int, Int) = (p.from, p.to)
-  def getFrom(p: Path): Int = p.from
-  def getTo(p: Path): Int = p.to
-
-  override def defaultParallelism = params.numSubTasks
+  val getEdge = (p: Path) => (p.from, p.to)
+  val getFrom = (p: Path) => p.from
+  val getTo = (p: Path) => p.to
 
   vertices.hints = RecordSize(16)
   edges.hints = RecordSize(16)
   output.hints = RecordSize(16)
 
-  def params = {
-    val argMap = args.zipWithIndex.map (_.swap).toMap
-
-    new {
-      val numSubTasks = argMap.getOrElse(0, "0").toInt
-      val verticesInput = argMap.getOrElse(1, "")
-      val edgesInput = argMap.getOrElse(2, "")
-      val output = argMap.getOrElse(3, "")
-    }
-  }
-
   case class Path(from: Int, to: Int, dist: Int)
 
-  def parseVertex(line: String): Path = {
+  val parseVertex = (line: String) => {
     val v = line.toInt
     Path(v, v, 0)
   }
 
   val EdgeInputPattern = """(\d+)\|(\d+)\|""".r
 
-  def parseEdge(line: String): Path = line match {
+  val parseEdge = (line: String) => line match {
     case EdgeInputPattern(from, to) => Path(from.toInt, to.toInt, 1)
   }
 
-  def formatOutput(path: Path): String = path match {
-    case Path(from, to, dist) => "%d|%d|%d".format(from, to, dist)
-  }
+  val formatOutput = (path: Path) => "%d|%d|%d".format(path.from, path.to, path.dist)
 }
 
 trait TransitiveClosureNaiveGeneratedImplicits { this: TransitiveClosureNaive =>
@@ -149,6 +145,7 @@ trait TransitiveClosureNaiveGeneratedImplicits { this: TransitiveClosureNaive =>
 
   implicit val udf1: UDF1[Function1[Iterator[Path], Path]] = defaultUDF1IterT[Path, Path]
   implicit val udf2: UDF2[Function2[Path, Path, Path]] = defaultUDF2[Path, Path, Path]
+  implicit val udf3: UDF2[Function2[Iterator[Path], Iterator[Path], Iterator[Path]]] = defaultUDF2IterTR[Path, Path, Path]
 
   implicit val selOutput: FieldSelector[Function1[Path, Unit]] = defaultFieldSelectorT[Path, Unit]
   implicit val selEdge: FieldSelector[Function1[Path, (Int, Int)]] = getFieldSelector[Path, (Int, Int)](0, 1)

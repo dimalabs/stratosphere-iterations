@@ -7,25 +7,31 @@ import eu.stratosphere.pact4s.common.operators._
 
 class BatchGradientDescentDescriptor[T <: BatchGradientDescent: Manifest] extends PactDescriptor[T] {
   override val name = "Batch Gradient Descent"
-  override val description = "Parameters: [noSubStasks] [eps] [eta] [lambda] [examples] [weights] [output]"
+  override val description = "Parameters: [numSubTasks] [eps] [eta] [lambda] [examples] [weights] [output]"
+  override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
 }
 
-abstract class BatchGradientDescent(args: String*) extends PactProgram with BatchGradientDescentGeneratedImplicits {
+abstract class BatchGradientDescent(eps: Double, eta: Double, lambda: Double, examplesInput: String, weightsInput: String, weightsOutput: String) extends PactProgram with BatchGradientDescentGeneratedImplicits {
 
-  def computeGradient(ex: Array[Double], w: Array[Double]): (Double, Array[Double])
+  def computeGradient(example: Array[Double], weight: Array[Double]): (Double, Array[Double])
 
-  val examples = new DataSource(params.examples, DelimetedDataSourceFormat(readVector _))
-  val weights = new DataSource(params.weights, DelimetedDataSourceFormat(readVector _))
-  val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
+  val examples = new DataSource(examplesInput, DelimetedDataSourceFormat(readVector))
+  val weights = new DataSource(weightsInput, DelimetedDataSourceFormat(readVector))
+  val output = new DataSink(weightsOutput, DelimetedDataSinkFormat(formatOutput.tupled))
 
-  val etaWeights = weights map { case (id, w) => (id, w, params.eta) }
-  val newWeights = weights keyBy { _._1 } untilEmpty etaWeights iterate gradientDescent
+  //val etaWeights = weights map { case (id, w) => (id, w, params.eta) }
+  //val newWeights = weights distinctBy { _._1 } untilEmpty etaWeights iterate gradientDescent
+
+  val newWeights = gradientDescent iterate (
+    s0 = weights distinctBy { _._1 },
+    ws0 = weights map { case (id, w) => (id, w, eta) }
+  )
 
   override def outputs = output <~ newWeights
 
-  def gradientDescent(s: DataStream[(Int, Array[Double])], ws: DataStream[(Int, Array[Double], Double)]) = {
+  val gradientDescent = (s: DataStream[(Int, Array[Double])], ws: DataStream[(Int, Array[Double], Double)]) => {
 
-    val lossesAndGradients = ws cross examples map { case ((id, w, _), (_, ex)) => ValueAndGradient(id, computeGradient(ex, w)) }
+    val lossesAndGradients = ws cross examples map { case ((id, w, _), (_, ex)) => new ValueAndGradient(id, computeGradient(ex, w)) }
     val lossAndGradientSums = lossesAndGradients groupBy { _.id } combine { _.reduce (_ + _) }
     val newWeights = ws join lossAndGradientSums on { _._1 } isEqualTo { _.id } map updateWeight
 
@@ -33,34 +39,18 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
     val s1 = newWeights map { case (wId, _, wNew, _) => (wId, wNew) }
 
     // new workset
-    val ws1 = newWeights filter { case (_, delta, _, _) => delta > params.eps } map { case (wId, _, wNew, etaNew) => (wId, wNew, etaNew) }
+    val ws1 = newWeights filter { case (_, delta, _, _) => delta > eps } map { case (wId, _, wNew, etaNew) => (wId, wNew, etaNew) }
 
     (s1, ws1)
   }
 
-  def updateWeight(prev: (Int, Array[Double], Double), vg: ValueAndGradient) = {
+  val updateWeight = (prev: (Int, Array[Double], Double), vg: ValueAndGradient) => {
     val (id, wOld, eta) = prev
     val ValueAndGradient(_, lossSum, gradSum) = vg
 
-    val delta = lossSum + params.lambda * wOld.norm
-    val wNew = (wOld + (gradSum * params.eta)) * (1 - eta * params.lambda)
+    val delta = lossSum + lambda * wOld.norm
+    val wNew = (wOld + (gradSum * eta)) * (1 - eta * lambda)
     (id, delta, wNew, eta * 0.9)
-  }
-
-  override def defaultParallelism = params.numSubTasks
-
-  def params = {
-    val argMap = args.zipWithIndex.map (_.swap).toMap
-
-    new {
-      val numSubTasks = argMap.getOrElse(0, "0").toInt
-      val eps = argMap.getOrElse(1, "0").toDouble
-      val eta = argMap.getOrElse(2, "0").toDouble
-      val lambda = argMap.getOrElse(3, "0").toDouble
-      val examples = argMap.getOrElse(4, "")
-      val weights = argMap.getOrElse(5, "")
-      val output = argMap.getOrElse(6, "")
-    }
   }
 
   class WeightVector(vector: Array[Double]) {
@@ -73,14 +63,11 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
   implicit def array2WeightVector(vector: Array[Double]): WeightVector = new WeightVector(vector)
 
   case class ValueAndGradient(id: Int, value: Double, gradient: Array[Double]) {
+    def this(id: Int, vg: (Double, Array[Double])) = this(id, vg._1, vg._2)
     def +(that: ValueAndGradient) = ValueAndGradient(id, value + that.value, gradient + that.gradient)
   }
 
-  object ValueAndGradient {
-    def apply(id: Int, vg: (Double, Array[Double])) = new ValueAndGradient(id, vg._1, vg._2)
-  }
-
-  def readVector(line: String): (Int, Array[Double]) = {
+  val readVector = (line: String) => {
 
     val items = line.split(',')
     val id = items(0).toInt
@@ -89,9 +76,7 @@ abstract class BatchGradientDescent(args: String*) extends PactProgram with Batc
     id -> vector
   }
 
-  def formatOutput(value: (Int, Array[Double])) = value match {
-    case (id, vector) => "%s,%s".format(id, vector.mkString(","))
-  }
+  val formatOutput = (id: Int, vector: Array[Double]) => "%s,%s".format(id, vector.mkString(","))
 }
 
 trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>

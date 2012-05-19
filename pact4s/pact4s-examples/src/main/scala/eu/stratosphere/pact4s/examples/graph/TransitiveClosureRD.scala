@@ -11,20 +11,24 @@ import eu.stratosphere.pact4s.common.operators._
  */
 class TransitiveClosureRDDescriptor extends PactDescriptor[TransitiveClosureRD] {
   override val name = "Transitive Closure with Recursive Doubling"
-  override val description = "Parameters: [noSubStasks] [vertices] [edges] [output]"
+  override val description = "Parameters: [numSubTasks] [vertices] [edges] [output]"
+  override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
+
+  override def createInstance(args: Map[Int, String]) = new TransitiveClosureRD(args.getOrElse(1, ""), args.getOrElse(2, ""), args.getOrElse(3, ""))
 }
 
-class TransitiveClosureRD(args: String*) extends PactProgram with TransitiveClosureRDGeneratedImplicits {
+class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput: String) extends PactProgram with TransitiveClosureRDGeneratedImplicits {
 
-  val vertices = new DataSource(params.verticesInput, DelimetedDataSourceFormat(parseVertex _))
-  val edges = new DataSource(params.edgesInput, DelimetedDataSourceFormat(parseEdge _))
-  val output = new DataSink(params.output, DelimetedDataSinkFormat(formatOutput _))
+  val vertices = new DataSource(verticesInput, DelimetedDataSourceFormat(parseVertex))
+  val edges = new DataSource(edgesInput, DelimetedDataSourceFormat(parseEdge))
+  val output = new DataSink(pathsOutput, DelimetedDataSinkFormat(formatOutput))
 
-  val transitiveClosure = vertices keyBy getEdge untilEmpty edges iterate createClosure
+  //val transitiveClosure = vertices distinctBy getEdge untilEmpty edges iterate createClosure
+  val transitiveClosure = createClosure iterate (s0 = vertices distinctBy getEdge, ws0 = edges)
 
   override def outputs = output <~ transitiveClosure
 
-  def createClosure(c: DataStream[Path], x: DataStream[Path]) = {
+  val createClosure = (c: DataStream[Path], x: DataStream[Path]) => {
 
     val cNewPaths = x.join(c).on(getTo)(selTo).isEqualTo(getFrom)(selFrom) map joinPaths
     val c1 = cNewPaths cogroup cNewPaths on getEdge isEqualTo getEdge map selectShortestDistance
@@ -35,56 +39,41 @@ class TransitiveClosureRD(args: String*) extends PactProgram with TransitiveClos
     (c1, x1)
   }
 
-  def joinPaths(p1: Path, p2: Path) = (p1, p2) match {
-    case (Path(from, _, dist1), Path(_, to, dist2)) => Path(from, to, dist1 + dist2)
-  }
+  val selectShortestDistance = (dist1: Iterator[Path], dist2: Iterator[Path]) => (dist1 ++ dist2) minBy { _.dist }
 
-  def selectShortestDistance(dist1: Iterator[Path], dist2: Iterator[Path]) = (dist1 ++ dist2) minBy { _.dist }
-
-  def excludeKnownPaths(x: Iterator[Path], c: Iterator[Path]) = {
+  val excludeKnownPaths = (x: Iterator[Path], c: Iterator[Path]) => {
     if (c.isEmpty)
       x
     else
-      Iterable.empty
+      Iterator.empty
   }
 
-  def getEdge(p: Path): (Int, Int) = (p.from, p.to)
-  def getFrom(p: Path): Int = p.from
-  def getTo(p: Path): Int = p.to
+  val joinPaths = (p1: Path, p2: Path) => (p1, p2) match {
+    case (Path(from, _, dist1), Path(_, to, dist2)) => Path(from, to, dist1 + dist2)
+  }
 
-  override def defaultParallelism = params.numSubTasks
+  val getEdge = (p: Path) => (p.from, p.to)
+  val getFrom = (p: Path) => p.from
+  val getTo = (p: Path) => p.to
 
   vertices.hints = RecordSize(16)
   edges.hints = RecordSize(16)
   output.hints = RecordSize(16)
 
-  def params = {
-    val argMap = args.zipWithIndex.map (_.swap).toMap
-
-    new {
-      val numSubTasks = argMap.getOrElse(0, "0").toInt
-      val verticesInput = argMap.getOrElse(1, "")
-      val edgesInput = argMap.getOrElse(2, "")
-      val output = argMap.getOrElse(3, "")
-    }
-  }
-
   case class Path(from: Int, to: Int, dist: Int)
 
-  def parseVertex(line: String): Path = {
+  val parseVertex = (line: String) => {
     val v = line.toInt
     Path(v, v, 0)
   }
 
   val EdgeInputPattern = """(\d+)\|(\d+)\|""".r
 
-  def parseEdge(line: String): Path = line match {
+  val parseEdge = (line: String) => line match {
     case EdgeInputPattern(from, to) => Path(from.toInt, to.toInt, 1)
   }
 
-  def formatOutput(path: Path): String = path match {
-    case Path(from, to, dist) => "%d|%d|%d".format(from, to, dist)
-  }
+  val formatOutput = (path: Path) => "%d|%d|%d".format(path.from, path.to, path.dist)
 }
 
 trait TransitiveClosureRDGeneratedImplicits { this: TransitiveClosureRD =>
