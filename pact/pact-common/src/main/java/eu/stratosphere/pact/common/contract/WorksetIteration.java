@@ -2,20 +2,43 @@ package eu.stratosphere.pact.common.contract;
 
 import eu.stratosphere.pact.common.plan.Visitor;
 
-
 /**
- *
- *
  * @author Stephan Ewen
  */
 public class WorksetIteration extends Contract
 {
-	
-	
-	public WorksetIteration() {
-		super("blah");
+	private class PlaceholderContract extends Contract {
+
+		protected PlaceholderContract() {
+			super("Placeholder");
+		}
+
+		@Override
+		public void accept(Visitor<Contract> visitor) {
+		}
+
+		@Override
+		public Class<?> getUserCodeClass() {
+			return null;
+		}
 	}
-	
+
+	private final Contract partialSolutionPlaceholder = new PlaceholderContract();
+
+	private final Contract worksetPlaceholder = new PlaceholderContract();
+
+	private Contract initialPartialSolution = null;
+
+	private Contract initialWorkset = null;
+
+	private Contract partialSolutionDelta = null;
+
+	private Contract nextWorkset = null;
+
+	public WorksetIteration() {
+		super("WorksetIteration");
+	}
+
 	/**
 	 * @param name
 	 */
@@ -23,39 +46,62 @@ public class WorksetIteration extends Contract
 		super(name);
 	}
 
-
-	public void setInitialWorkset(Contract input)
-	{}
-	
-	public void setInitialPartialSolution(Contract input)
-	{}
-	
-	public void setNextWorkset(Contract result)
-	{}
-	
-	public void setPartialSolutionDelta(Contract result)
-	{}
-	
-	
 	public Contract getPartialSolution()
 	{
-		return null;
+		return this.partialSolutionPlaceholder;
 	}
-	
+
 	public Contract getWorkset()
 	{
-		return null;
+		return this.worksetPlaceholder;
 	}
-	
-	
-	/* (non-Javadoc)
+
+	public Contract getInitialPartialSolution() {
+		return this.initialPartialSolution;
+	}
+
+	public void setInitialPartialSolution(Contract input)
+	{
+		this.initialPartialSolution = input;
+	}
+
+	public Contract getPartialSolutionDelta() {
+		return this.partialSolutionDelta;
+	}
+
+	public void setPartialSolutionDelta(Contract result)
+	{
+		this.partialSolutionDelta = result;
+	}
+
+	public Contract getInitialWorkset() {
+		return this.initialWorkset;
+	}
+
+	public void setInitialWorkset(Contract input)
+	{
+		this.initialWorkset = input;
+	}
+
+	public Contract getNextWorkset() {
+		return this.nextWorkset;
+	}
+
+	public void setNextWorkset(Contract result)
+	{
+		this.nextWorkset = result;
+	}
+
+	/*
+	 * (non-Javadoc)
 	 * @see eu.stratosphere.pact.common.plan.Visitable#accept(eu.stratosphere.pact.common.plan.Visitor)
 	 */
 	@Override
 	public void accept(Visitor<Contract> visitor) {
 	}
 
-	/* (non-Javadoc)
+	/*
+	 * (non-Javadoc)
 	 * @see eu.stratosphere.pact.common.contract.Contract#getUserCodeClass()
 	 */
 	@Override
