@@ -28,7 +28,7 @@ class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput
 
   override def outputs = output <~ transitiveClosure
 
-  val createClosure = (c: DataStream[Path], x: DataStream[Path]) => {
+  def createClosure = (c: DataStream[Path], x: DataStream[Path]) => {
 
     val cNewPaths = x.join(c).on(getTo)(selTo).isEqualTo(getFrom)(selFrom) map joinPaths
     val c1 = cNewPaths cogroup cNewPaths on getEdge isEqualTo getEdge map selectShortestDistance
@@ -39,22 +39,22 @@ class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput
     (c1, x1)
   }
 
-  val selectShortestDistance = (dist1: Iterator[Path], dist2: Iterator[Path]) => (dist1 ++ dist2) minBy { _.dist }
+  def selectShortestDistance = (dist1: Iterator[Path], dist2: Iterator[Path]) => (dist1 ++ dist2) minBy { _.dist }
 
-  val excludeKnownPaths = (x: Iterator[Path], c: Iterator[Path]) => {
+  def excludeKnownPaths = (x: Iterator[Path], c: Iterator[Path]) => {
     if (c.isEmpty)
       x
     else
       Iterator.empty
   }
 
-  val joinPaths = (p1: Path, p2: Path) => (p1, p2) match {
+  def joinPaths = (p1: Path, p2: Path) => (p1, p2) match {
     case (Path(from, _, dist1), Path(_, to, dist2)) => Path(from, to, dist1 + dist2)
   }
 
-  val getEdge = (p: Path) => (p.from, p.to)
-  val getFrom = (p: Path) => p.from
-  val getTo = (p: Path) => p.to
+  def getEdge = (p: Path) => (p.from, p.to)
+  def getFrom = (p: Path) => p.from
+  def getTo = (p: Path) => p.to
 
   vertices.hints = RecordSize(16)
   edges.hints = RecordSize(16)
@@ -62,18 +62,18 @@ class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput
 
   case class Path(from: Int, to: Int, dist: Int)
 
-  val parseVertex = (line: String) => {
+  def parseVertex = (line: String) => {
     val v = line.toInt
     Path(v, v, 0)
   }
 
   val EdgeInputPattern = """(\d+)\|(\d+)\|""".r
 
-  val parseEdge = (line: String) => line match {
+  def parseEdge = (line: String) => line match {
     case EdgeInputPattern(from, to) => Path(from.toInt, to.toInt, 1)
   }
 
-  val formatOutput = (path: Path) => "%d|%d|%d".format(path.from, path.to, path.dist)
+  def formatOutput = (path: Path) => "%d|%d|%d".format(path.from, path.to, path.dist)
 }
 
 trait TransitiveClosureRDGeneratedImplicits { this: TransitiveClosureRD =>
@@ -151,12 +151,12 @@ trait TransitiveClosureRDGeneratedImplicits { this: TransitiveClosureRD =>
     }
   }
 
-  implicit val udf1: UDF2[Function2[Path, Path, Path]] = defaultUDF2[Path, Path, Path]
-  implicit val udf2: UDF2[Function2[Iterator[Path], Iterator[Path], Path]] = defaultUDF2IterT[Path, Path, Path]
-  implicit val udf3: UDF2[Function2[Iterator[Path], Iterator[Path], Iterator[Path]]] = defaultUDF2IterTR[Path, Path, Path]
+  implicit def udf1: UDF2[Function2[Path, Path, Path]] = defaultUDF2[Path, Path, Path]
+  implicit def udf2: UDF2[Function2[Iterator[Path], Iterator[Path], Path]] = defaultUDF2IterT[Path, Path, Path]
+  implicit def udf3: UDF2[Function2[Iterator[Path], Iterator[Path], Iterator[Path]]] = defaultUDF2IterTR[Path, Path, Path]
 
-  implicit val selOutput: FieldSelector[Function1[Path, Unit]] = defaultFieldSelectorT[Path, Unit]
-  implicit val selEdge: FieldSelector[Function1[Path, (Int, Int)]] = getFieldSelector[Path, (Int, Int)](0, 1)
-  val selFrom: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](0)
-  val selTo: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](1)
+  implicit def selOutput: FieldSelector[Function1[Path, Unit]] = defaultFieldSelectorT[Path, Unit]
+  implicit def selEdge: FieldSelector[Function1[Path, (Int, Int)]] = getFieldSelector[Path, (Int, Int)](0, 1)
+  def selFrom: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](0)
+  def selTo: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](1)
 }

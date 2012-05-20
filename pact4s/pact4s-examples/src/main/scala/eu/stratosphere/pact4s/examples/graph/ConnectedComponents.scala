@@ -26,7 +26,7 @@ class ConnectedComponents(verticesInput: String, edgesInput: String, componentsO
 
   override def outputs = output <~ components
 
-  val propagateComponent = (s: DataStream[(Int, Int)], ws: DataStream[(Int, Int)]) => {
+  def propagateComponent = (s: DataStream[(Int, Int)], ws: DataStream[(Int, Int)]) => {
 
     val allNeighbors = ws join undirectedEdges on { case (v, _) => v } isEqualTo { case (from, _) => from } map { case ((_, c), (_, to)) => to -> c }
     val minNeighbors = allNeighbors groupBy { case (to, _) => to } combine { cs => cs minBy { _._2 } }
@@ -45,18 +45,18 @@ class ConnectedComponents(verticesInput: String, edgesInput: String, componentsO
   undirectedEdges.hints = RecordSize(8) +: RecordsEmitted(2.0f)
   output.hints = RecordSize(8)
 
-  val parseVertex = (line: String) => {
+  def parseVertex = (line: String) => {
     val v = line.toInt
     v -> v
   }
 
   val EdgeInputPattern = """(\d+)\|(\d+)\|""".r
 
-  val parseEdge = (line: String) => line match {
+  def parseEdge = (line: String) => line match {
     case EdgeInputPattern(from, to) => from.toInt -> to.toInt
   }
 
-  val formatOutput = (vertex: Int, component: Int) => "%d|%d".format(vertex, component)
+  def formatOutput = (vertex: Int, component: Int) => "%d|%d".format(vertex, component)
 }
 
 trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>
@@ -119,11 +119,11 @@ trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>
     }
   }
 
-  implicit val udf1: UDF1[Function1[(Int, Int), Iterator[(Int, Int)]]] = defaultUDF1IterR[(Int, Int), (Int, Int)]
-  implicit val udf2: UDF1[Function1[Iterator[(Int, Int)], (Int, Int)]] = defaultUDF1IterT[(Int, Int), (Int, Int)]
-  implicit val udf3: UDF2[Function2[(Int, Int), (Int, Int), (Int, Int)]] = defaultUDF2[(Int, Int), (Int, Int), (Int, Int)]
-  implicit val udf4: UDF2[Function2[(Int, Int), (Int, Int), Iterator[(Int, Int)]]] = defaultUDF2IterR[(Int, Int), (Int, Int), (Int, Int)]
+  implicit def udf1: UDF1[Function1[(Int, Int), Iterator[(Int, Int)]]] = defaultUDF1IterR[(Int, Int), (Int, Int)]
+  implicit def udf2: UDF1[Function1[Iterator[(Int, Int)], (Int, Int)]] = defaultUDF1IterT[(Int, Int), (Int, Int)]
+  implicit def udf3: UDF2[Function2[(Int, Int), (Int, Int), (Int, Int)]] = defaultUDF2[(Int, Int), (Int, Int), (Int, Int)]
+  implicit def udf4: UDF2[Function2[(Int, Int), (Int, Int), Iterator[(Int, Int)]]] = defaultUDF2IterR[(Int, Int), (Int, Int), (Int, Int)]
 
-  implicit val selOutput: FieldSelector[Function1[(Int, Int), Unit]] = defaultFieldSelectorT[(Int, Int), Unit]
-  implicit val selFirst: FieldSelector[Function1[(Int, Int), Int]] = getFieldSelector[(Int, Int), Int](0)
+  implicit def selOutput: FieldSelector[Function1[(Int, Int), Unit]] = defaultFieldSelectorT[(Int, Int), Unit]
+  implicit def selFirst: FieldSelector[Function1[(Int, Int), Int]] = getFieldSelector[(Int, Int), Int](0)
 }

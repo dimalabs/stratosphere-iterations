@@ -12,7 +12,6 @@ trait UDF extends Serializable {
 
   def isGlobalized: Boolean
   def getWriteFields: Array[Int]
-  def getOutputLocation: Int
   def getOutputFields: Map[Int, Int]
 
   def relocateInputField(oldPosition: Int, newPosition: Int)
@@ -29,8 +28,14 @@ trait UDF1[+F <: _ => _] extends UDF {
   def markInputFieldUnread(inputFieldNum: Int)
   def markInputFieldCopied(fromInputFieldNum: Int, toOutputFieldNum: Int)
 
-  def globalize(inputLocations: Map[Int, Int], outputLocation: Int): Int
-  def globalizeInPlace(inputLocations: Map[Int, Int])
+  protected def globalize(inputLocations: Map[Int, Int], outputLocation: Int): Int
+  protected def globalize(inputLocations: Map[Int, Int], outputLocations: Map[Int, Int])
+
+  def globalize(inputLocations: Map[Int, Int], freePos: Int, outputLocations: Option[Map[Int, Int]]): Int = outputLocations match {
+    case Some(outputLocations) => { globalize(inputLocations, outputLocations); freePos }
+    case None                  => globalize(inputLocations, freePos)
+  }
+
   def setAmbientFieldBehavior(position: Int, behavior: AmbientFieldBehavior)
 }
 
@@ -54,7 +59,14 @@ trait UDF2[+F <: (_, _) => _] extends UDF {
   def markInputFieldUnread(inputFieldNum: Either[Int, Int])
   def markInputFieldCopied(fromInputFieldNum: Either[Int, Int], toOutputFieldNum: Int)
 
-  def globalize(leftInputLocations: Map[Int, Int], rightInputLocations: Map[Int, Int], outputLocation: Int): Int
+  protected def globalize(leftInputLocations: Map[Int, Int], rightInputLocations: Map[Int, Int], outputLocation: Int): Int
+  protected def globalize(leftInputLocations: Map[Int, Int], rightInputLocations: Map[Int, Int], outputLocations: Map[Int, Int])
+
+  def globalize(leftInputLocations: Map[Int, Int], rightInputLocations: Map[Int, Int], freePos: Int, outputLocations: Option[Map[Int, Int]]): Int = outputLocations match {
+    case Some(outputLocations) => { globalize(leftInputLocations, rightInputLocations, outputLocations); freePos }
+    case None                  => globalize(leftInputLocations, rightInputLocations, freePos)
+  }
+
   def setAmbientFieldBehavior(position: Either[Int, Int], behavior: AmbientFieldBehavior)
 }
 

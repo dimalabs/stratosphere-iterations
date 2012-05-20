@@ -10,7 +10,7 @@ class KMeansDescriptor extends PactDescriptor[KMeans] {
   override val description = "Parameters: [numSubTasks] [numIterations] [dataPoints] [clusterCenters] [output]"
   override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
 
-  override def createInstance(args: Map[Int, String]) = new KMeans(args.getOrElse(1, "1").toInt, args.getOrElse(2, ""), args.getOrElse(3, ""), args.getOrElse(4, ""))
+  override def createInstance(args: Map[Int, String]) = new KMeans(args.getOrElse(1, "2").toInt, args.getOrElse(2, "dataPoints"), args.getOrElse(3, "clusterCenters"), args.getOrElse(4, "output"))
 }
 
 class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, clusterOutput: String) extends PactProgram with KMeansGeneratedImplicits {
@@ -24,7 +24,7 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
 
   override def outputs = newClusterPoints <~ newCenters
 
-  val computeNewCenters = (centers: DataStream[(Int, Point)]) => {
+  def computeNewCenters = (centers: DataStream[(Int, Point)]) => {
 
     val distances = dataPoints cross centers map computeDistance
     val nearestCenters = distances groupBy { case (pid, _) => pid } combine { ds => ds.minBy(_._2.distance) } map asPointSum.tupled
@@ -37,16 +37,16 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
     newCenters
   }
 
-  val computeDistance = (p: (Int, Point), c: (Int, Point)) => {
+  def computeDistance = (p: (Int, Point), c: (Int, Point)) => {
     val ((pid, dataPoint), (cid, clusterPoint)) = (p, c)
     val distToCluster = dataPoint.computeEuclidianDistance(clusterPoint)
 
     pid -> Distance(dataPoint, cid, distToCluster)
   }
 
-  val asPointSum = (pid: Int, dist: Distance) => dist.clusterId -> PointSum(1, dist.dataPoint)
+  def asPointSum = (pid: Int, dist: Distance) => dist.clusterId -> PointSum(1, dist.dataPoint)
 
-  val sumPointSums = (dataPoints: Iterator[(Int, PointSum)]) => dataPoints.reduce { (z, v) => z.copy(_2 = z._2 + v._2) }
+  def sumPointSums = (dataPoints: Iterator[(Int, PointSum)]) => dataPoints.reduce { (z, v) => z.copy(_2 = z._2 + v._2) }
 
   dataPoints.hints = PactName("Data Points")
   clusterPoints.hints = Degree(1) +: PactName("Cluster Points")
@@ -54,11 +54,11 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
 
   val PointInputPattern = """(\d+)\|(\d+\.\d+)\|(\d+\.\d+)\|""".r
 
-  val parseInput = (line: String) => line match {
+  def parseInput = (line: String) => line match {
     case PointInputPattern(id, x, y) => id.toInt -> Point(x.toDouble, y.toDouble)
   }
 
-  val formatOutput = (cid: Int, p: Point) => "%d|%.2f|%.2f|".format(cid, p.x, p.y)
+  def formatOutput = (cid: Int, p: Point) => "%d|%.2f|%.2f|".format(cid, p.x, p.y)
 
   case class Point(x: Double, y: Double) {
     def computeEuclidianDistance(other: Point) = other match {
@@ -73,7 +73,12 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
       case PointSum(c, Point(x, y)) => PointSum(count + c, Point(x + pointSum.x, y + pointSum.y))
     }
 
-    def toPoint() = Point(pointSum.x / count, pointSum.y / count)
+    def toPoint() = Point(round(pointSum.x / count), round(pointSum.y / count))
+
+    // Rounding ensures that we get the same results in a multi-iteration run
+    // as we do in successive single-iteration runs, since the output format
+    // only contains two decimal places.
+    private def round(d: Double) = math.round(d * 100.0) / 100.0;
   }
 }
 
@@ -88,7 +93,7 @@ trait KMeansGeneratedImplicits { this: KMeans =>
 
   implicit val intPointSerializer: UDT[(Int, Point)] = new UDT[(Int, Point)] {
 
-    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactDouble], classOf[PactDouble], classOf[PactDouble])
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactDouble], classOf[PactDouble])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Point)] {
 
@@ -153,7 +158,7 @@ trait KMeansGeneratedImplicits { this: KMeans =>
 
   implicit val intDistanceSerializer: UDT[(Int, Distance)] = new UDT[(Int, Distance)] {
 
-    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactDouble], classOf[PactDouble], classOf[PactDouble], classOf[PactInteger], classOf[PactDouble])
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactDouble], classOf[PactDouble], classOf[PactInteger], classOf[PactDouble])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, Distance)] {
 
@@ -246,7 +251,7 @@ trait KMeansGeneratedImplicits { this: KMeans =>
 
   implicit val intPointSumSerializer: UDT[(Int, PointSum)] = new UDT[(Int, PointSum)] {
 
-    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactDouble], classOf[PactDouble], classOf[PactDouble])
+    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactDouble], classOf[PactDouble])
 
     override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[(Int, PointSum)] {
 
@@ -323,13 +328,13 @@ trait KMeansGeneratedImplicits { this: KMeans =>
     }
   }
 
-  implicit val udf1: UDF1[Function1[Iterator[(Int, Distance)], (Int, Distance)]] = defaultUDF1IterT[(Int, Distance), (Int, Distance)]
-  implicit val udf2: UDF1[Function1[(Int, Distance), (Int, PointSum)]] = defaultUDF1[(Int, Distance), (Int, PointSum)]
-  implicit val udf3: UDF1[Function1[Iterator[(Int, PointSum)], (Int, PointSum)]] = defaultUDF1IterT[(Int, PointSum), (Int, PointSum)]
-  implicit val udf4: UDF1[Function1[(Int, PointSum), (Int, Point)]] = defaultUDF1[(Int, PointSum), (Int, Point)]
-  implicit val udf5: UDF2[Function2[(Int, Point), (Int, Point), (Int, Distance)]] = defaultUDF2[(Int, Point), (Int, Point), (Int, Distance)]
+  implicit def udf1: UDF1[Function1[Iterator[(Int, Distance)], (Int, Distance)]] = defaultUDF1IterT[(Int, Distance), (Int, Distance)]
+  implicit def udf2: UDF1[Function1[(Int, Distance), (Int, PointSum)]] = defaultUDF1[(Int, Distance), (Int, PointSum)]
+  implicit def udf3: UDF1[Function1[Iterator[(Int, PointSum)], (Int, PointSum)]] = defaultUDF1IterT[(Int, PointSum), (Int, PointSum)]
+  implicit def udf4: UDF1[Function1[(Int, PointSum), (Int, Point)]] = defaultUDF1[(Int, PointSum), (Int, Point)]
+  implicit def udf5: UDF2[Function2[(Int, Point), (Int, Point), (Int, Distance)]] = defaultUDF2[(Int, Point), (Int, Point), (Int, Distance)]
 
-  implicit val selNewClusterPoints: FieldSelector[Function1[(Int, Point), Unit]] = defaultFieldSelectorT[(Int, Point), Unit]
-  implicit val selNearestCenters: FieldSelector[Function1[(Int, Distance), Int]] = getFieldSelector[(Int, Distance), Int](0)
-  implicit val selNewCenters: FieldSelector[Function1[(Int, PointSum), Int]] = getFieldSelector[(Int, PointSum), Int](0)
+  implicit def selNewClusterPoints: FieldSelector[Function1[(Int, Point), Unit]] = defaultFieldSelectorT[(Int, Point), Unit]
+  implicit def selNearestCenters: FieldSelector[Function1[(Int, Distance), Int]] = getFieldSelector[(Int, Distance), Int](0)
+  implicit def selNewCenters: FieldSelector[Function1[(Int, PointSum), Int]] = getFieldSelector[(Int, PointSum), Int](0)
 }

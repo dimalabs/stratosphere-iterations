@@ -58,15 +58,15 @@ class TPCHQuery3(ordersInput: String, lineItemsInput: String, ordersOutput: Stri
   val OrderInputPattern = """(\d+)\|[^\|]+\|([^\|])\|[^\|]+\|(\d\d\d\d)-(\d\d)-(\d\d)\|([^\|]+)\|[^\|]+\|(\d+)\|[^\|]+\|""".r
   val LineItemInputPattern = """(\d+)\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|(\d+\.\d\d)\|[^\|]+\|[^\|]+\|[^\|]\|[^\|]\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|""".r
 
-  val parseOrder = (line: String) => line match {
+  def parseOrder = (line: String) => line match {
     case OrderInputPattern(orderId, status, year, month, day, oPr, sPr) => Order(orderId.toInt, status(0), year.toInt, month.toInt, day.toInt, oPr, sPr.toInt)
   }
 
-  val parseLineItem = (line: String) => line match {
+  def parseLineItem = (line: String) => line match {
     case LineItemInputPattern(orderId, price) => LineItem(orderId.toInt, price.toDouble)
   }
 
-  val formatOutput = (item: PrioritizedOrder) => "%d|%d|%.2f".format(item.orderId, item.shipPriority, item.revenue)
+  def formatOutput = (item: PrioritizedOrder) => "%d|%d|%.2f".format(item.orderId, item.shipPriority, item.revenue)
 }
 
 trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
@@ -315,12 +315,12 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
     }
   }
 
-  implicit val udf1: UDF1[Function1[Iterator[PrioritizedOrder], PrioritizedOrder]] = defaultUDF1IterT[PrioritizedOrder, PrioritizedOrder]
-  implicit val udf2: UDF2[Function2[Order, LineItem, PrioritizedOrder]] = defaultUDF2[Order, LineItem, PrioritizedOrder]
-  implicit val udf3: FieldSelector[Function1[Order, Boolean]] = defaultFieldSelectorT[Order, Boolean]
+  implicit def udf1: UDF1[Function1[Iterator[PrioritizedOrder], PrioritizedOrder]] = defaultUDF1IterT[PrioritizedOrder, PrioritizedOrder]
+  implicit def udf2: UDF2[Function2[Order, LineItem, PrioritizedOrder]] = defaultUDF2[Order, LineItem, PrioritizedOrder]
+  implicit def udf3: FieldSelector[Function1[Order, Boolean]] = defaultFieldSelectorT[Order, Boolean]
 
-  implicit val selOutput: FieldSelector[Function1[PrioritizedOrder, Unit]] = defaultFieldSelectorT[PrioritizedOrder, Unit]
-  implicit val selPrioritizedItemsLeft: FieldSelector[Function1[Order, Int]] = getFieldSelector[Order, Int](0)
-  implicit val selPrioritizedItemsRight: FieldSelector[Function1[LineItem, Int]] = getFieldSelector[LineItem, Int](0)
-  implicit val selPrioritizedOrders: FieldSelector[Function1[PrioritizedOrder, (Int, Int)]] = getFieldSelector[PrioritizedOrder, (Int, Int)](0, 1)
+  implicit def selOutput: FieldSelector[Function1[PrioritizedOrder, Unit]] = defaultFieldSelectorT[PrioritizedOrder, Unit]
+  implicit def selPrioritizedItemsLeft: FieldSelector[Function1[Order, Int]] = getFieldSelector[Order, Int](0)
+  implicit def selPrioritizedItemsRight: FieldSelector[Function1[LineItem, Int]] = getFieldSelector[LineItem, Int](0)
+  implicit def selPrioritizedOrders: FieldSelector[Function1[PrioritizedOrder, (Int, Int)]] = getFieldSelector[PrioritizedOrder, (Int, Int)](0, 1)
 }

@@ -9,11 +9,14 @@ import eu.stratosphere.pact.common.contract._
 
 class RepeatOperator[SolutionItem: UDT](stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]) extends Serializable {
 
+  def ^(numIterations: Int): DataStream[SolutionItem] => DataStream[SolutionItem] = Function.chain(List.fill(numIterations)(stepFunction))
+
+  /*
   def ^(numIterations: Int): DataStream[SolutionItem] => DataStream[SolutionItem] = (initialSolution: DataStream[SolutionItem]) => new DataStream[SolutionItem] {
 
     override def createContract = {
 
-      val contract = new Iteration with Iteration4sContract[SolutionItem]
+      val contract = new Iteration with Iterate4sContract[SolutionItem]
 
       val solutionInput = new DataStream[SolutionItem] {
         override def createContract = contract.getPartialSolution()
@@ -28,6 +31,7 @@ class RepeatOperator[SolutionItem: UDT](stepFunction: DataStream[SolutionItem] =
       contract
     }
   }
+  */
 }
 
 class IterateOperator[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStream[SolutionItem] => (DataStream[SolutionItem], DataStream[DeltaItem])) extends Serializable {
@@ -36,7 +40,7 @@ class IterateOperator[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStrea
 
     override def createContract = {
 
-      val contract = new Iteration with Iteration4sContract[SolutionItem]
+      val contract = new Iteration with Iterate4sContract[SolutionItem]
 
       val solutionInput = new DataStream[SolutionItem] {
         override def createContract = contract.getPartialSolution()
@@ -63,7 +67,7 @@ class WorksetIterateOperator[SolutionItem: UDT, WorksetItem: UDT](stepFunction: 
       val keyFields = keyFieldSelector.getFields filter { _ >= 0 }
       val keyFieldTypes = implicitly[UDT[SolutionItem]].getKeySet(keyFields)
 
-      val contract = new WorksetIteration with WorksetIteration4sContract[Key, SolutionItem, WorksetItem] {
+      val contract = new WorksetIteration with WorksetIterate4sContract[Key, SolutionItem, WorksetItem] {
 
         override val keySelector = keyFieldSelector
       }

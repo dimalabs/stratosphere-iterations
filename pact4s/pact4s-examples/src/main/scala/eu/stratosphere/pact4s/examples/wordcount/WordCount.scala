@@ -19,7 +19,7 @@ class WordCount(textInput: String, wordsOutput: String) extends PactProgram with
   val input = new DataSource(textInput, DelimetedDataSourceFormat(identity[String] _))
   val output = new DataSink(wordsOutput, DelimetedDataSinkFormat(formatOutput.tupled))
 
-  val words = input flatMap { line => line.toLowerCase().split("""\W+""") map { (_, 1) } }
+  val words = input flatMap { _.toLowerCase().split("""\W+""") map { (_, 1) } }
 
   val counts = words groupBy { case (word, _) => word } combine {
     _.reduce { (z, s) => z.copy(_2 = z._2 + s._2) }
@@ -32,7 +32,7 @@ class WordCount(textInput: String, wordsOutput: String) extends PactProgram with
   words.hints = PactName("Words")
   counts.hints = PactName("Counts")
 
-  val formatOutput = (word: String, count: Int) => "%s %d".format(word, count)
+  def formatOutput = (word: String, count: Int) => "%s %d".format(word, count)
 }
 
 trait WordCountGeneratedImplicits {
@@ -131,10 +131,10 @@ trait WordCountGeneratedImplicits {
     }
   }
 
-  implicit val udf1: UDF1[Function1[String, Iterator[String]]] = defaultUDF1IterR[String, String]
-  implicit val udf2: UDF1[Function1[String, Iterator[(String, Int)]]] = defaultUDF1IterR[String, (String, Int)]
-  implicit val udf3: UDF1[Function1[Iterator[(String, Int)], (String, Int)]] = defaultUDF1IterT[(String, Int), (String, Int)]
+  implicit def udf1: UDF1[Function1[String, Iterator[String]]] = defaultUDF1IterR[String, String]
+  implicit def udf2: UDF1[Function1[String, Iterator[(String, Int)]]] = defaultUDF1IterR[String, (String, Int)]
+  implicit def udf3: UDF1[Function1[Iterator[(String, Int)], (String, Int)]] = defaultUDF1IterT[(String, Int), (String, Int)]
 
-  implicit val selOutput: FieldSelector[Function1[(String, Int), Unit]] = defaultFieldSelectorT[(String, Int), Unit]
-  implicit val selCounts: FieldSelector[Function1[(String, Int), String]] = getFieldSelector[(String, Int), String](0)
+  implicit def selOutput: FieldSelector[Function1[(String, Int), Unit]] = defaultFieldSelectorT[(String, Int), Unit]
+  implicit def selCounts: FieldSelector[Function1[(String, Int), String]] = getFieldSelector[(String, Int), String](0)
 }
