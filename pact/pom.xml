@@ -110,7 +110,7 @@
     <module>pact-common</module>
     <module>pact-runtime</module>
     <module>pact-compiler</module>
-    <module>pact-iterations</module>
+    <!--<module>pact-iterations</module>-->
     <module>pact-clients</module>
     <module>pact-examples</module>
     <module>pact-tests</module>
