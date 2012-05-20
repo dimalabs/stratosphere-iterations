@@ -11,7 +11,7 @@ class WordCountDescriptor extends PactDescriptor[WordCount] {
   override val description = "Parameters: [numSubTasks] [input] [output]"
   override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
 
-  override def createInstance(args: Map[Int, String]) = new WordCount(args.getOrElse(1, ""), args.getOrElse(2, ""))
+  override def createInstance(args: Map[Int, String]) = new WordCount(args.getOrElse(1, "input"), args.getOrElse(2, "output"))
 }
 
 class WordCount(textInput: String, wordsOutput: String) extends PactProgram with WordCountGeneratedImplicits {

@@ -14,7 +14,7 @@ class TransitiveClosureRDDescriptor extends PactDescriptor[TransitiveClosureRD] 
   override val description = "Parameters: [numSubTasks] [vertices] [edges] [output]"
   override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
 
-  override def createInstance(args: Map[Int, String]) = new TransitiveClosureRD(args.getOrElse(1, ""), args.getOrElse(2, ""), args.getOrElse(3, ""))
+  override def createInstance(args: Map[Int, String]) = new TransitiveClosureRD(args.getOrElse(1, "vertices"), args.getOrElse(2, "edges"), args.getOrElse(3, "output"))
 }
 
 class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput: String) extends PactProgram with TransitiveClosureRDGeneratedImplicits {
@@ -31,10 +31,15 @@ class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput
   def createClosure = (c: DataStream[Path], x: DataStream[Path]) => {
 
     val cNewPaths = x.join(c).on(getTo)(selTo).isEqualTo(getFrom)(selFrom) map joinPaths
-    val c1 = cNewPaths cogroup cNewPaths on getEdge isEqualTo getEdge map selectShortestDistance
+    val c1 = cNewPaths cogroup c on getEdge isEqualTo getEdge map selectShortestDistance
 
     val xNewPaths = x.join(x).on(getTo)(selTo).isEqualTo(getFrom)(selFrom) map joinPaths
     val x1 = xNewPaths cogroup c1 on getEdge isEqualTo getEdge flatMap excludeKnownPaths
+
+    cNewPaths.hints = PactName("cNewPaths")
+    c1.hints = PactName("c1")
+    xNewPaths.hints = PactName("xNewPaths")
+    x1.hints = PactName("x1")
 
     (c1, x1)
   }
@@ -56,9 +61,10 @@ class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput
   def getFrom = (p: Path) => p.from
   def getTo = (p: Path) => p.to
 
-  vertices.hints = RecordSize(16)
-  edges.hints = RecordSize(16)
-  output.hints = RecordSize(16)
+  vertices.hints = RecordSize(16) +: PactName("Vertices")
+  edges.hints = RecordSize(16) +: PactName("Edges")
+  transitiveClosure.hints = PactName("Transitive Closure")
+  output.hints = RecordSize(16) +: PactName("Output")
 
   case class Path(from: Int, to: Int, dist: Int)
 

@@ -92,9 +92,9 @@ class WorksetIterateOperator[SolutionItem: UDT, WorksetItem: UDT](stepFunction: 
   }
 }
 
-class DistinctByOperator[T: UDT](stream: DataStream[T]) {
+class DistinctByOperator[T: UDT](stream: DataStream[T]) extends Serializable {
   def distinctBy[Key, SolutionKeySelector: SelectorBuilder[T, Key]#Selector](keySelector: T => Key) = new DistinctDataStream(stream, keySelector)
 }
 
-class DistinctDataStream[T: UDT, Key, SolutionKeySelector: SelectorBuilder[T, Key]#Selector](val stream: DataStream[T], val keySelector: T => Key)
+case class DistinctDataStream[T: UDT, Key, SolutionKeySelector: SelectorBuilder[T, Key]#Selector](stream: DataStream[T], keySelector: T => Key)
 

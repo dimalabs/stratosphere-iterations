@@ -19,10 +19,10 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
   val clusterPoints = new DataSource(clusterInput, DelimetedDataSourceFormat(parseInput))
   val newClusterPoints = new DataSink(clusterOutput, DelimetedDataSinkFormat(formatOutput.tupled))
 
-  val newCenters = (computeNewCenters ^ numIterations)(clusterPoints)
-  //val newCenters = computeNewCenters ^ numIterations apply clusterPoints
+  val finalCenters = (computeNewCenters ^ numIterations)(clusterPoints)
+  //val finalCenters = computeNewCenters ^ numIterations apply clusterPoints
 
-  override def outputs = newClusterPoints <~ newCenters
+  override def outputs = newClusterPoints <~ finalCenters
 
   def computeNewCenters = (centers: DataStream[(Int, Point)]) => {
 
@@ -50,7 +50,7 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
 
   dataPoints.hints = PactName("Data Points")
   clusterPoints.hints = Degree(1) +: PactName("Cluster Points")
-  newClusterPoints.hints = PactName("New ClusterPoints")
+  newClusterPoints.hints = PactName("New Cluster Points")
 
   val PointInputPattern = """(\d+)\|(\d+\.\d+)\|(\d+\.\d+)\|""".r
 

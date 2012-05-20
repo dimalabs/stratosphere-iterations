@@ -26,7 +26,7 @@ class TPCHQuery3Descriptor extends PactDescriptor[TPCHQuery3] {
   override val description = "Parameters: [numSubTasks] [orders] [lineItems] [output]"
   override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
 
-  override def createInstance(args: Map[Int, String]) = new TPCHQuery3(args.getOrElse(1, ""), args.getOrElse(2, ""), args.getOrElse(3, ""))
+  override def createInstance(args: Map[Int, String]) = new TPCHQuery3(args.getOrElse(1, "orders"), args.getOrElse(2, "lineItems"), args.getOrElse(3, "output"))
 }
 
 class TPCHQuery3(ordersInput: String, lineItemsInput: String, ordersOutput: String, status: Char = 'F', minYear: Int = 1993, priority: String = "5") extends PactProgram with TPCHQuery3GeneratedImplicits {

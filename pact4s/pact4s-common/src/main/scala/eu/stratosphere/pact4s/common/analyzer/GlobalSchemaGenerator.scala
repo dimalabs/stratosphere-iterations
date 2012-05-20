@@ -109,10 +109,12 @@ trait GlobalSchemaGenerator {
 
           newFreePos = udf.globalize(leftInputLocations, rightInputLocations, freePos2, predeterminedOutputLocations)
 
-          val leftFields = leftInputLocations.values.toSet union leftForwards
-          val rightFields = rightInputLocations.values.toSet union rightForwards
-          val leftKeyFields = leftKey.getGlobalFields.values.toSet
-          val rightKeyFields = rightKey.getGlobalFields.values.toSet
+          val writeFields = udf.getWriteFields filter { _ >= 0 } toSet
+          val leftKeyFields = leftKey.getGlobalFields.values.toSet diff writeFields
+          val rightKeyFields = rightKey.getGlobalFields.values.toSet diff writeFields
+
+          val leftFields = leftInputLocations.values.toSet union leftForwards diff writeFields
+          val rightFields = rightInputLocations.values.toSet union rightForwards diff writeFields
 
           for (pos <- leftFields diff leftKeyFields)
             udf.setAmbientFieldBehavior(Left(pos), AmbientFieldBehavior.Discard)
@@ -143,8 +145,9 @@ trait GlobalSchemaGenerator {
 
           newFreePos = udf.globalize(leftInputLocations, rightInputLocations, freePos2, predeterminedOutputLocations)
 
-          val leftFields = leftInputLocations.values.toSet union leftForwards
-          val rightFields = rightInputLocations.values.toSet union rightForwards
+          val writeFields = udf.getWriteFields filter { _ >= 0 } toSet
+          val leftFields = leftInputLocations.values.toSet union leftForwards diff writeFields
+          val rightFields = rightInputLocations.values.toSet union rightForwards diff writeFields
           val conflicts = leftFields intersect rightFields
 
           for (pos <- conflicts) {
@@ -179,11 +182,12 @@ trait GlobalSchemaGenerator {
 
           newFreePos = udf.globalize(leftInputLocations, rightInputLocations, freePos2, predeterminedOutputLocations)
 
-          val leftKeyFields = leftKey.getGlobalFields.values.toSet
-          val rightKeyFields = rightKey.getGlobalFields.values.toSet
+          val writeFields = udf.getWriteFields filter { _ >= 0 } toSet
+          val leftKeyFields = leftKey.getGlobalFields.values.toSet diff writeFields
+          val rightKeyFields = rightKey.getGlobalFields.values.toSet diff writeFields
 
-          val leftFields = leftInputLocations.values.toSet union leftForwards
-          val rightFields = rightInputLocations.values.toSet union rightForwards
+          val leftFields = leftInputLocations.values.toSet union leftForwards diff writeFields
+          val rightFields = rightInputLocations.values.toSet union rightForwards diff writeFields
           val conflicts = leftFields intersect rightFields
 
           for (pos <- conflicts) {
@@ -213,7 +217,8 @@ trait GlobalSchemaGenerator {
 
           newFreePos = udf.globalize(inputLocations, freePos1, predeterminedOutputLocations)
 
-          val inputFields = inputLocations.values.toSet union forwards
+          val writeFields = udf.getWriteFields filter { _ >= 0 } toSet
+          val inputFields = inputLocations.values.toSet union forwards diff writeFields
 
           for (pos <- inputFields)
             udf.setAmbientFieldBehavior(pos, AmbientFieldBehavior.Forward)
@@ -238,8 +243,9 @@ trait GlobalSchemaGenerator {
           cUDF.globalize(inputLocations, freePos1, Some(inputLocations))
           newFreePos = rUDF.globalize(inputLocations, freePos1, predeterminedOutputLocations)
 
-          val inputFields = inputLocations.values.toSet union forwards
-          val keyFields = key.getGlobalFields.values.toSet
+          val writeFields = rUDF.getWriteFields filter { _ >= 0 } toSet
+          val keyFields = key.getGlobalFields.values.toSet diff writeFields
+          val inputFields = inputLocations.values.toSet union forwards diff writeFields
 
           for (pos <- inputFields diff keyFields)
             rUDF.setAmbientFieldBehavior(pos, AmbientFieldBehavior.Discard)

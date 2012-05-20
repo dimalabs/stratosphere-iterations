@@ -11,7 +11,7 @@ class TransitiveClosureNaiveDescriptor extends PactDescriptor[TransitiveClosureN
   override val description = "Parameters: [numSubTasks] [vertices] [edges] [output]"
   override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
 
-  override def createInstance(args: Map[Int, String]) = new TransitiveClosureNaive(args.getOrElse(1, ""), args.getOrElse(2, ""), args.getOrElse(3, ""))
+  override def createInstance(args: Map[Int, String]) = new TransitiveClosureNaive(args.getOrElse(1, "vertices"), args.getOrElse(2, "edges"), args.getOrElse(3, "output"))
 }
 
 class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOutput: String) extends PactProgram with TransitiveClosureNaiveGeneratedImplicits {
@@ -37,6 +37,10 @@ class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOut
       }
     }
 
+    allNewPaths.hints = PactName("All New Paths")
+    shortestPaths.hints = PactName("Shortest Paths")
+    delta.hints = PactName("Delta")
+
     (shortestPaths, delta)
   }
 
@@ -48,9 +52,10 @@ class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOut
   def getFrom = (p: Path) => p.from
   def getTo = (p: Path) => p.to
 
-  vertices.hints = RecordSize(16)
-  edges.hints = RecordSize(16)
-  output.hints = RecordSize(16)
+  vertices.hints = RecordSize(16) +: PactName("Vertices")
+  edges.hints = RecordSize(16) +: PactName("Edges")
+  transitiveClosure.hints = PactName("Transitive Closure")
+  output.hints = RecordSize(16) +: PactName("Output")
 
   case class Path(from: Int, to: Int, dist: Int)
 

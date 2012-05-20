@@ -10,7 +10,7 @@ class ConnectedComponentsDescriptor extends PactDescriptor[ConnectedComponents] 
   override val description = "Parameters: [numSubTasks] [vertices] [edges] [output]"
   override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
 
-  override def createInstance(args: Map[Int, String]) = new ConnectedComponents(args.getOrElse(1, ""), args.getOrElse(2, ""), args.getOrElse(3, ""))
+  override def createInstance(args: Map[Int, String]) = new ConnectedComponents(args.getOrElse(1, "vertices"), args.getOrElse(2, "edges"), args.getOrElse(3, "output"))
 }
 
 class ConnectedComponents(verticesInput: String, edgesInput: String, componentsOutput: String) extends PactProgram with ConnectedComponentsGeneratedImplicits {
@@ -37,13 +37,18 @@ class ConnectedComponents(verticesInput: String, edgesInput: String, componentsO
       case _                                     => None
     }
 
+    allNeighbors.hints = PactName("All Neighbors")
+    minNeighbors.hints = PactName("Min Neighbors")
+    s1.hints = PactName("Partial Solution")
+
     (s1, s1)
   }
 
-  vertices.hints = RecordSize(8)
-  directedEdges.hints = RecordSize(8)
-  undirectedEdges.hints = RecordSize(8) +: RecordsEmitted(2.0f)
-  output.hints = RecordSize(8)
+  vertices.hints = RecordSize(8) +: PactName("Vertices")
+  directedEdges.hints = RecordSize(8) +: PactName("Directed Edges")
+  undirectedEdges.hints = RecordSize(8) +: RecordsEmitted(2.0f) +: PactName("Undirected Edges")
+  components.hints = PactName("Components")
+  output.hints = RecordSize(8) +: PactName("Output")
 
   def parseVertex = (line: String) => {
     val v = line.toInt
