@@ -270,7 +270,7 @@ public class CrossNode extends TwoInputNode {
 			}	
 		}
 		
-		for(PactConnection c : this.input1) {
+		for(PactConnection c : this.input2) {
 			if (!props2.isEmpty()) {
 				c.addAllInterestingProperties(props2);
 			}
