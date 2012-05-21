@@ -89,6 +89,7 @@
 	
     <modules>
         <module>pact4s-common</module>
+        <module>pact4s-compiler</module>
       	<module>pact4s-examples</module>
     </modules>
 </project>
