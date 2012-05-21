@@ -22,7 +22,7 @@ abstract class PactDescriptor[T <: PactProgram: Manifest] extends PlanAssembler 
     val argsMap = args.zipWithIndex.map (_.swap).toMap
 
     val program = createInstance(argsMap)
-    val sinks = program.outputs map { _.getContract.asInstanceOf[Pact4sDataSinkContract[_]] }
+    val sinks = program.outputs map { _.getContract.asInstanceOf[DataSink4sContract[_]] }
 
     initGlobalSchema(sinks)
 

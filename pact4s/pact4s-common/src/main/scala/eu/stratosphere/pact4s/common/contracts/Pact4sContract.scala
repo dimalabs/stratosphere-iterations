@@ -57,7 +57,7 @@ object Pact4sTwoInputContract {
   def unapply(c: Pact4sTwoInputContract) = Some((c.leftInput, c.rightInput))
 }
 
-trait Pact4sDataSourceContract[Out] extends Pact4sContract { this: GenericDataSource[_ <: InputFormat[_,_]] =>
+trait DataSource4sContract[Out] extends Pact4sContract { this: GenericDataSource[_ <: InputFormat[_, _]] =>
 
   val outputUDT: UDT[Out]
   val fieldSelector: FieldSelector[_ => Out]
@@ -65,12 +65,12 @@ trait Pact4sDataSourceContract[Out] extends Pact4sContract { this: GenericDataSo
   override def annotations = Seq(Annotations.getExplicitModifications(fieldSelector.getFields))
 }
 
-object Pact4sDataSourceContract {
+object DataSource4sContract {
 
-  def unapply(c: Pact4sDataSourceContract[_]) = Some((c.outputUDT, c.fieldSelector))
+  def unapply(c: DataSource4sContract[_]) = Some((c.outputUDT, c.fieldSelector))
 }
 
-trait Pact4sDataSinkContract[In] extends Pact4sOneInputContract { this: GenericDataSink =>
+trait DataSink4sContract[In] extends Pact4sOneInputContract { this: GenericDataSink =>
 
   val inputUDT: UDT[In]
   val fieldSelector: FieldSelector[In => _]
@@ -78,10 +78,10 @@ trait Pact4sDataSinkContract[In] extends Pact4sOneInputContract { this: GenericD
   override def annotations = Seq(Annotations.getReads(fieldSelector.getFields))
 }
 
-object Pact4sDataSinkContract {
-  implicit def toGenericSink(s: Pact4sDataSinkContract[_]): GenericDataSink = s.asInstanceOf[GenericDataSink]
-  implicit def toGenericSinks(s: Seq[Pact4sDataSinkContract[_]]): JCollection[GenericDataSink] = s.map(_.asInstanceOf[GenericDataSink])
+object DataSink4sContract {
+  implicit def toGenericSink(s: DataSink4sContract[_]): GenericDataSink = s.asInstanceOf[GenericDataSink]
+  implicit def toGenericSinks(s: Seq[DataSink4sContract[_]]): JCollection[GenericDataSink] = s.map(_.asInstanceOf[GenericDataSink])
 
-  def unapply(c: Pact4sDataSinkContract[_]) = Some((c.singleInput, c.inputUDT, c.fieldSelector))
+  def unapply(c: DataSink4sContract[_]) = Some((c.singleInput, c.inputUDT, c.fieldSelector))
 }
 

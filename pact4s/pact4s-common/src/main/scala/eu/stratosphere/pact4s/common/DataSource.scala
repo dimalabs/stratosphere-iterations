@@ -4,7 +4,7 @@ import java.io.DataInput
 import java.net.URI
 
 import eu.stratosphere.pact4s.common.analyzer._
-import eu.stratosphere.pact4s.common.contracts.Pact4sDataSourceContract
+import eu.stratosphere.pact4s.common.contracts.DataSource4sContract
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract.FileDataSource
@@ -18,23 +18,35 @@ import eu.stratosphere.nephele.configuration.Configuration
 
 class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends DataStream[Out] {
 
-  override def createContract = new URI(url).getScheme match {
+  override def createContract = {
 
-    case "file" | null => new FileDataSource(format.stub.asInstanceOf[Class[FileInputFormat]], url) with Pact4sDataSourceContract[Out] {
+    val uri = getUri(url)
+    uri.getScheme match {
 
-      override val outputUDT = format.outputUDT
-      override val fieldSelector = format.fieldSelector
+      case "file" | "hdfs" => new FileDataSource(format.stub.asInstanceOf[Class[FileInputFormat]], uri.toString) with DataSource4sContract[Out] {
 
-      override def persistConfiguration() = format.persistConfiguration(this.getParameters())
+        override val outputUDT = format.outputUDT
+        override val fieldSelector = format.fieldSelector
+
+        override def persistConfiguration() = format.persistConfiguration(this.getParameters())
+      }
+
+      case "ext" => new GenericDataSource(format.stub.asInstanceOf[Class[InputFormat[_, _]]]) with DataSource4sContract[Out] {
+
+        override val outputUDT = format.outputUDT
+        override val fieldSelector = format.fieldSelector
+
+        override def persistConfiguration() = format.persistConfiguration(this.getParameters())
+      }
     }
+  }
 
-    case "ext" => new GenericDataSource(format.stub.asInstanceOf[Class[InputFormat[_, _]]]) with Pact4sDataSourceContract[Out] {
-
-      override val outputUDT = format.outputUDT
-      override val fieldSelector = format.fieldSelector
-
-      override def persistConfiguration() = format.persistConfiguration(this.getParameters())
-    }
+  private def getUri(url: String) = {
+    val uri = new URI(url)
+    if (uri.getScheme == null)
+      new URI("file://" + url)
+    else
+      uri
   }
 }
 

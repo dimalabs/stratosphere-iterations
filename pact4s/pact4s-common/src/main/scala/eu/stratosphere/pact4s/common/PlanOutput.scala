@@ -4,7 +4,7 @@ import java.net.URI
 
 import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.contracts.Pact4sContractFactory
-import eu.stratosphere.pact4s.common.contracts.Pact4sDataSinkContract
+import eu.stratosphere.pact4s.common.contracts.DataSink4sContract
 
 import eu.stratosphere.pact.common.io.FileOutputFormat
 import eu.stratosphere.pact.common.generic.io.OutputFormat
@@ -15,15 +15,27 @@ class PlanOutput[In: UDT](val source: DataStream[In], val sink: DataSink[In]) ex
 
   override def getHints = sink.getHints
 
-  override def createContract = new URI(sink.url).getScheme match {
+  override def createContract = {
 
-    case "file" | null => new FileDataSink(sink.format.stub.asInstanceOf[Class[FileOutputFormat]], sink.url, source.getContract) with Pact4sDataSinkContract[In] {
+    val uri = getUri(sink.url)
+    uri.getScheme match {
 
-      override val inputUDT = sink.format.inputUDT
-      override val fieldSelector = sink.format.fieldSelector
+      case "file" | "hdfs" => new FileDataSink(sink.format.stub.asInstanceOf[Class[FileOutputFormat]], uri.toString, source.getContract) with DataSink4sContract[In] {
 
-      override def persistConfiguration() = sink.format.persistConfiguration(this.getParameters())
+        override val inputUDT = sink.format.inputUDT
+        override val fieldSelector = sink.format.fieldSelector
+
+        override def persistConfiguration() = sink.format.persistConfiguration(this.getParameters())
+      }
     }
+  }
+
+  private def getUri(url: String) = {
+    val uri = new URI(url)
+    if (uri.getScheme == null)
+      new URI("file://" + url)
+    else
+      uri
   }
 }
 

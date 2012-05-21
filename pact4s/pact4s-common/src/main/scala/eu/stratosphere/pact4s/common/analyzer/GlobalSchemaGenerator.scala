@@ -5,14 +5,15 @@ import eu.stratosphere.pact.common.contract._
 
 trait GlobalSchemaGenerator {
 
-  def initGlobalSchema(outputs: Seq[Pact4sDataSinkContract[_]]) = {
+  def initGlobalSchema(outputs: Seq[DataSink4sContract[_]]) = {
+
+    implicit val printer = new SchemaPrinter
 
     val proxies: Map[Contract, Pact4sContract] = Map() withDefault { _.asInstanceOf[Pact4sContract] }
-    implicit val printer = new SchemaPrinter
     outputs.foldLeft(0) { (freePos, contract) => globalizeContract(freePos, contract, proxies, None).freePos }
   }
 
-  case class GlobalizeResult(freePos: Int, outputs: Map[Int, Int], forwards: Set[Int])
+  private case class GlobalizeResult(freePos: Int, outputs: Map[Int, Int], forwards: Set[Int])
 
   /**
    * Computes disjoint write sets for a contract and its inputs.
@@ -23,11 +24,12 @@ trait GlobalSchemaGenerator {
    * @param predeterminedOutputLocations Specifies required positions for the contract's output fields, or None to allocate new positions
    * @return A GlobalizeResult containing the next available position in the global schema and the locations of the contract's output fields
    */
-  def globalizeContract(freePos: Int, contract: Contract, proxies: Map[Contract, Pact4sContract], predeterminedOutputLocations: Option[Map[Int, Int]])(implicit printer: SchemaPrinter): GlobalizeResult = {
+  private def globalizeContract(freePos: Int, contract: Contract, proxies: Map[Contract, Pact4sContract], predeterminedOutputLocations: Option[Map[Int, Int]])(implicit printer: SchemaPrinter): GlobalizeResult = {
 
-    val result = proxies(contract) match {
+    val contract4s = proxies(contract)
+    val result = contract4s match {
 
-      case contract4s @ Pact4sDataSinkContract(input, udt, fieldSelector) => {
+      case DataSink4sContract(input, udt, fieldSelector) => {
 
         var newFreePos = freePos
 
@@ -44,7 +46,7 @@ trait GlobalSchemaGenerator {
         GlobalizeResult(newFreePos, Map(), Set())
       }
 
-      case contract4s @ Pact4sDataSourceContract(udt, fieldSelector) => {
+      case DataSource4sContract(udt, fieldSelector) => {
 
         var newFreePos = freePos
 
@@ -67,7 +69,7 @@ trait GlobalSchemaGenerator {
         GlobalizeResult(newFreePos, fieldSelector.getGlobalFields, Set())
       }
 
-      case contract4s @ Iterate4sContract(s0, step, term, placeholder) => {
+      case Iterate4sContract(s0, step, term, placeholder) => {
 
         val newProxies = proxies + (placeholder -> proxies.getOrElse(s0, s0.asInstanceOf[Pact4sContract]))
 
@@ -82,7 +84,7 @@ trait GlobalSchemaGenerator {
         GlobalizeResult(newFreePos, outputs, forwards)
       }
 
-      case contract4s @ WorksetIterate4sContract(s0, ws0, key, deltaS, newWS, placeholderS, placeholderWS) => {
+      case WorksetIterate4sContract(s0, ws0, key, deltaS, newWS, placeholderS, placeholderWS) => {
 
         val newProxies = proxies + (placeholderS -> proxies.getOrElse(s0, s0.asInstanceOf[Pact4sContract])) + (placeholderWS -> proxies.getOrElse(ws0, ws0.asInstanceOf[Pact4sContract]))
 
@@ -94,7 +96,7 @@ trait GlobalSchemaGenerator {
         GlobalizeResult(freePos4, sOutputs, forwards)
       }
 
-      case contract4s @ CoGroup4sContract(left, right, leftKey, rightKey, leftUdt, rightUdt, udt, udf) => {
+      case CoGroup4sContract(left, right, leftKey, rightKey, leftUdt, rightUdt, udt, udf) => {
 
         var newFreePos = freePos
 
@@ -134,7 +136,7 @@ trait GlobalSchemaGenerator {
         GlobalizeResult(newFreePos, udf.getOutputFields, udf.getAllForwardedFields.toSet)
       }
 
-      case contract4s @ Cross4sContract(left, right, leftUdt, rightUdt, udt, udf) => {
+      case Cross4sContract(left, right, leftUdt, rightUdt, udt, udf) => {
 
         var newFreePos = freePos
 
@@ -167,7 +169,7 @@ trait GlobalSchemaGenerator {
         GlobalizeResult(newFreePos, udf.getOutputFields, udf.getAllForwardedFields.toSet)
       }
 
-      case contract4s @ Join4sContract(left, right, leftKey, rightKey, leftUdt, rightUdt, udt, udf) => {
+      case Join4sContract(left, right, leftKey, rightKey, leftUdt, rightUdt, udt, udf) => {
 
         var newFreePos = freePos
 
@@ -207,7 +209,7 @@ trait GlobalSchemaGenerator {
         GlobalizeResult(newFreePos, udf.getOutputFields, udf.getAllForwardedFields.toSet)
       }
 
-      case contract4s @ Map4sContract(input, inputUdt, udt, udf) => {
+      case Map4sContract(input, inputUdt, udt, udf) => {
 
         var newFreePos = freePos
 
@@ -229,7 +231,7 @@ trait GlobalSchemaGenerator {
         GlobalizeResult(newFreePos, udf.getOutputFields, udf.getForwardedFields.toSet)
       }
 
-      case contract4s @ Reduce4sContract(input, key, inputUdt, udt, cUDF, rUDF) => {
+      case Reduce4sContract(input, key, inputUdt, udt, cUDF, rUDF) => {
 
         var newFreePos = freePos
 
@@ -289,11 +291,11 @@ trait GlobalSchemaGenerator {
 
         contract match {
 
-          case Pact4sDataSinkContract(input, udt, fieldSelector) => {
+          case DataSink4sContract(input, udt, fieldSelector) => {
             println(contract.getName() + " (Sink): [" + fieldSelector.getFields.mkString(", ") + "] -> Format")
           }
 
-          case Pact4sDataSourceContract(udt, fieldSelector) => {
+          case DataSource4sContract(udt, fieldSelector) => {
             println(contract.getName() + " (Source): Parse -> [" + fieldSelector.getFields.mkString(", ") + "]")
           }
 
