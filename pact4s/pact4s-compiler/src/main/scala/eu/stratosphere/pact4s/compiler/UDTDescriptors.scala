@@ -2,12 +2,12 @@ package eu.stratosphere.pact4s.compiler
 
 import scala.collection.mutable
 
-import scala.tools.nsc.ast.TreeDSL
+import scala.tools.nsc.Global
 
-trait UDTDescriptors extends TreeDSL {
+trait UDTDescriptors {
 
+  val global: Global
   import global._
-  import CODE._
 
   abstract sealed class UDTDescriptor(val tpe: Type)
   case class PrimitiveDescriptor(myTpe: Type, default: Literal, wrapperClass: Symbol) extends UDTDescriptor(myTpe)
@@ -99,15 +99,15 @@ trait UDTDescriptors extends TreeDSL {
   }
 
   private lazy val primitives = Map(
-    definitions.BooleanClass -> (FALSE, definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-    definitions.ByteClass -> (LIT(0), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-    definitions.CharClass -> (LIT(0), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-    definitions.DoubleClass -> (LIT(0.0), definitions.getClass("eu.stratosphere.pact.common.type.base.PactDouble")),
-    definitions.FloatClass -> (LIT(0.f), definitions.getClass("eu.stratosphere.pact.common.type.base.PactDouble")),
-    definitions.IntClass -> (LIT(0), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-    definitions.LongClass -> (LIT(0L), definitions.getClass("eu.stratosphere.pact.common.type.base.PactLong")),
-    definitions.ShortClass -> (LIT(0), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-    definitions.StringClass -> (NULL, definitions.getClass("eu.stratosphere.pact.common.type.base.PactString"))
+    definitions.BooleanClass -> (Literal(false), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+    definitions.ByteClass -> (Literal(0: Byte), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+    definitions.CharClass -> (Literal(0: Char), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+    definitions.DoubleClass -> (Literal(0: Double), definitions.getClass("eu.stratosphere.pact.common.type.base.PactDouble")),
+    definitions.FloatClass -> (Literal(0: Float), definitions.getClass("eu.stratosphere.pact.common.type.base.PactDouble")),
+    definitions.IntClass -> (Literal(0: Int), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+    definitions.LongClass -> (Literal(0: Long), definitions.getClass("eu.stratosphere.pact.common.type.base.PactLong")),
+    definitions.ShortClass -> (Literal(0: Short), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+    definitions.StringClass -> (Literal(null: String), definitions.getClass("eu.stratosphere.pact.common.type.base.PactString"))
   )
 
   private lazy val lists = Set(definitions.ArrayClass, definitions.SeqClass, definitions.ListClass, definitions.IterableClass, definitions.IteratorClass)

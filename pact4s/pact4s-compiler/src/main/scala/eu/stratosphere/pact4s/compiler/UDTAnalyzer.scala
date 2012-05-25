@@ -20,7 +20,7 @@ abstract class UDTAnalyzer(udtDescriptors: UDTDescriptors) extends PluginCompone
   override def newTraverser(unit: CompilationUnit) = new Traverser {
 
     private val genSites = getGenSites(unit)
-    private val genSitePaths = mutable.Map[UDTDescriptor, Seq[Tree]]()
+    private val genSitePaths = mutable.Map[UDTDescriptor, Set[Seq[Tree]]]() withDefaultValue Set()
 
     private val unanalyzedUdt = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.package"), "unanalyzedUDT")
 
@@ -44,24 +44,43 @@ abstract class UDTAnalyzer(udtDescriptors: UDTDescriptors) extends PluginCompone
 
     private def updateGenSite(desc: UDTDescriptor) = {
 
-      genSitePaths get desc match {
+      genSitePaths get desc flatMap { findCommonLexicalParent(getPath, _) } match {
 
-        case Some(oldPath) => {
-          val newPath = findCommonLexicalParent(oldPath, getPath)
+        case Some((oldPath, newPath)) => {
           genSites(oldPath.head) -= desc
           genSites(newPath.head) += desc
-          genSitePaths(desc) = newPath
+          genSitePaths(desc) -= oldPath
+          genSitePaths(desc) += newPath
         }
 
         case None => {
           genSites(getPath.head) += desc
-          genSitePaths(desc) = getPath
+          genSitePaths(desc) += getPath
         }
       }
     }
 
-    private def findCommonLexicalParent(path1: Seq[Tree], path2: Seq[Tree]): Seq[Tree] = {
-      (path1.reverse, path2.reverse).zipped.takeWhile(p => p._1 == p._2).map(_._1).toSeq.reverse
+    private def findCommonLexicalParent(path: Seq[Tree], candidates: Set[Seq[Tree]]): Option[(Seq[Tree], Seq[Tree])] = {
+
+      val commonPaths =
+        candidates.toSeq flatMap { candidate =>
+          val commonPath = (path.reverse, candidate.reverse).zipped takeWhile { case (x, y) => x == y } map { _._1 } toSeq;
+          if (commonPath.nonEmpty)
+            Some((candidate, commonPath.reverse))
+          else
+            None
+        }
+
+      commonPaths match {
+        case Seq(x) => Some(x)
+        case Seq()  => None
+      }
+    }
+
+    override def isPathComponent(tree: Tree) = tree match {
+      case _: Template => true
+      case _: Block    => true
+      case _           => false
     }
   }
 }

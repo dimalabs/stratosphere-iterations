@@ -19,11 +19,19 @@ trait Traverse extends Transform {
       super.transform(tree)
     }
 
+    def isPathComponent(tree: Tree): Boolean = true
+
     override def transform(tree: Tree): Tree = {
 
-      path = tree +: path
+      val isPathComp = isPathComponent(tree)
+
+      if (isPathComp)
+        path = tree +: path
+
       traverse(tree)
-      path = path.tail
+
+      if (isPathComp)
+        path = path.tail
 
       tree
     }
