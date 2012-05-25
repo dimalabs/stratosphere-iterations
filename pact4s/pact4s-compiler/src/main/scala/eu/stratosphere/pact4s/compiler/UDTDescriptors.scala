@@ -9,6 +9,10 @@ trait UDTDescriptors {
   val global: Global
   import global._
 
+  lazy val udtClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDT")
+  lazy val udtSerializerClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDTSerializer")
+  lazy val pactValueClass = definitions.getClass("eu.stratosphere.pact.common.type.Value")
+
   abstract sealed class UDTDescriptor(val tpe: Type)
   case class PrimitiveDescriptor(myTpe: Type, default: Literal, wrapperClass: Symbol) extends UDTDescriptor(myTpe)
   case class ListDescriptor(myTpe: Type, listType: Type, elem: UDTDescriptor) extends UDTDescriptor(myTpe)
@@ -85,7 +89,7 @@ trait UDTDescriptors {
     ctors match {
       case ctor :: Nil   => Right(ctor)
       case c1 :: c2 :: _ => Left("Multiple constructors found with signature " + signature + " { " + ctors.map(_._2).mkString(", ") + " }")
-      case Nil           => Left("No constructor found  with signature " + signature + " { " + candidates.map(_._2).mkString(", ") + " }")
+      case Nil           => Left("No constructor found with signature " + signature + " { " + candidates.map(_._2).mkString(", ") + " }")
     }
   }
 
