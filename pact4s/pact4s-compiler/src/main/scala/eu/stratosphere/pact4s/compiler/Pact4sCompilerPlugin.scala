@@ -1,21 +1,32 @@
 package eu.stratosphere.pact4s.compiler
 
-import scala.tools.nsc
-import nsc.Global
-import nsc.Phase
-import nsc.plugins.Plugin
-import nsc.plugins.PluginComponent
+import scala.collection.mutable
+import scala.tools.nsc.Global
+import scala.tools.nsc.plugins.Plugin
+import scala.tools.nsc.plugins.PluginComponent
+import scala.tools.nsc.symtab.SymbolTable
+import scala.tools.nsc.symtab.Symbols
+import scala.tools.nsc.symtab.Types
 
 class Pact4sCompilerPlugin(val global: Global) extends Plugin {
   import global._
 
-  override val name = "Pact4s"
-  override val description = "Performs analysis and code generation for Pact4s programs."
-
-  object udtGenerator extends UDTGenerator {
-    override val global: Pact4sCompilerPlugin.this.global.type = Pact4sCompilerPlugin.this.global
+  object udtDescriptors extends UDTDescriptors {
+    override val global = Pact4sCompilerPlugin.this.global
+  }
+  
+  object udtAnalyzer extends UDTAnalyzer(udtDescriptors) {
     override val runsAfter = List[String]("refchecks");
+    override val runsRightAfter = Some("refchecks")
   }
 
-  override val components = List[PluginComponent](udtGenerator)
+  object udtGenerator extends UDTGenerator(udtDescriptors) {
+    override val runsAfter = List[String]("Pact4s.UDTAnalyzer");
+    override val runsRightAfter = Some("Pact4s.UDTAnalyzer")
+  }
+
+  override val name = "Pact4s"
+  override val description = "Performs analysis and code generation for Pact4s programs."
+  override val components = List[PluginComponent](udtAnalyzer, udtGenerator)
 }
+

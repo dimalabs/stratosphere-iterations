@@ -1,51 +1,32 @@
 package eu.stratosphere.pact4s.compiler
 
-import scala.reflect._
-import scala.tools.nsc
-import nsc.ast.TreeDSL
-import nsc.symtab.Flags
-import nsc.Global
-import nsc.plugins.PluginComponent
-import nsc.transform.Transform
+import scala.collection.mutable
 
-trait UDTGenerator extends PluginComponent with UDTAnalyzer with Transform with TreeDSL {
+import scala.tools.nsc.Global
+import scala.tools.nsc.plugins.PluginComponent
+import scala.tools.nsc.transform.Transform
+
+abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginComponent with Transform {
+
+  override val global: udtDescriptors.global.type = udtDescriptors.global
 
   import global._
-  import CODE._
+  import udtDescriptors._
 
   override val phaseName = "Pact4s.UDTGenerator"
 
-  override def newTransformer(unit: CompilationUnit) = new UDTGeneratorTransformer(unit)
+  override def newTransformer(unit: CompilationUnit) = new Transformer {
 
-  class UDTGeneratorTransformer(unit: CompilationUnit) extends Transformer {
-
-    private val unanalyzedUdt = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.package"), "unanalyzedUDT")
+    private val genSites = getGenSites(unit)
+    private val udtClasses = collection.mutable.Map[Type, (Symbol, UDTDescriptor)]()
 
     override def transform(tree: Tree): Tree = {
 
-      tree match {
-
-        case TypeApply(s @ Select(_, _), List(t)) if s.symbol == unanalyzedUdt => {
-
-          val typeName = t.tpe.typeSymbol.name + (t.tpe.typeArgs match {
-            case List() => ""
-            case args   => "[" + args.map(_.typeSymbol.name).mkString(", ") + "]"
-          })
-
-          analyzeType(t.tpe) match {
-            case Left(err)     => unit.error(tree.pos, "Could not generate UDT[" + typeName + "]: " + err)
-            case Right(result) => unit.warning(tree.pos, "Generating UDT[" + typeName + "]: " + result)
-          }
-        }
-
-        case _ =>
+      for (udt <- genSites(tree)) {
+        unit.warning(tree.pos, "Generating: UDT[" + udt.tpe + "]@" + tree.id + ":" + tree.pos.line + ":" + tree.pos.column)
       }
 
       super.transform(tree)
-    }
-
-    private def generateUDT(desc: UDTDescriptor) {
-
     }
   }
 }
