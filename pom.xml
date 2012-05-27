@@ -500,6 +500,12 @@
                                 </goals>
                             </execution>
                         </executions>
+                        <configuration>
+                            <jvmArgs>
+                                <jvmArg>-Xms64m</jvmArg>
+                                <jvmArg>-Xmx1024m</jvmArg>
+                            </jvmArgs>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>
