@@ -10,7 +10,7 @@ trait Traverse extends Transform {
   protected def newTraverser(unit: CompilationUnit): Traverser
   override def newTransformer(unit: CompilationUnit) = newTraverser(unit)
 
-  abstract class Traverser extends Transformer {
+  trait Traverser extends Transformer {
 
     private var path = Seq[Tree]()
     def getPath = path

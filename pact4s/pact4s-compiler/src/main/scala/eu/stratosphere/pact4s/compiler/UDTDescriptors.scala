@@ -9,47 +9,50 @@ trait UDTDescriptors {
   val global: Global
   import global._
 
+  lazy val unanalyzedUdt = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.UDT"), "unanalyzedUDT")
   lazy val udtClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDT")
   lazy val udtSerializerClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDTSerializer")
+  lazy val pactRecordClass = definitions.getClass("eu.stratosphere.pact.common.type.PactRecord")
   lazy val pactValueClass = definitions.getClass("eu.stratosphere.pact.common.type.Value")
+  lazy val pactListClass = definitions.getClass("eu.stratosphere.pact.common.type.base.PactList")
 
-  abstract sealed class UDTDescriptor(val tpe: Type)
-  case class PrimitiveDescriptor(myTpe: Type, default: Literal, wrapperClass: Symbol) extends UDTDescriptor(myTpe)
-  case class ListDescriptor(myTpe: Type, listType: Type, elem: UDTDescriptor) extends UDTDescriptor(myTpe)
-  case class CaseClassDescriptor(myTpe: Type, ctor: Symbol, ctorTpe: Type, getters: Seq[Accessor]) extends UDTDescriptor(myTpe)
-  case class Accessor(sym: Symbol, tpe: Type, descr: UDTDescriptor)
+  abstract sealed class UDTDescriptor { val tpe: Type }
+  case class OpaqueDescriptor(tpe: Type, ref: Tree) extends UDTDescriptor
+  case class PrimitiveDescriptor(tpe: Type, default: Literal, wrapperClass: Symbol) extends UDTDescriptor
+  case class ListDescriptor(tpe: Type, listType: Type, elem: UDTDescriptor) extends UDTDescriptor
+  case class CaseClassDescriptor(tpe: Type, ctor: Symbol, ctorTpe: Type, getters: Seq[FieldAccessor]) extends UDTDescriptor
+  case class FieldAccessor(sym: Symbol, tpe: Type, descr: UDTDescriptor)
 
-  private val udts = mutable.Map[Type, UDTDescriptor]()
+  private val udts = mutable.Map[Type, Either[String, UDTDescriptor]]()
   private val genSites = mutable.Map[CompilationUnit, mutable.Map[Tree, Set[UDTDescriptor]]]()
+
+  def analyzeUDT(tpe: Type, infer: Type => Tree): Either[String, UDTDescriptor] = {
+    val normTpe = tpe.map { t => if (t.typeSymbol.isMemberOf(definitions.getModule("java.lang"))) t.normalize else t }
+    analyzeType(normTpe, infer)
+  }
 
   def getUDTDescriptor(tpe: Type): Either[String, UDTDescriptor] = {
     val normTpe = tpe.map { t => if (t.typeSymbol.isMemberOf(definitions.getModule("java.lang"))) t.normalize else t }
-    analyzeType(normTpe)
+    udts.getOrElse(normTpe, Left("Unsupported type " + tpe))
   }
 
   def getGenSites(unit: CompilationUnit) = genSites.getOrElseUpdate(unit, mutable.Map() withDefaultValue Set())
 
-  private def analyzeType(tpe: Type): Either[String, UDTDescriptor] = {
+  private def analyzeType(tpe: Type, infer: Type => Tree): Either[String, UDTDescriptor] = {
 
-    val result =
-      if (udts.keySet.contains(tpe))
-        Right(udts(tpe))
-      else if (primitives.keySet.contains(tpe.typeSymbol))
-        analyzePrimitive(tpe)
-      else if (lists.contains(tpe.typeConstructor.typeSymbol))
-        analyzeList(tpe)
-      else if (tpe.typeSymbol.isCaseClass)
-        analyzeCaseClass(tpe)
-      else
-        Left("Unsupported type " + tpe)
-
-    for (desc <- result.right) {
-      if (!udts.keySet.contains(desc.tpe)) {
-        udts += (desc.tpe -> desc)
+    infer(tpe) match {
+      case t if t.symbol == unanalyzedUdt => udts.getOrElseUpdate(tpe, {
+        reporter.info(NoPosition, "Analyzing UDT[" + tpe + "]", true)
+        tpe match {
+          case _ if primitives.keySet.contains(tpe.typeSymbol) => analyzePrimitive(tpe)
+          case _ if lists.contains(tpe.typeConstructor.typeSymbol) => analyzeList(tpe, infer)
+          case _ if tpe.typeSymbol.isCaseClass => analyzeCaseClass(tpe, infer)
+          case _ => Left("Unsupported type " + tpe)
+        }
       }
+      )
+      case ref => Right(OpaqueDescriptor(tpe, ref))
     }
-
-    result
   }
 
   private def analyzePrimitive(tpe: Type): Either[String, UDTDescriptor] = {
@@ -57,17 +60,17 @@ trait UDTDescriptors {
     Right(PrimitiveDescriptor(tpe, default, wrapper))
   }
 
-  private def analyzeList(tpe: Type): Either[String, UDTDescriptor] = analyzeType(tpe.typeArgs.head) match {
+  private def analyzeList(tpe: Type, infer: Type => Tree): Either[String, UDTDescriptor] = analyzeType(tpe.typeArgs.head, infer) match {
     case Left(err)   => Left(err)
     case Right(desc) => Right(ListDescriptor(tpe, tpe.typeConstructor, desc))
   }
 
-  private def analyzeCaseClass(tpe: Type): Either[String, UDTDescriptor] = {
+  private def analyzeCaseClass(tpe: Type, infer: Type => Tree): Either[String, UDTDescriptor] = {
 
     val (tParams, tArgs) = tpe.typeConstructor.typeParams.zip(tpe.typeArgs).unzip
     val getters = tpe.typeSymbol.caseFieldAccessors.map(f => (f, f.tpe.instantiateTypeParams(tParams, tArgs).asSeenFrom(tpe.prefix, f.owner.owner)))
 
-    analyzeFields(getters) match {
+    analyzeFields(getters, infer) match {
       case Left(err) => Left(err)
       case Right(fields) => {
 
@@ -93,11 +96,11 @@ trait UDTDescriptors {
     }
   }
 
-  private def analyzeFields(getters: Seq[(Symbol, Type)]): Either[String, Seq[Accessor]] = {
-    val fieldDescriptors = getters map { case (fSym, fTpe) => (fSym, fTpe, analyzeType(fTpe.resultType)) }
+  private def analyzeFields(getters: Seq[(Symbol, Type)], infer: Type => Tree): Either[String, Seq[FieldAccessor]] = {
+    val fieldDescriptors = getters map { case (fSym, fTpe) => (fSym, fTpe, analyzeType(fTpe.resultType, infer)) }
 
     fieldDescriptors filter { _._3.isLeft } match {
-      case Seq() => Right(fieldDescriptors map { case (fSym, fTpe, Right(desc)) => Accessor(fSym, fTpe, desc) })
+      case Seq() => Right(fieldDescriptors map { case (fSym, fTpe, Right(desc)) => FieldAccessor(fSym, fTpe, desc) })
       case errs  => Left(errs map { case (fSym, _, Left(err)) => "(" + fSym.name + ": " + err + ")" } mkString (", "))
     }
   }

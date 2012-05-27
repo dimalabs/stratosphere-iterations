@@ -20,52 +20,140 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
   override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) {
 
     private val genSites = getGenSites(unit)
-    private val udtClasses = collection.mutable.Map[Type, (Symbol, UDTDescriptor)]()
 
-    override def transform(tree: Tree): Tree = super.transform(insertAtSite(tree, genSites(tree) map { mkUdtClass(tree, _) }))
+    private var first = true
 
-    private def insertAtSite(site: Tree, udtClasses: Iterable[Tree]): Tree = site match {
-      case _ if udtClasses.isEmpty       => site
-      case Block(stats, expr)            => treeCopy.Block(site, udtClasses.toList ::: stats, expr)
-      case Template(parents, self, body) => treeCopy.Template(site, parents, self, udtClasses.toList ::: body)
-    }
+    override def transform(tree: Tree): Tree = {
 
-    private def mkUdtClass(site: Tree, desc: UDTDescriptor): Tree = {
+      val isFirst = first
+      first = false
 
-      safely[Tree] { e => reporter.error(site.pos, "Error generating UDT[" + desc.tpe + "]: " + e.getMessage() + " @ " + e.getStackTrace.find(_.getClassName.startsWith("eu.stratosphere")).getOrElse(e.getStackTrace.head)); EmptyTree } {
-        withObserver[Tree] { t => reporter.info(site.pos, "Generated UDT[" + desc.tpe + "]: " + t, true) } {
+      val showResult: Tree => Unit = { tree: Tree =>
+        if (unit.toString.contains("WordCount.scala") && isFirst) {
+          treeBrowsers.create().browse(tree)
+        }
+      }
 
-          val udtTpe = appliedType(udtClass.tpe, List(desc.tpe))
-          val udtClassSym = currentOwner newClass (site.pos, unit.freshTypeName("UDTImpl")) setFlag (FINAL | SYNTHETIC)
-          udtClassSym setInfo ClassInfoType(List(definitions.ObjectClass.tpe, udtTpe), newScope, udtClassSym)
+      withObserver(showResult) {
 
-          val members = List(mkFieldTypes(udtClassSym, desc), mkCreateSerializer(udtClassSym, desc))
-          members foreach { m => udtClassSym.info.decls enter m.symbol }
+        val udtInstances = genSites(tree).toList map { desc => (desc, mkUdtInst(desc)) }
 
-          localTyper.typed {
-            ClassDef(udtClassSym, Modifiers(FINAL | SYNTHETIC), List(Nil), List(Nil), members, site.pos)
+        super.transform {
+          tree match {
+
+            // Insert generated classes
+            case Block(stats, expr)            => treeCopy.Block(tree, udtInstances.unzip._2 ::: stats, expr)
+            case Template(parents, self, body) => treeCopy.Template(tree, parents, self, udtInstances.unzip._2 ::: body)
+
+            // Rerun implicit inference at call sites
+            case TypeApply(s: Select, List(t)) if s.symbol == unanalyzedUdt => {
+
+              val udtTpe = appliedType(udtClass.tpe, List(t.tpe))
+              safely[Tree] { e => reporter.error(currentOwner.pos, "Error generating UDT[" + t.tpe + "]: " + e.getMessage() + " @ " + e.getStackTrace.find(_.getClassName.startsWith("eu.stratosphere")).getOrElse(e.getStackTrace.head)); tree } {
+
+                val udtInst = analyzer.inferImplicit(tree, udtTpe, true, false, localTyper.context)
+
+                udtInst.tree match {
+                  case t if t.isEmpty || t.symbol == unanalyzedUdt => {
+                    reporter.info(tree.pos, "Failed to apply " + udtTpe, true)
+                    tree
+                  }
+                  case udtInst => {
+                    reporter.info(tree.pos, "Applied " + udtInst.symbol.fullName + ": " + udtInst.tpe, true)
+                    localTyper.typed {
+                      Typed(udtInst, TypeTree(udtTpe))
+                    }
+                  }
+                }
+              }
+            }
+
+            case _ => tree
           }
         }
       }
     }
 
-    private def mkFieldTypes(udtClassSym: Symbol, desc: UDTDescriptor): Tree = {
-      val name = newTermName("fieldTypes")
+    private def mkUdtInst(desc: UDTDescriptor): Tree = {
 
-      //val valTpe = udtClass.tpe.members find { _.name.toString == "fieldTypes" } map { _.tpe.resultType } get
-      val valTpe = {
-        val exVar = udtClassSym.newAbstractType(newTypeName("_$1")) setInfo TypeBounds.upper(pactValueClass.tpe)
-        TypeRef(definitions.ArrayClass.tpe.prefix, definitions.ArrayClass, List(
-          ExistentialType(List(exVar), TypeRef(definitions.ClassClass.tpe.prefix, definitions.ClassClass, List(
-            TypeRef(NoPrefix, exVar, List()))
-          ))
-        ))
+      safely[Tree] { e => reporter.error(currentOwner.pos, "Error generating UDT[" + desc.tpe + "]: " + e.getMessage() + " @ " + e.getStackTrace.find(_.getClassName.startsWith("eu.stratosphere")).getOrElse(e.getStackTrace.headOption.getOrElse("No Stack Trace"))); EmptyTree } {
+        withObserver[Tree] { t => reporter.info(currentOwner.pos, "Generated " + t.symbol.fullName + "[" + desc.tpe + "]: " + t, true) } {
+
+          val udtTpe = appliedType(udtClass.tpe, List(desc.tpe))
+          val valSym = currentOwner.newValue(unit.freshTermName("udtInst")) setFlag (FINAL | IMPLICIT | SYNTHETIC) setInfo udtTpe
+          currentOwner.info.decls enter valSym
+
+          val udtClassDef = mkUdtClass(valSym, desc)
+          val rhs = Block(udtClassDef, New(TypeTree(udtClassDef.symbol.tpe), List(List())))
+
+          localTyper.typed {
+            ValDef(valSym, rhs)
+          }
+        }
       }
-      val valSym = udtClassSym.newValue(name) setFlag (OVERRIDE | FINAL | SYNTHETIC) setInfo valTpe
+    }
+
+    private def mkUdtClass(owner: Symbol, desc: UDTDescriptor): Tree = {
+
+      val udtTpe = appliedType(udtClass.tpe, List(desc.tpe))
+      val udtClassSym = owner newClass (owner.pos, unit.freshTypeName("UDTImpl")) setFlag (FINAL | SYNTHETIC)
+      udtClassSym setInfo ClassInfoType(List(definitions.ObjectClass.tpe, udtTpe), newScope, udtClassSym)
+
+      val members = mkFieldTypes(udtClassSym, desc) :+ mkCreateSerializer(udtClassSym, desc)
 
       localTyper.typed {
-        ValDef(valSym, New(TypeTree(valTpe), List(List(Literal(0)))))
+        ClassDef(udtClassSym, Modifiers(FINAL | SYNTHETIC), List(Nil), List(Nil), members, owner.pos)
       }
+    }
+
+    private def mkFieldTypes(udtClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
+
+      val elemTpe = {
+        val exVar = udtClassSym.newAbstractType(newTypeName("_$1")) setInfo TypeBounds.upper(pactValueClass.tpe)
+        ExistentialType(List(exVar), appliedType(definitions.ClassClass.tpe, List(TypeRef(NoPrefix, exVar, Nil))))
+      }
+
+      val valTpe = definitions.arrayType(elemTpe)
+      val valSym = udtClassSym.newValue(newTermName("fieldTypes ")) setFlag (PRIVATE | SYNTHETIC) setInfo valTpe
+
+      def getFieldTypes(desc: UDTDescriptor): Seq[(Boolean, Tree)] = desc match {
+        case OpaqueDescriptor(_, ref)                             => Seq((false, Select(ref, "fieldTypes"))) //Apply(Select(ref, "fieldTypes"), Nil)))
+        case PrimitiveDescriptor(_, _, sym)                       => Seq((true, gen.mkClassOf(sym.tpe)))
+        case ListDescriptor(_, _, PrimitiveDescriptor(_, _, sym)) => Seq((true, gen.mkClassOf(appliedType(pactListClass.tpe, List(sym.tpe)))))
+        case ListDescriptor(_, _, _)                              => Seq((true, gen.mkClassOf(appliedType(pactListClass.tpe, List(pactRecordClass.tpe)))))
+        case CaseClassDescriptor(_, _, _, getters)                => getters flatMap { getter => getFieldTypes(getter.descr) }
+      }
+
+      val fieldSets = getFieldTypes(desc).foldRight(Seq[(Boolean, Seq[Tree])]()) { (f, z) =>
+        val (compose, field) = f
+        z match {
+          case (true, group) :: rest if compose => (true, field +: group) +: rest
+          case _                                => (compose, Seq(field)) +: z
+        }
+      } map {
+        case (false, Seq(ref)) => ref
+        case (true, group)     => ArrayValue(TypeTree(elemTpe), group.toList)
+      }
+
+      val rhs = fieldSets match {
+        case Seq(a) => a
+        case as     => Apply(TypeApply(Select(Select(Ident("scala"), "Array"), "concat"), List(TypeTree(elemTpe))), as.toList)
+      }
+
+      val valDef = localTyper.typed {
+        udtClassSym.info.decls enter valSym
+        ValDef(valSym, rhs)
+      }
+
+      val defDef = localTyper.typed {
+        val mods = OVERRIDE | FINAL | STABLE | ACCESSOR | SYNTHETIC
+        val defSym = udtClassSym.newMethod(newTermName("fieldTypes")) setFlag mods setInfo NullaryMethodType(valTpe)
+        udtClassSym.info.decls enter defSym
+
+        DefDef(defSym, Modifiers(mods), Nil, Select(This(udtClassSym), "fieldTypes "))
+      }
+
+      List(valDef, defDef)
     }
 
     private def mkCreateSerializer(udtClassSym: Symbol, desc: UDTDescriptor): Tree = {
@@ -111,7 +199,7 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
       }
 
       val record = {
-        val ss = methodSym.newValueParameter(NoPosition, "record") setInfo desc.tpe
+        val ss = methodSym.newValueParameter(NoPosition, "record") setInfo pactRecordClass.tpe
         ValDef(ss) setType ss.tpe
       }
 
@@ -127,7 +215,7 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
       val methodSym = udtSerClassSym.newMethod(name) setFlag (OVERRIDE | FINAL | SYNTHETIC)
 
       val record = {
-        val ss = methodSym.newValueParameter(NoPosition, "record") setInfo desc.tpe
+        val ss = methodSym.newValueParameter(NoPosition, "record") setInfo pactRecordClass.tpe
         ValDef(ss) setType ss.tpe
       }
 
@@ -153,8 +241,22 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
 
     private def withObserver[T](obs: T => Unit)(block: => T): T = {
       val ret = block
-      obs(block)
+      obs(ret)
+      ret
+    }
+
+    private def idempotently(value: Boolean, setter: Boolean => Unit)(block: => Unit): Unit = {
+      if (value) {
+        setter(false)
+        block
+      }
+    }
+
+    private def preserving[T, U](value: T, setter: T => Unit)(block: => U): U = {
+      val ret = block
+      setter(value)
       ret
     }
   }
 }
+
