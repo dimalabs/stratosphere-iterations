@@ -35,7 +35,7 @@ class WordCount(textInput: String, wordsOutput: String) extends PactProgram with
   def formatOutput = (word: String, count: Int) => "%s %d".format(word, count)
 }
 
-trait WordCountGeneratedImplicits {
+trait WordCountGeneratedImplicits { this: WordCount =>
 
   import java.io.ObjectInputStream
 

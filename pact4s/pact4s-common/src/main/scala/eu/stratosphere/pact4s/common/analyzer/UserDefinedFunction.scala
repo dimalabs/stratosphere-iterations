@@ -17,6 +17,18 @@ trait UDF extends Serializable {
   def relocateInputField(oldPosition: Int, newPosition: Int)
 }
 
+trait UDFLowPriorityImplicits {
+
+  class UDFAnalysisFailedException extends RuntimeException("UDF analysis failed. This should never happen.")
+
+  implicit def unanalyzedUDF1[T1, R]: UDF1[T1 => R] = throw new UDFAnalysisFailedException
+  implicit def unanalyzedUDF2[T1, T2, R]: UDF2[(T1, T2) => R] = throw new UDFAnalysisFailedException
+}
+
+object UDF extends UDFLowPriorityImplicits {
+
+}
+
 trait UDF1[+F <: _ => _] extends UDF {
 
   def getReadFields: Array[Int]

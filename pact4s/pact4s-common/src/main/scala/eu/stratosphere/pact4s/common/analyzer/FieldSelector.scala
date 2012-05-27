@@ -11,3 +11,14 @@ trait FieldSelector[+F <: _ => _] extends Serializable {
   def globalize(locations: Map[Int, Int])
   def relocateField(oldPosition: Int, newPosition: Int)
 }
+
+trait FieldSelectorLowPriorityImplicits {
+
+  class FieldSelectorAnalysisFailedException extends RuntimeException("Field selector analysis failed. This should never happen.")
+
+  implicit def unanalyzedFieldSelector[T1, R]: FieldSelector[T1 => R] = throw new FieldSelectorAnalysisFailedException
+}
+
+object FieldSelector extends FieldSelectorLowPriorityImplicits {
+
+}
