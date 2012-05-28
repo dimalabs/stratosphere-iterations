@@ -16,6 +16,16 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
   import udtDescriptors._
 
   override val phaseName = "Pact4s.UDTGenerator"
+  var msgNum = 100;
+
+  private def log(pos: Position, isError: Boolean)(msg: String): Unit = {
+    if (isError) {
+      reporter.error(pos, "#" + msgNum + " - " + msg)
+    } else {
+      reporter.info(pos, "#" + msgNum + " - " + msg, true)
+    }
+    msgNum += 1
+  }
 
   override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) {
 
@@ -42,36 +52,43 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
           //       Wrap the block in an anonymous class, process the tree, then unpack the result.
           case block: Block if genSites(tree).nonEmpty => {
 
-            val (wrapper, unwrap) = mkBlockWrapper(block)
-            unwrap(super.transform(wrapper))
-          }
+            val (wrappedBlock, wrapper) = mkBlockWrapper(currentOwner, block)
+            val result = super.transform(localTyper.typed { wrappedBlock })
 
-          // Insert generated classes
-          case Template(parents, self, body) if genSites(tree).nonEmpty => {
-
-            super.transform {
-              val udtInstances = genSites(tree).toList map { desc => (desc, mkUdtInst(desc)) }
-              localTyper.typed { treeCopy.Template(tree, parents, self, udtInstances.unzip._2 ::: body) }
+            detectWrapperArtifacts(wrapper) {
+              localTyper.typed { unwrapBlock(currentOwner, wrapper, result) }
             }
           }
 
-          // Rerun implicit inference at call sites
+          // Generate UDT classes and inject them into the AST
+          case ClassDef(mods, name, tparams, template @ Template(parents, self, body)) if genSites(tree).nonEmpty => {
+
+            super.transform {
+
+              val udtInstances = genSites(tree).toList map { desc => mkUdtInst(tree.symbol, desc) }
+              log(tree.pos, false) { "GenSite " + tree.symbol + " defines:   " + tree.symbol.tpe.members.filter(_.isImplicit).map(_.name.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ") }
+
+              localTyper.typed { treeCopy.ClassDef(tree, mods, name, tparams, treeCopy.Template(template, parents, self, udtInstances ::: body)) }
+            }
+          }
+
+          // Rerun implicit inference at call sites bound to unanalyzedUdt
           case TypeApply(s: Select, List(t)) if s.symbol == unanalyzedUdt => {
 
             super.transform {
 
-              val udtTpe = appliedType(udtClass.tpe, List(t.tpe))
-              safely(tree) { e => reporter.error(currentOwner.pos, "Error generating UDT[" + t.tpe + "]: " + e.getMessage() + " @ " + getRelevantStackLine(e)) } {
+              safely(tree) { e => "Error applying UDT[" + t.tpe + "]: " + e.getMessage() + " @ " + getRelevantStackLine(e) } {
 
+                val udtTpe = appliedType(udtClass.tpe, List(t.tpe)) map { t => if (t.typeSymbol.isMemberOf(definitions.getModule("java.lang"))) t.normalize else t }
                 val udtInst = analyzer.inferImplicit(tree, udtTpe, true, false, localTyper.context)
 
                 udtInst.tree match {
                   case t if t.isEmpty || t.symbol == unanalyzedUdt => {
-                    reporter.info(tree.pos, "Failed to apply " + udtTpe, true)
+                    log(tree.pos, true) { "Failed to apply " + udtTpe + ". Implicits: " + localTyper.context.implicitss.flatten.map(_.name.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ") }
                     tree
                   }
                   case udtInst => {
-                    reporter.info(tree.pos, "Applied " + udtInst.symbol.fullName + ": " + udtInst.tpe, true)
+                    log(tree.pos, false) { "Applied " + udtInst.symbol.fullName + ": " + udtInst.tpe }
                     localTyper.typed {
                       Typed(udtInst, TypeTree(udtTpe))
                     }
@@ -86,126 +103,121 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
       }
     }
 
-    private def mkBlockWrapper(site: Block): (Tree, Tree => Tree) = {
+    private def mkBlockWrapper(owner: Symbol, site: Block): (Tree, Symbol) = {
 
-      safely[(Tree, Tree => Tree)](site: Tree, identity[Tree] _) { e => reporter.error(currentOwner.pos, "Error generating BlockWrapper in " + currentOwner + ": " + e.getMessage() + " @ " + getRelevantStackLine(e)) } {
+      safely[(Tree, Symbol)](site: Tree, NoSymbol) { e => "Error generating BlockWrapper in " + owner + ": " + e.getMessage() + " @ " + getRelevantStackLine(e) } {
 
-        val wrapperSym = currentOwner newAnonymousClass currentOwner.pos
-        wrapperSym setInfo ClassInfoType(List(definitions.ObjectClass.tpe), newScope, wrapperSym)
+        val wrapper = this.mkClass(owner, null, FINAL, List(definitions.ObjectClass.tpe)) { classSym =>
 
-        val mods = FINAL | STABLE | SYNTHETIC
-        val result = newTermName("result")
-        val defSym = wrapperSym.newMethod(result) setFlag mods setInfo NullaryMethodType(site.expr.tpe)
-        wrapperSym.info.decls enter defSym
+          val rewireOwner = mkTransformer { tree =>
+            if (tree.hasSymbol && tree.symbol.owner == owner)
+              tree.symbol.owner = classSym
+            tree
+          }
 
-        val defDef = DefDef(defSym, Modifiers(mods), Nil, site.changeOwner((currentOwner, wrapperSym)))
-        val classDef = ClassDef(wrapperSym, Modifiers(FINAL | SYNTHETIC), List(Nil), List(Nil), List(defDef), wrapperSym.pos)
-
-        genSites(classDef.impl) = genSites(site)
-        genSites(site) = Set()
-
-        val wrappedBlock = localTyper.typed {
-          Select(Block(classDef, New(TypeTree(wrapperSym.tpe), List(List()))), "result")
+          List(mkMethod(classSym, "result", FINAL, Nil, site.expr.tpe) { _ => rewireOwner(site) })
         }
 
-        (wrappedBlock, unwrapBlock(wrapperSym, result))
+        val wrappedBlock = Select(Block(wrapper, New(TypeTree(wrapper.symbol.tpe), List(List()))), "result")
+        genSites(wrapper) = genSites(site)
+        genSites(site) = Set()
+
+        (wrappedBlock, wrapper.symbol)
       }
     }
 
-    private def unwrapBlock(wrapper: Symbol, result: Name)(tree: Tree): Tree = {
+    private def unwrapBlock(owner: Symbol, wrapper: Symbol, tree: Tree): Tree = {
 
-      treeBrowsers.create().browse(tree)
-
-      safely(tree) { e => reporter.error(currentOwner.pos, "Error unwrapping BlockWrapper in " + currentOwner + ": " + e.getMessage() + " @ " + getRelevantStackLine(e)) } {
+      safely(tree) { e => "Error unwrapping BlockWrapper in " + owner + ": " + e.getMessage() + " @ " + getRelevantStackLine(e) } {
 
         val Select(Block(List(cd: ClassDef), _), _) = tree
         val ClassDef(_, _, _, Template(_, _, body)) = cd
-        val Some(DefDef(_, _, _, _, _, rhs: Block)) = body find { item => item.hasSymbol && item.symbol.name == result }
+        val Some(DefDef(_, _, _, _, _, rhs: Block)) = body find { item => item.hasSymbol && item.symbol.name.toString == "result" }
 
         val newImplicits = body filter { m => m.hasSymbol && m.symbol.isImplicit }
         val newSyms = newImplicits map { _.symbol } toSet
 
-        val trans = new Transformer {
-          override def transform(tree: Tree): Tree = tree match {
-            case sel: Select if sel.hasSymbol && newSyms.contains(sel.symbol) => Ident(sel.symbol) setType sel.tpe
-            case tree => super.transform(tree)
+        val rewireRefsAndOwner = mkTransformer {
+          _ match {
+            case sel: Select if sel.hasSymbol && newSyms.contains(sel.symbol) => mkIdent(sel.symbol)
+            case tree => {
+              if (tree.hasSymbol && tree.symbol.owner == wrapper)
+                tree.symbol.owner = owner
+              tree
+            }
           }
         }
 
-        val rewiredRhs = trans.transform(rhs).changeOwner((wrapper, currentOwner))
+        val rewiredRhs = rewireRefsAndOwner(rhs)
 
         val rewiredImplicits = newImplicits map { imp =>
           val sym = imp.symbol
           val ValDef(_, _, _, rhs) = imp
 
-          sym.resetFlag(PRIVATE | FINAL)
-          sym.owner = currentOwner
+          sym.owner = owner
+          sym.resetFlag(PRIVATE)
 
           ValDef(sym, rhs) setType sym.tpe
         }
 
-        // Sanity check - make sure we've properly cleaned up after ourselves
-        val detectArtifactsTransformer = new Transformer {
-          override def transform(tree: Tree): Tree = {
-            var detected = false
-
-            if (tree.hasSymbol && tree.symbol == wrapper)
-              detected = true
-
-            if (tree.tpe == null) {
-              reporter.error(currentOwner.pos, "Unwrapped tree has no type: " + tree)
-            } else {
-              val tpeArtifacts = tree.tpe filter { tpe => tpe.typeSymbol == wrapper || tpe.termSymbol == wrapper }
-              detected |= tpeArtifacts.nonEmpty
-            }
-
-            if (detected)
-              reporter.error(currentOwner.pos, "Wrapper artifact detected: " + tree)
-
-            super.transform(tree)
-          }
-        }
-
-        detectArtifactsTransformer.transform {
-          localTyper.typed {
-            val Block(stats, expr) = rewiredRhs
-            treeCopy.Block(rewiredRhs, rewiredImplicits ::: stats, expr)
-          }
-        }
+        val Block(stats, expr) = rewiredRhs
+        treeCopy.Block(rewiredRhs, rewiredImplicits ::: stats, expr)
       }
     }
 
-    private def mkUdtInst(desc: UDTDescriptor): Tree = {
+    // Sanity check - make sure we've properly cleaned up after ourselves
+    private def detectWrapperArtifacts(wrapper: Symbol)(tree: Tree): Tree = {
 
-      safely(EmptyTree: Tree) { e => reporter.error(currentOwner.pos, "Error generating UDT[" + desc.tpe + "]: " + e.getMessage() + " @ " + getRelevantStackLine(e)) } {
-        withObserver[Tree] { t => reporter.info(currentOwner.pos, "Generated " + t.symbol.fullName + "[" + desc.tpe + "] @ " + currentClass + " " + currentOwner + " : " + t, true) } {
+      var detected = false
+
+      val trans = mkTransformer { tree =>
+
+        detected |= (tree.hasSymbol && tree.symbol.hasTransOwner(wrapper))
+
+        if (tree.tpe == null) {
+          log(currentOwner.pos, true) { "Unwrapped tree has no type [" + tree.shortClass + "]: " + tree }
+        } else {
+          detected |= (tree.tpe filter { tpe => tpe.typeSymbol.hasTransOwner(wrapper) || tpe.termSymbol.hasTransOwner(wrapper) }).nonEmpty
+        }
+
+        if (detected)
+          log(currentOwner.pos, true) { "Wrapper artifact detected [" + tree.shortClass + "]: " + tree }
+
+        tree
+      }
+
+      if (detected)
+        treeBrowsers.create().browse(tree)
+
+      tree
+    }
+
+    private def mkUdtInst(owner: Symbol, desc: UDTDescriptor): Tree = {
+
+      safely(EmptyTree: Tree) { e => "Error generating UDT[" + desc.tpe + "]: " + e.getMessage() + " @ " + getRelevantStackLine(e) } {
+        withObserver[Tree] { t => log(owner.pos, false) { "Generated " + t.symbol.fullName + "[" + desc.tpe + "] @ " + owner + " : " + t } } {
 
           val udtTpe = appliedType(udtClass.tpe, List(desc.tpe))
-          val valSym = currentClass.newValue(unit.freshTermName("pact4s udtInst")) setInfo udtTpe
 
-          currentClass.info.decls enter valSym
-          valSym setFlag (PRIVATE | FINAL | IMPLICIT | SYNTHETIC)
+          val tree = mkVal(owner, unit.freshTermName("udtInst(") + ")", PRIVATE | IMPLICIT, udtTpe) { valSym =>
 
-          val udtClassDef = mkUdtClass(valSym, desc)
-          val rhs = Block(udtClassDef, New(TypeTree(udtClassDef.symbol.tpe), List(List())))
-
-          localTyper.typed {
-            ValDef(valSym, rhs)
+            val udtClassDef = mkUdtClass(valSym, desc)
+            Block(udtClassDef, Typed(New(TypeTree(udtClassDef.symbol.tpe), List(List())), TypeTree(udtTpe)))
           }
+
+          owner.info.decls enter tree.symbol
+
+          // Why is the UnCurry phase unhappy if we don't run the typer here?
+          // We're already running it for the enclosing ClassDef...
+          localTyper.typed { tree }
         }
       }
     }
 
     private def mkUdtClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 
-      val udtTpe = appliedType(udtClass.tpe, List(desc.tpe))
-      val udtClassSym = owner newClass (owner.pos, unit.freshTypeName("UDTImpl")) setFlag (FINAL | SYNTHETIC)
-      udtClassSym setInfo ClassInfoType(List(definitions.ObjectClass.tpe, udtTpe), newScope, udtClassSym)
-
-      val members = mkFieldTypes(udtClassSym, desc) :+ mkCreateSerializer(udtClassSym, desc)
-
-      localTyper.typed {
-        ClassDef(udtClassSym, Modifiers(FINAL | SYNTHETIC), List(Nil), List(Nil), members, owner.pos)
+      mkClass(owner, "UDTImpl", FINAL, List(definitions.ObjectClass.tpe, appliedType(udtClass.tpe, List(desc.tpe)))) { classSym =>
+        mkFieldTypes(classSym, desc) :+ mkCreateSerializer(classSym, desc)
       }
     }
 
@@ -217,128 +229,132 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
       }
 
       val valTpe = definitions.arrayType(elemTpe)
-      val valSym = udtClassSym.newValue(newTermName("fieldTypes ")) setFlag (PRIVATE | SYNTHETIC) setInfo valTpe
 
-      def getFieldTypes(desc: UDTDescriptor): Seq[(Boolean, Tree)] = desc match {
-        case OpaqueDescriptor(_, ref)                             => Seq((false, Select(ref, "fieldTypes"))) //Apply(Select(ref, "fieldTypes"), Nil)))
-        case PrimitiveDescriptor(_, _, sym)                       => Seq((true, gen.mkClassOf(sym.tpe)))
-        case ListDescriptor(_, _, PrimitiveDescriptor(_, _, sym)) => Seq((true, gen.mkClassOf(appliedType(pactListClass.tpe, List(sym.tpe)))))
-        case ListDescriptor(_, _, _)                              => Seq((true, gen.mkClassOf(appliedType(pactListClass.tpe, List(pactRecordClass.tpe)))))
-        case CaseClassDescriptor(_, _, _, getters)                => getters flatMap { getter => getFieldTypes(getter.descr) }
-      }
+      mkValAndGetter(udtClassSym, "fieldTypes", OVERRIDE | FINAL, valTpe) { _ =>
 
-      val fieldSets = getFieldTypes(desc).foldRight(Seq[(Boolean, Seq[Tree])]()) { (f, z) =>
-        val (compose, field) = f
-        z match {
-          case (true, group) :: rest if compose => (true, field +: group) +: rest
-          case _                                => (compose, Seq(field)) +: z
+        def getFieldTypes(desc: UDTDescriptor): Seq[(Boolean, Tree)] = desc match {
+          case OpaqueDescriptor(_, ref)                             => Seq((false, Select(ref, "fieldTypes"))) //Apply(Select(ref, "fieldTypes"), Nil)))
+          case PrimitiveDescriptor(_, _, sym)                       => Seq((true, gen.mkClassOf(sym.tpe)))
+          case ListDescriptor(_, _, PrimitiveDescriptor(_, _, sym)) => Seq((true, gen.mkClassOf(appliedType(pactListClass.tpe, List(sym.tpe)))))
+          case ListDescriptor(_, _, _)                              => Seq((true, gen.mkClassOf(appliedType(pactListClass.tpe, List(pactRecordClass.tpe)))))
+          case CaseClassDescriptor(_, _, _, getters)                => getters flatMap { getter => getFieldTypes(getter.descr) }
         }
-      } map {
-        case (false, Seq(ref)) => ref
-        case (true, group)     => ArrayValue(TypeTree(elemTpe), group.toList)
+
+        val fieldSets = getFieldTypes(desc).foldRight(Seq[(Boolean, Seq[Tree])]()) { (f, z) =>
+          val (compose, field) = f
+          z match {
+            case (true, group) :: rest if compose => (true, field +: group) +: rest
+            case _                                => (compose, Seq(field)) +: z
+          }
+        } map {
+          case (false, Seq(ref)) => ref
+          case (true, group)     => ArrayValue(TypeTree(elemTpe), group.toList)
+        }
+
+        fieldSets match {
+          case Seq(a) => a
+          case as     => Apply(TypeApply(Select(Select(Ident("scala"), "Array"), "concat"), List(TypeTree(elemTpe))), as.toList)
+        }
       }
+    }
 
-      val rhs = fieldSets match {
-        case Seq(a) => a
-        case as     => Apply(TypeApply(Select(Select(Ident("scala"), "Array"), "concat"), List(TypeTree(elemTpe))), as.toList)
+    private def mkCreateSerializer(udtClassSym: Symbol, desc: UDTDescriptor): Tree = {
+
+      val indexMapTpe = appliedType(definitions.ArrayClass.tpe, List(definitions.IntClass.tpe))
+      val udtSerTpe = appliedType(udtSerializerClass.tpe, List(desc.tpe))
+
+      mkMethod(udtClassSym, "createSerializer", OVERRIDE | FINAL, List(("indexMap", indexMapTpe)), udtSerTpe) { methodSym =>
+        val udtSer = mkUdtSerializerClass(methodSym, desc)
+        Block(udtSer, Typed(New(TypeTree(udtSer.symbol.tpe), List(List())), TypeTree(udtSerTpe)))
       }
+    }
 
-      val valDef = localTyper.typed {
-        udtClassSym.info.decls enter valSym
-        ValDef(valSym, rhs)
+    private def mkUdtSerializerClass(owner: Symbol, desc: UDTDescriptor): Tree = {
+
+      mkClass(owner, "UDTSerializerImpl", FINAL, List(appliedType(udtSerializerClass.tpe, List(desc.tpe)))) { classSym =>
+        List(mkSerialize(classSym, desc), mkDeserialize(classSym, desc))
       }
+    }
 
-      val defDef = localTyper.typed {
-        val mods = OVERRIDE | FINAL | STABLE | ACCESSOR | SYNTHETIC
-        val defSym = udtClassSym.newMethod(newTermName("fieldTypes")) setFlag mods setInfo NullaryMethodType(valTpe)
-        udtClassSym.info.decls enter defSym
+    private def mkSerialize(udtSerClassSym: Symbol, desc: UDTDescriptor): Tree = {
+      mkMethod(udtSerClassSym, "serialize", OVERRIDE | FINAL, List(("item", desc.tpe), ("record", pactRecordClass.tpe)), definitions.UnitClass.tpe) { _ =>
+        Literal(())
+      }
+    }
 
-        DefDef(defSym, Modifiers(mods), Nil, Select(This(udtClassSym), "fieldTypes "))
+    private def mkDeserialize(udtSerClassSym: Symbol, desc: UDTDescriptor): Tree = {
+
+      mkMethod(udtSerClassSym, "deserialize", OVERRIDE | FINAL, List(("record", pactRecordClass.tpe)), desc.tpe) { _ =>
+        desc match {
+          case PrimitiveDescriptor(_, default, _) => default
+          case _                                  => Literal(Constant(null))
+        }
+      }
+    }
+
+    private def mkIdent(target: Symbol): Tree = Ident(target) setType target.tpe
+
+    private def mkVal(owner: Symbol, name: String, flags: Int, valTpe: Type)(value: Symbol => Tree): Tree = {
+      val valSym = owner.newValue(name) setFlag (flags | SYNTHETIC) setInfo valTpe
+      ValDef(valSym, value(valSym))
+    }
+
+    private def mkMethod(owner: Symbol, name: String, flags: Int, args: List[(String, Type)], ret: Type)(impl: Symbol => Tree): Tree = {
+
+      val methodSym = owner.newMethod(name) setFlag (flags | SYNTHETIC)
+
+      if (args.isEmpty)
+        methodSym setInfo NullaryMethodType(ret)
+      else
+        methodSym setInfo MethodType(methodSym newSyntheticValueParams args.unzip._2, ret)
+
+      val valParams = args map { case (name, tpe) => ValDef(methodSym.newValueParameter(NoPosition, name) setInfo tpe) }
+
+      DefDef(methodSym, Modifiers(flags | SYNTHETIC), List(valParams), impl(methodSym))
+    }
+
+    private def mkValAndGetter(owner: Symbol, name: String, flags: Int, valTpe: Type)(value: Symbol => Tree): List[Tree] = {
+
+      val valDef = mkVal(owner, name + " ", PRIVATE, valTpe) { value }
+
+      val defDef = mkMethod(owner, name, flags | ACCESSOR, Nil, valTpe) { _ =>
+        Select(This(owner), name + " ")
       }
 
       List(valDef, defDef)
     }
 
-    private def mkCreateSerializer(udtClassSym: Symbol, desc: UDTDescriptor): Tree = {
-      val name = newTermName("createSerializer")
-      val methodSym = udtClassSym.newMethod(name) setFlag (OVERRIDE | FINAL | SYNTHETIC)
+    private def mkClass(owner: Symbol, name: String, flags: Int, parents: List[Type])(members: Symbol => List[Tree]): Tree = {
 
-      val indexMap = {
-        val ss = methodSym.newValueParameter(NoPosition, "indexMap") setInfo appliedType(definitions.ArrayClass.tpe, List(definitions.IntClass.tpe))
-        ValDef(ss) setType ss.tpe
+      val classSym = {
+        if (name == null)
+          owner newAnonymousClass owner.pos
+        else
+          owner newClass (owner.pos, unit.freshTypeName(name))
       }
 
-      val udtSer = mkUdtSerializerClass(methodSym, desc)
-      val udtSerTpe = appliedType(udtSerializerClass.tpe, List(desc.tpe))
-      val rhs = Block(udtSer, New(TypeTree(udtSer.symbol.tpe), List(List())))
+      classSym setFlag (flags | SYNTHETIC)
+      classSym setInfo ClassInfoType(parents, newScope, classSym)
 
-      methodSym setInfo MethodType(methodSym newSyntheticValueParams List(indexMap.tpe), udtSerTpe)
+      val classMembers = members(classSym)
+      classMembers foreach { m => classSym.info.decls enter m.symbol }
 
-      localTyper.typed {
-        DefDef(methodSym, Modifiers(OVERRIDE | FINAL | SYNTHETIC), List(List(indexMap)), rhs)
-      }
+      ClassDef(classSym, Modifiers(flags | SYNTHETIC), List(Nil), List(Nil), classMembers, owner.pos)
     }
 
-    private def mkUdtSerializerClass(owner: Symbol, desc: UDTDescriptor): Tree = {
-      val udtSerTpe = appliedType(udtSerializerClass.tpe, List(desc.tpe))
-      val udtSerClassSym = owner newClass (owner.pos, unit.freshTypeName("UDTSerializerImpl")) setFlag (FINAL | SYNTHETIC)
-      udtSerClassSym setInfo ClassInfoType(List(udtSerTpe), newScope, udtSerClassSym)
-
-      val members = List(mkSerialize(udtSerClassSym, desc), mkDeserialize(udtSerClassSym, desc))
-      members foreach { m => udtSerClassSym.info.decls enter m.symbol }
-
-      localTyper.typed {
-        ClassDef(udtSerClassSym, Modifiers(FINAL | SYNTHETIC), List(Nil), List(Nil), members, owner.pos)
+    private def mkTransformer(trans: Tree => Tree): Tree => Tree = {
+      val transformer = new Transformer {
+        override def transform(tree: Tree): Tree = super.transform(trans(tree))
       }
+
+      transformer.transform _
     }
 
-    private def mkSerialize(udtSerClassSym: Symbol, desc: UDTDescriptor): Tree = {
-      val name = newTermName("serialize")
-      val methodSym = udtSerClassSym.newMethod(name) setFlag (OVERRIDE | FINAL | SYNTHETIC)
-
-      val item = {
-        val ss = methodSym.newValueParameter(NoPosition, "item") setInfo desc.tpe
-        ValDef(ss) setType ss.tpe
-      }
-
-      val record = {
-        val ss = methodSym.newValueParameter(NoPosition, "record") setInfo pactRecordClass.tpe
-        ValDef(ss) setType ss.tpe
-      }
-
-      methodSym setInfo MethodType(methodSym newSyntheticValueParams List(item.tpe, record.tpe), definitions.UnitClass.tpe)
-
-      localTyper.typed {
-        DefDef(methodSym, Modifiers(OVERRIDE | FINAL | SYNTHETIC), List(List(item, record)), Literal(()))
-      }
-    }
-
-    private def mkDeserialize(udtSerClassSym: Symbol, desc: UDTDescriptor): Tree = {
-      val name = newTermName("deserialize")
-      val methodSym = udtSerClassSym.newMethod(name) setFlag (OVERRIDE | FINAL | SYNTHETIC)
-
-      val record = {
-        val ss = methodSym.newValueParameter(NoPosition, "record") setInfo pactRecordClass.tpe
-        ValDef(ss) setType ss.tpe
-      }
-
-      methodSym setInfo MethodType(methodSym newSyntheticValueParams List(record.tpe), desc.tpe)
-
-      val rhs = desc match {
-        case PrimitiveDescriptor(_, default, _) => default
-        case _                                  => Literal(Constant(null))
-      }
-
-      localTyper.typed {
-        DefDef(methodSym, Modifiers(OVERRIDE | FINAL | SYNTHETIC), List(List(record)), rhs)
-      }
-    }
-
-    private def safely[T](default: => T)(onError: Throwable => Unit)(block: => T): T = {
+    private def safely[T](default: => T)(onError: Throwable => String)(block: => T): T = {
       try {
         block
       } catch {
-        case e => { onError(e); default }
+        case e => { log(currentOwner.pos, true)(onError(e)); default }
       }
     }
 

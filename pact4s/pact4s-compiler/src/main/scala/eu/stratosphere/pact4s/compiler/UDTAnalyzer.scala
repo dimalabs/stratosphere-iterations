@@ -81,7 +81,7 @@ abstract class UDTAnalyzer(udtDescriptors: UDTDescriptors) extends PluginCompone
     }
 
     override def isPathComponent(tree: Tree) = tree match {
-      case _: Template => true
+      case _: ClassDef => true
       case _: Block    => true
       case _           => false
     }
