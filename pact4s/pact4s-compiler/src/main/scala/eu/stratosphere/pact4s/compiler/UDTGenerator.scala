@@ -36,20 +36,32 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
 
       withObserver(showResult) {
 
-        val udtInstances = genSites(tree).toList map { desc => (desc, mkUdtInst(desc)) }
+        tree match {
 
-        super.transform {
-          tree match {
+          // HACK: Blocks are naked (no symbol), so there's no scope in which to insert new implicits. 
+          //       Wrap the block in an anonymous class, process the tree, then unpack the result.
+          case block: Block if genSites(tree).nonEmpty => {
 
-            // Insert generated classes
-            case Block(stats, expr)            => treeCopy.Block(tree, udtInstances.unzip._2 ::: stats, expr)
-            case Template(parents, self, body) => treeCopy.Template(tree, parents, self, udtInstances.unzip._2 ::: body)
+            val (wrapper, unwrap) = mkBlockWrapper(block)
+            unwrap(super.transform(wrapper))
+          }
 
-            // Rerun implicit inference at call sites
-            case TypeApply(s: Select, List(t)) if s.symbol == unanalyzedUdt => {
+          // Insert generated classes
+          case Template(parents, self, body) if genSites(tree).nonEmpty => {
+
+            super.transform {
+              val udtInstances = genSites(tree).toList map { desc => (desc, mkUdtInst(desc)) }
+              localTyper.typed { treeCopy.Template(tree, parents, self, udtInstances.unzip._2 ::: body) }
+            }
+          }
+
+          // Rerun implicit inference at call sites
+          case TypeApply(s: Select, List(t)) if s.symbol == unanalyzedUdt => {
+
+            super.transform {
 
               val udtTpe = appliedType(udtClass.tpe, List(t.tpe))
-              safely[Tree] { e => reporter.error(currentOwner.pos, "Error generating UDT[" + t.tpe + "]: " + e.getMessage() + " @ " + e.getStackTrace.find(_.getClassName.startsWith("eu.stratosphere")).getOrElse(e.getStackTrace.head)); tree } {
+              safely(tree) { e => reporter.error(currentOwner.pos, "Error generating UDT[" + t.tpe + "]: " + e.getMessage() + " @ " + getRelevantStackLine(e)) } {
 
                 val udtInst = analyzer.inferImplicit(tree, udtTpe, true, false, localTyper.context)
 
@@ -67,8 +79,97 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
                 }
               }
             }
+          }
 
-            case _ => tree
+          case _ => super.transform(tree)
+        }
+      }
+    }
+
+    private def mkBlockWrapper(site: Block): (Tree, Tree => Tree) = {
+
+      safely[(Tree, Tree => Tree)](site: Tree, identity[Tree] _) { e => reporter.error(currentOwner.pos, "Error generating BlockWrapper in " + currentOwner + ": " + e.getMessage() + " @ " + getRelevantStackLine(e)) } {
+
+        val wrapperSym = currentOwner newAnonymousClass currentOwner.pos
+        wrapperSym setInfo ClassInfoType(List(definitions.ObjectClass.tpe), newScope, wrapperSym)
+
+        val mods = FINAL | STABLE | SYNTHETIC
+        val result = newTermName("result")
+        val defSym = wrapperSym.newMethod(result) setFlag mods setInfo NullaryMethodType(site.expr.tpe)
+        wrapperSym.info.decls enter defSym
+
+        val defDef = DefDef(defSym, Modifiers(mods), Nil, site.changeOwner((currentOwner, wrapperSym)))
+        val classDef = ClassDef(wrapperSym, Modifiers(FINAL | SYNTHETIC), List(Nil), List(Nil), List(defDef), wrapperSym.pos)
+
+        genSites(classDef.impl) = genSites(site)
+        genSites(site) = Set()
+
+        val wrappedBlock = localTyper.typed {
+          Select(Block(classDef, New(TypeTree(wrapperSym.tpe), List(List()))), "result")
+        }
+
+        (wrappedBlock, unwrapBlock(wrapperSym, result))
+      }
+    }
+
+    private def unwrapBlock(wrapper: Symbol, result: Name)(tree: Tree): Tree = {
+
+      treeBrowsers.create().browse(tree)
+
+      safely(tree) { e => reporter.error(currentOwner.pos, "Error unwrapping BlockWrapper in " + currentOwner + ": " + e.getMessage() + " @ " + getRelevantStackLine(e)) } {
+
+        val Select(Block(List(cd: ClassDef), _), _) = tree
+        val ClassDef(_, _, _, Template(_, _, body)) = cd
+        val Some(DefDef(_, _, _, _, _, rhs: Block)) = body find { item => item.hasSymbol && item.symbol.name == result }
+
+        val newImplicits = body filter { m => m.hasSymbol && m.symbol.isImplicit }
+        val newSyms = newImplicits map { _.symbol } toSet
+
+        val trans = new Transformer {
+          override def transform(tree: Tree): Tree = tree match {
+            case sel: Select if sel.hasSymbol && newSyms.contains(sel.symbol) => Ident(sel.symbol) setType sel.tpe
+            case tree => super.transform(tree)
+          }
+        }
+
+        val rewiredRhs = trans.transform(rhs).changeOwner((wrapper, currentOwner))
+
+        val rewiredImplicits = newImplicits map { imp =>
+          val sym = imp.symbol
+          val ValDef(_, _, _, rhs) = imp
+
+          sym.resetFlag(PRIVATE | FINAL)
+          sym.owner = currentOwner
+
+          ValDef(sym, rhs) setType sym.tpe
+        }
+
+        // Sanity check - make sure we've properly cleaned up after ourselves
+        val detectArtifactsTransformer = new Transformer {
+          override def transform(tree: Tree): Tree = {
+            var detected = false
+
+            if (tree.hasSymbol && tree.symbol == wrapper)
+              detected = true
+
+            if (tree.tpe == null) {
+              reporter.error(currentOwner.pos, "Unwrapped tree has no type: " + tree)
+            } else {
+              val tpeArtifacts = tree.tpe filter { tpe => tpe.typeSymbol == wrapper || tpe.termSymbol == wrapper }
+              detected |= tpeArtifacts.nonEmpty
+            }
+
+            if (detected)
+              reporter.error(currentOwner.pos, "Wrapper artifact detected: " + tree)
+
+            super.transform(tree)
+          }
+        }
+
+        detectArtifactsTransformer.transform {
+          localTyper.typed {
+            val Block(stats, expr) = rewiredRhs
+            treeCopy.Block(rewiredRhs, rewiredImplicits ::: stats, expr)
           }
         }
       }
@@ -76,12 +177,14 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
 
     private def mkUdtInst(desc: UDTDescriptor): Tree = {
 
-      safely[Tree] { e => reporter.error(currentOwner.pos, "Error generating UDT[" + desc.tpe + "]: " + e.getMessage() + " @ " + e.getStackTrace.find(_.getClassName.startsWith("eu.stratosphere")).getOrElse(e.getStackTrace.headOption.getOrElse("No Stack Trace"))); EmptyTree } {
-        withObserver[Tree] { t => reporter.info(currentOwner.pos, "Generated " + t.symbol.fullName + "[" + desc.tpe + "]: " + t, true) } {
+      safely(EmptyTree: Tree) { e => reporter.error(currentOwner.pos, "Error generating UDT[" + desc.tpe + "]: " + e.getMessage() + " @ " + getRelevantStackLine(e)) } {
+        withObserver[Tree] { t => reporter.info(currentOwner.pos, "Generated " + t.symbol.fullName + "[" + desc.tpe + "] @ " + currentClass + " " + currentOwner + " : " + t, true) } {
 
           val udtTpe = appliedType(udtClass.tpe, List(desc.tpe))
-          val valSym = currentOwner.newValue(unit.freshTermName("udtInst")) setFlag (FINAL | IMPLICIT | SYNTHETIC) setInfo udtTpe
-          currentOwner.info.decls enter valSym
+          val valSym = currentClass.newValue(unit.freshTermName("pact4s udtInst")) setInfo udtTpe
+
+          currentClass.info.decls enter valSym
+          valSym setFlag (PRIVATE | FINAL | IMPLICIT | SYNTHETIC)
 
           val udtClassDef = mkUdtClass(valSym, desc)
           val rhs = Block(udtClassDef, New(TypeTree(udtClassDef.symbol.tpe), List(List())))
@@ -231,11 +334,11 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
       }
     }
 
-    private def safely[T](onError: Throwable => T)(block: => T): T = {
+    private def safely[T](default: => T)(onError: Throwable => Unit)(block: => T): T = {
       try {
         block
       } catch {
-        case e => onError(e)
+        case e => { onError(e); default }
       }
     }
 
@@ -245,17 +348,10 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
       ret
     }
 
-    private def idempotently(value: Boolean, setter: Boolean => Unit)(block: => Unit): Unit = {
-      if (value) {
-        setter(false)
-        block
-      }
-    }
-
-    private def preserving[T, U](value: T, setter: T => Unit)(block: => U): U = {
-      val ret = block
-      setter(value)
-      ret
+    private def getRelevantStackLine(e: Throwable): String = {
+      val lines = e.getStackTrace.map(_.toString)
+      val relevant = lines filter { _.contains("eu.stratosphere") }
+      relevant.headOption getOrElse e.getStackTrace.toString
     }
   }
 }

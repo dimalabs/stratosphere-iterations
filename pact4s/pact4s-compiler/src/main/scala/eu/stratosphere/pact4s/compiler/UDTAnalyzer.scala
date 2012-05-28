@@ -58,7 +58,7 @@ abstract class UDTAnalyzer(udtDescriptors: UDTDescriptors) extends PluginCompone
         case None => {
           genSites(getPath.head) += desc
           genSitePaths(desc) += getPath
-          reporter.info(getPath.head.pos, "Added GenSite[" + desc.tpe + "](" + genSitePaths(desc).size + ") " + getPath.head.pos.line + ":" + getPath.head.pos.column, true)
+          reporter.info(getPath.head.pos, "Added GenSite[" + desc.tpe + "] " + getPath.head.pos.line + ":" + getPath.head.pos.column, true)
         }
       }
     }
