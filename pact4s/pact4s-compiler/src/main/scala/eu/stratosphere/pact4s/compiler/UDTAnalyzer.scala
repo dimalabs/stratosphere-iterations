@@ -8,30 +8,35 @@ import scala.tools.nsc.transform.Transform
 import scala.tools.nsc.transform.TypingTransformers
 
 import eu.stratosphere.pact4s.compiler.util.Traverse
+import eu.stratosphere.pact4s.compiler.util.Logger
 
 abstract class UDTAnalyzer(udtDescriptors: UDTDescriptors) extends PluginComponent with Traverse with TypingTransformers {
 
   override val global: udtDescriptors.global.type = udtDescriptors.global
 
   import global._
-  import udtDescriptors._
 
   override val phaseName = "Pact4s.UDTAnalyzer"
 
   override def newTraverser(unit: CompilationUnit) = new TypingTransformer(unit) with Traverser {
+
+    import udtDescriptors._
+    import udtDescriptors.Severity._
 
     private val genSites = getGenSites(unit)
     private val genSitePaths = mutable.Map[UDTDescriptor, Set[Seq[Tree]]]() withDefaultValue Set()
 
     override def traverse(tree: Tree) = {
 
+      udtDescriptors.curPos = tree.pos
+
       tree match {
 
         case TypeApply(s: Select, List(t)) if s.symbol == unanalyzedUdt => {
 
           analyzeUDT(t.tpe, infer(tree)) match {
-            case Left(err)     => unit.error(tree.pos, "Could not generate UDT[" + t.tpe + "]: " + err)
-            case Right(result) => updateGenSite(result)
+            case UnsupportedDescriptor(_, errs) => errs foreach { err => log(Error) { "Could not generate UDT[" + t.tpe + "]: " + err } }
+            case descr                          => updateGenSite(descr); collectInferences(descr) foreach { traverse(_) }
           }
         }
 
@@ -43,6 +48,13 @@ abstract class UDTAnalyzer(udtDescriptors: UDTDescriptors) extends PluginCompone
 
     private def infer(tree: Tree)(tpe: Type) = analyzer.inferImplicit(tree, appliedType(udtClass.tpe, List(tpe)), true, false, localTyper.context).tree
 
+    private def collectInferences(descr: UDTDescriptor): Seq[Tree] = descr match {
+      case OpaqueDescriptor(_, ref)              => Seq(ref)
+      case PrimitiveDescriptor(_, _, _)          => Seq()
+      case ListDescriptor(_, _, elem)            => collectInferences(elem)
+      case CaseClassDescriptor(_, _, _, getters) => getters flatMap { f => collectInferences(f.descr) }
+    }
+
     private def updateGenSite(desc: UDTDescriptor) = {
 
       genSitePaths get desc flatMap { findCommonLexicalParent(getPath, _) } match {
@@ -52,13 +64,13 @@ abstract class UDTAnalyzer(udtDescriptors: UDTDescriptors) extends PluginCompone
           genSites(newPath.head) += desc
           genSitePaths(desc) -= oldPath
           genSitePaths(desc) += newPath
-          reporter.info(newPath.head.pos, "Updated GenSite[" + desc.tpe + "] " + oldPath.head.pos.line + ":" + oldPath.head.pos.column + " -> " + newPath.head.pos.line + ":" + newPath.head.pos.column, true)
+          log(Debug, newPath.head.pos) { "Updated GenSite[" + desc.tpe + "] " + oldPath.head.pos.line + ":" + oldPath.head.pos.column + " -> " + newPath.head.pos.line + ":" + newPath.head.pos.column }
         }
 
         case None => {
           genSites(getPath.head) += desc
           genSitePaths(desc) += getPath
-          reporter.info(getPath.head.pos, "Added GenSite[" + desc.tpe + "] " + getPath.head.pos.line + ":" + getPath.head.pos.column, true)
+          log(Debug, getPath.head.pos) { "Added GenSite[" + desc.tpe + "] " + getPath.head.pos.line + ":" + getPath.head.pos.column }
         }
       }
     }

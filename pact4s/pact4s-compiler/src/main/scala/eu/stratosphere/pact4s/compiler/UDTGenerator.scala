@@ -8,6 +8,8 @@ import scala.tools.nsc.symtab.Flags._
 import scala.tools.nsc.transform.Transform
 import scala.tools.nsc.transform.TypingTransformers
 
+import eu.stratosphere.pact4s.compiler.util.Logger
+
 abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginComponent with Transform with TypingTransformers {
 
   override val global: udtDescriptors.global.type = udtDescriptors.global
@@ -16,35 +18,24 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
   import udtDescriptors._
 
   override val phaseName = "Pact4s.UDTGenerator"
-  var msgNum = 100;
 
-  private def log(pos: Position, isError: Boolean)(msg: String): Unit = {
-    if (isError) {
-      reporter.error(pos, "#" + msgNum + " - " + msg)
-    } else {
-      reporter.info(pos, "#" + msgNum + " - " + msg, true)
-    }
-    msgNum += 1
-  }
+  override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with Logger {
 
-  override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) {
+    import Severity._
 
-    private val genSites = getGenSites(unit)
+    val global: UDTGenerator.this.global.type = UDTGenerator.this.global
+    val genSites = getGenSites(unit)
+    val unitRoot = new Switch { override def guard = unit.toString.contains("WordCount.scala") }
+    var curPos: Position = NoPosition
 
-    private var first = true
+    override def messageTag = "Gen"
+    override def currentPosition = curPos
 
     override def transform(tree: Tree): Tree = {
 
-      val isFirst = first
-      first = false
+      curPos = tree.pos
 
-      val showResult: Tree => Unit = { tree: Tree =>
-        if (unit.toString.contains("WordCount.scala") && isFirst) {
-          treeBrowsers.create().browse(tree)
-        }
-      }
-
-      withObserver(showResult) {
+      visually(unitRoot) {
 
         tree match {
 
@@ -66,7 +57,7 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
             super.transform {
 
               val udtInstances = genSites(tree).toList map { desc => mkUdtInst(tree.symbol, desc) }
-              log(tree.pos, false) { "GenSite " + tree.symbol + " defines:   " + tree.symbol.tpe.members.filter(_.isImplicit).map(_.name.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ") }
+              log(Debug) { "GenSite " + tree.symbol + " defines:   " + tree.symbol.tpe.members.filter(_.isImplicit).map(_.name.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ") }
 
               localTyper.typed { treeCopy.ClassDef(tree, mods, name, tparams, treeCopy.Template(template, parents, self, udtInstances ::: body)) }
             }
@@ -84,11 +75,11 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
 
                 udtInst.tree match {
                   case t if t.isEmpty || t.symbol == unanalyzedUdt => {
-                    log(tree.pos, true) { "Failed to apply " + udtTpe + ". Implicits: " + localTyper.context.implicitss.flatten.map(_.name.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ") }
+                    log(Error) { "Failed to apply " + udtTpe + ". Available UDTs: " + localTyper.context.implicitss.flatten.map(_.name.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ") }
                     tree
                   }
                   case udtInst => {
-                    log(tree.pos, false) { "Applied " + udtInst.symbol.fullName + ": " + udtInst.tpe }
+                    log(Debug) { "Applied " + udtInst.symbol.fullName + ": " + udtInst.tpe }
                     localTyper.typed {
                       Typed(udtInst, TypeTree(udtTpe))
                     }
@@ -109,13 +100,14 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
 
         val wrapper = this.mkClass(owner, null, FINAL, List(definitions.ObjectClass.tpe)) { classSym =>
 
-          val rewireOwner = mkTransformer { tree =>
-            if (tree.hasSymbol && tree.symbol.owner == owner)
-              tree.symbol.owner = classSym
-            tree
-          }
+          List(mkMethod(classSym, "result", FINAL, Nil, site.expr.tpe) { _ =>
 
-          List(mkMethod(classSym, "result", FINAL, Nil, site.expr.tpe) { _ => rewireOwner(site) })
+            applyTransformation(site) { tree =>
+              if (tree.hasSymbol && tree.symbol.owner == owner)
+                tree.symbol.owner = classSym
+              tree
+            }
+          })
         }
 
         val wrappedBlock = Select(Block(wrapper, New(TypeTree(wrapper.symbol.tpe), List(List()))), "result")
@@ -137,7 +129,7 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
         val newImplicits = body filter { m => m.hasSymbol && m.symbol.isImplicit }
         val newSyms = newImplicits map { _.symbol } toSet
 
-        val rewireRefsAndOwner = mkTransformer {
+        val rewiredRhs = applyTransformation(rhs) {
           _ match {
             case sel: Select if sel.hasSymbol && newSyms.contains(sel.symbol) => mkIdent(sel.symbol)
             case tree => {
@@ -147,8 +139,6 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
             }
           }
         }
-
-        val rewiredRhs = rewireRefsAndOwner(rhs)
 
         val rewiredImplicits = newImplicits map { imp =>
           val sym = imp.symbol
@@ -170,32 +160,29 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
 
       var detected = false
 
-      val trans = mkTransformer { tree =>
+      visually (detected) {
+        applyTransformation(tree) { tree =>
 
-        detected |= (tree.hasSymbol && tree.symbol.hasTransOwner(wrapper))
+          detected |= (tree.hasSymbol && tree.symbol.hasTransOwner(wrapper))
 
-        if (tree.tpe == null) {
-          log(currentOwner.pos, true) { "Unwrapped tree has no type [" + tree.shortClass + "]: " + tree }
-        } else {
-          detected |= (tree.tpe filter { tpe => tpe.typeSymbol.hasTransOwner(wrapper) || tpe.termSymbol.hasTransOwner(wrapper) }).nonEmpty
+          if (tree.tpe == null) {
+            log(Error) { "Unwrapped tree has no type [" + tree.shortClass + "]: " + tree }
+          } else {
+            detected |= (tree.tpe filter { tpe => tpe.typeSymbol.hasTransOwner(wrapper) || tpe.termSymbol.hasTransOwner(wrapper) }).nonEmpty
+          }
+
+          if (detected)
+            log(Error) { "Wrapper artifact detected [" + tree.shortClass + "]: " + tree }
+
+          tree
         }
-
-        if (detected)
-          log(currentOwner.pos, true) { "Wrapper artifact detected [" + tree.shortClass + "]: " + tree }
-
-        tree
       }
-
-      if (detected)
-        treeBrowsers.create().browse(tree)
-
-      tree
     }
 
     private def mkUdtInst(owner: Symbol, desc: UDTDescriptor): Tree = {
 
       safely(EmptyTree: Tree) { e => "Error generating UDT[" + desc.tpe + "]: " + e.getMessage() + " @ " + getRelevantStackLine(e) } {
-        withObserver[Tree] { t => log(owner.pos, false) { "Generated " + t.symbol.fullName + "[" + desc.tpe + "] @ " + owner + " : " + t } } {
+        verbosely { t: Tree => "Generated " + t.symbol.fullName + "[" + desc.tpe + "] @ " + owner + " : " + t } {
 
           val udtTpe = appliedType(udtClass.tpe, List(desc.tpe))
 
@@ -342,26 +329,12 @@ abstract class UDTGenerator(udtDescriptors: UDTDescriptors) extends PluginCompon
       ClassDef(classSym, Modifiers(flags | SYNTHETIC), List(Nil), List(Nil), classMembers, owner.pos)
     }
 
-    private def mkTransformer(trans: Tree => Tree): Tree => Tree = {
+    private def applyTransformation(tree: Tree)(trans: Tree => Tree): Tree = {
       val transformer = new Transformer {
         override def transform(tree: Tree): Tree = super.transform(trans(tree))
       }
 
-      transformer.transform _
-    }
-
-    private def safely[T](default: => T)(onError: Throwable => String)(block: => T): T = {
-      try {
-        block
-      } catch {
-        case e => { log(currentOwner.pos, true)(onError(e)); default }
-      }
-    }
-
-    private def withObserver[T](obs: T => Unit)(block: => T): T = {
-      val ret = block
-      obs(ret)
-      ret
+      transformer.transform(tree)
     }
 
     private def getRelevantStackLine(e: Throwable): String = {

@@ -4,7 +4,9 @@ import scala.collection.mutable
 
 import scala.tools.nsc.Global
 
-trait UDTDescriptors {
+import eu.stratosphere.pact4s.compiler.util.Logger
+
+trait UDTDescriptors extends Logger {
 
   val global: Global
   import global._
@@ -17,72 +19,80 @@ trait UDTDescriptors {
   lazy val pactListClass = definitions.getClass("eu.stratosphere.pact.common.type.base.PactList")
 
   abstract sealed class UDTDescriptor { val tpe: Type }
+  case class UnsupportedDescriptor(tpe: Type, errors: Seq[String]) extends UDTDescriptor
   case class OpaqueDescriptor(tpe: Type, ref: Tree) extends UDTDescriptor
   case class PrimitiveDescriptor(tpe: Type, default: Literal, wrapperClass: Symbol) extends UDTDescriptor
   case class ListDescriptor(tpe: Type, listType: Type, elem: UDTDescriptor) extends UDTDescriptor
   case class CaseClassDescriptor(tpe: Type, ctor: Symbol, ctorTpe: Type, getters: Seq[FieldAccessor]) extends UDTDescriptor
   case class FieldAccessor(sym: Symbol, tpe: Type, descr: UDTDescriptor)
 
-  private val udts = mutable.Map[Type, Either[String, UDTDescriptor]]()
+  private val udts = mutable.Map[Type, UDTDescriptor]()
   private val genSites = mutable.Map[CompilationUnit, mutable.Map[Tree, Set[UDTDescriptor]]]()
 
-  def analyzeUDT(tpe: Type, infer: Type => Tree): Either[String, UDTDescriptor] = {
+  def analyzeUDT(tpe: Type, infer: Type => Tree): UDTDescriptor = {
     val normTpe = tpe.map { t => if (t.typeSymbol.isMemberOf(definitions.getModule("java.lang"))) t.normalize else t }
     analyzeType(normTpe, infer)
   }
 
-  def getUDTDescriptor(tpe: Type): Either[String, UDTDescriptor] = {
+  def getUDTDescriptor(tpe: Type): UDTDescriptor = {
     val normTpe = tpe.map { t => if (t.typeSymbol.isMemberOf(definitions.getModule("java.lang"))) t.normalize else t }
-    udts.getOrElse(normTpe, Left("Unsupported type " + tpe))
+    udts.getOrElse(normTpe, UnsupportedDescriptor(tpe, Seq("Unsupported type")))
   }
 
   def getGenSites(unit: CompilationUnit) = genSites.getOrElseUpdate(unit, mutable.Map() withDefaultValue Set())
 
-  private def analyzeType(tpe: Type, infer: Type => Tree): Either[String, UDTDescriptor] = {
+  var curPos: Position = _
+  override def messageTag = "Ana"
+  override def currentPosition = curPos
+
+  private def analyzeType(tpe: Type, infer: Type => Tree): UDTDescriptor = {
 
     infer(tpe) match {
       case t if t.symbol == unanalyzedUdt => udts.getOrElseUpdate(tpe, {
-        reporter.info(NoPosition, "Analyzing UDT[" + tpe + "]", true)
-        tpe match {
-          case _ if primitives.keySet.contains(tpe.typeSymbol) => analyzePrimitive(tpe)
-          case _ if lists.contains(tpe.typeConstructor.typeSymbol) => analyzeList(tpe, infer)
-          case _ if tpe.typeSymbol.isCaseClass => analyzeCaseClass(tpe, infer)
-          case _ => Left("Unsupported type " + tpe)
+        verbosely[UDTDescriptor] { _ => "Analyzing UDT[" + tpe + "]" } {
+          tpe match {
+            case _ if primitives.keySet.contains(tpe.typeSymbol) => analyzePrimitive(tpe)
+            case _ if lists.contains(tpe.typeConstructor.typeSymbol) => analyzeList(tpe, infer)
+            case _ if tpe.typeSymbol.isCaseClass => analyzeCaseClass(tpe, infer)
+            case _ => UnsupportedDescriptor(tpe, Seq("Unsupported type"))
+          }
         }
-      }
-      )
-      case ref => Right(OpaqueDescriptor(tpe, ref))
+      })
+      case ref => OpaqueDescriptor(tpe, ref)
     }
   }
 
-  private def analyzePrimitive(tpe: Type): Either[String, UDTDescriptor] = {
+  private def analyzePrimitive(tpe: Type): UDTDescriptor = {
     val (default, wrapper) = primitives(tpe.typeSymbol)
-    Right(PrimitiveDescriptor(tpe, default, wrapper))
+    PrimitiveDescriptor(tpe, default, wrapper)
   }
 
-  private def analyzeList(tpe: Type, infer: Type => Tree): Either[String, UDTDescriptor] = analyzeType(tpe.typeArgs.head, infer) match {
-    case Left(err)   => Left(err)
-    case Right(desc) => Right(ListDescriptor(tpe, tpe.typeConstructor, desc))
+  private def analyzeList(tpe: Type, infer: Type => Tree): UDTDescriptor = analyzeType(tpe.typeArgs.head, infer) match {
+    case UnsupportedDescriptor(_, errs) => UnsupportedDescriptor(tpe, errs)
+    case desc                           => ListDescriptor(tpe, tpe.typeConstructor, desc)
   }
 
-  private def analyzeCaseClass(tpe: Type, infer: Type => Tree): Either[String, UDTDescriptor] = {
+  private def analyzeCaseClass(tpe: Type, infer: Type => Tree): UDTDescriptor = {
 
+    // TODO (Joe): tpe.typeSymbol.sealedDescendants
     val (tParams, tArgs) = tpe.typeConstructor.typeParams.zip(tpe.typeArgs).unzip
     val getters = tpe.typeSymbol.caseFieldAccessors.map(f => (f, f.tpe.instantiateTypeParams(tParams, tArgs).asSeenFrom(tpe.prefix, f.owner.owner)))
 
-    analyzeFields(getters, infer) match {
-      case Left(err) => Left(err)
-      case Right(fields) => {
+    val fields = getters map { case (fSym, fTpe) => FieldAccessor(fSym, fTpe, analyzeType(fTpe.resultType, infer)) }
+
+    fields filter { _.descr.isInstanceOf[UnsupportedDescriptor] } match {
+      case errs @ Seq(_, _*) => UnsupportedDescriptor(tpe, errs flatMap { f => f.descr.asInstanceOf[UnsupportedDescriptor].errors map { err => "Field " + f.sym.name + ": " + err } })
+      case Seq() => {
 
         findConstructor(tpe, getters.map(_._2.resultType), tParams, tArgs) match {
-          case Left(err)              => Left(err)
-          case Right((ctor, ctorTpe)) => Right(CaseClassDescriptor(tpe, ctor, ctorTpe, fields))
+          case Left(err)              => UnsupportedDescriptor(tpe, Seq(err))
+          case Right((ctor, ctorTpe)) => CaseClassDescriptor(tpe, ctor, ctorTpe, fields)
         }
       }
     }
   }
 
-  private def findConstructor(tpe: Type, params: Seq[Type], tParams: List[Symbol], tArgs: List[Type]) = {
+  private def findConstructor(tpe: Type, params: Seq[Type], tParams: List[Symbol], tArgs: List[Type]): Either[String, (Symbol, Type)] = {
 
     val signature = "(" + params.mkString(", ") + ")" + tpe
 
@@ -91,17 +101,8 @@ trait UDTDescriptors {
 
     ctors match {
       case ctor :: Nil   => Right(ctor)
-      case c1 :: c2 :: _ => Left("Multiple constructors found with signature " + signature + " { " + ctors.map(_._2).mkString(", ") + " }")
-      case Nil           => Left("No constructor found with signature " + signature + " { " + candidates.map(_._2).mkString(", ") + " }")
-    }
-  }
-
-  private def analyzeFields(getters: Seq[(Symbol, Type)], infer: Type => Tree): Either[String, Seq[FieldAccessor]] = {
-    val fieldDescriptors = getters map { case (fSym, fTpe) => (fSym, fTpe, analyzeType(fTpe.resultType, infer)) }
-
-    fieldDescriptors filter { _._3.isLeft } match {
-      case Seq() => Right(fieldDescriptors map { case (fSym, fTpe, Right(desc)) => FieldAccessor(fSym, fTpe, desc) })
-      case errs  => Left(errs map { case (fSym, _, Left(err)) => "(" + fSym.name + ": " + err + ")" } mkString (", "))
+      case c1 :: c2 :: _ => Left("Multiple constructors found with signature " + signature + ": { " + ctors.map(_._2).mkString(", ") + " }")
+      case Nil           => Left("No constructor found with signature " + signature + ": { " + candidates.map(_._2).mkString(", ") + " }")
     }
   }
 
