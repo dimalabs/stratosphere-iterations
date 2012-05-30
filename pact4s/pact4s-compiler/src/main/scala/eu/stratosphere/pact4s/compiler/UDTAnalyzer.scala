@@ -52,6 +52,7 @@ abstract class UDTAnalyzer(udtDescriptors: UDTDescriptors) extends PluginCompone
       case OpaqueDescriptor(_, ref)              => Seq(ref)
       case PrimitiveDescriptor(_, _, _)          => Seq()
       case ListDescriptor(_, _, elem)            => collectInferences(elem)
+      case BaseClassDescriptor(_, subTypes)      => subTypes flatMap { collectInferences(_) }
       case CaseClassDescriptor(_, _, _, getters) => getters flatMap { f => collectInferences(f.descr) }
     }
 

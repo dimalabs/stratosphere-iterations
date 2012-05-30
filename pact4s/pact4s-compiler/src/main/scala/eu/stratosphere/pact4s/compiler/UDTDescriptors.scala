@@ -23,6 +23,7 @@ trait UDTDescriptors extends Logger {
   case class OpaqueDescriptor(tpe: Type, ref: Tree) extends UDTDescriptor
   case class PrimitiveDescriptor(tpe: Type, default: Literal, wrapperClass: Symbol) extends UDTDescriptor
   case class ListDescriptor(tpe: Type, listType: Type, elem: UDTDescriptor) extends UDTDescriptor
+  case class BaseClassDescriptor(tpe: Type, subTypes: Seq[UDTDescriptor]) extends UDTDescriptor
   case class CaseClassDescriptor(tpe: Type, ctor: Symbol, ctorTpe: Type, getters: Seq[FieldAccessor]) extends UDTDescriptor
   case class FieldAccessor(sym: Symbol, tpe: Type, descr: UDTDescriptor)
 
@@ -48,16 +49,22 @@ trait UDTDescriptors extends Logger {
   private def analyzeType(tpe: Type, infer: Type => Tree): UDTDescriptor = {
 
     infer(tpe) match {
-      case t if t.symbol == unanalyzedUdt => udts.getOrElseUpdate(tpe, {
-        verbosely[UDTDescriptor] { _ => "Analyzing UDT[" + tpe + "]" } {
-          tpe match {
-            case _ if primitives.keySet.contains(tpe.typeSymbol) => analyzePrimitive(tpe)
-            case _ if lists.contains(tpe.typeConstructor.typeSymbol) => analyzeList(tpe, infer)
-            case _ if tpe.typeSymbol.isCaseClass => analyzeCaseClass(tpe, infer)
-            case _ => UnsupportedDescriptor(tpe, Seq("Unsupported type"))
+      case t if t.symbol == unanalyzedUdt =>
+        udts.getOrElseUpdate(tpe, {
+          verbosely[UDTDescriptor] { _ => "Analyzing UDT[" + tpe + "]" } {
+            // TODO (Joe): What if a case class implements GenTraversableOnce?
+            // For example - Cons, Nil  <: List[T] <: GenTraversableOnce[T]
+            // Or this one - Leaf, Node <: Tree[T] <: GenTraversableOnce[Tree[T]]
+            tpe match {
+              case _ if primitives.keySet.contains(tpe.typeSymbol) => analyzePrimitive(tpe)
+              case _ if lists.intersect(tpe.baseClasses.toSet).nonEmpty => analyzeList(tpe, infer)
+              case _ if tpe.typeSymbol.isCaseClass => analyzeCaseClass(tpe, infer)
+              case _ if tpe.typeSymbol.isClass => analyzeClassHierarchy(tpe, infer)
+              case _ => UnsupportedDescriptor(tpe, Seq("Unsupported type"))
+            }
           }
-        }
-      })
+        })
+
       case ref => OpaqueDescriptor(tpe, ref)
     }
   }
@@ -67,32 +74,81 @@ trait UDTDescriptors extends Logger {
     PrimitiveDescriptor(tpe, default, wrapper)
   }
 
+  // TODO (Joe): Handle recursive types
+
   private def analyzeList(tpe: Type, infer: Type => Tree): UDTDescriptor = analyzeType(tpe.typeArgs.head, infer) match {
     case UnsupportedDescriptor(_, errs) => UnsupportedDescriptor(tpe, errs)
     case desc                           => ListDescriptor(tpe, tpe.typeConstructor, desc)
   }
 
-  private def analyzeCaseClass(tpe: Type, infer: Type => Tree): UDTDescriptor = {
+  private def analyzeClassHierarchy(tpe: Type, infer: Type => Tree): UDTDescriptor = {
 
-    // TODO (Joe): tpe.typeSymbol.sealedDescendants
-    val (tParams, tArgs) = tpe.typeConstructor.typeParams.zip(tpe.typeArgs).unzip
-    val getters = tpe.typeSymbol.caseFieldAccessors.map(f => (f, f.tpe.instantiateTypeParams(tParams, tArgs).asSeenFrom(tpe.prefix, f.owner.owner)))
+    (tpe.typeSymbol.isSealed, tpe.typeSymbol.children) match {
 
-    val fields = getters map { case (fSym, fTpe) => FieldAccessor(fSym, fTpe, analyzeType(fTpe.resultType, infer)) }
+      case (false, _)  => UnsupportedDescriptor(tpe, Seq("Cannot statically determine subtypes for non-sealed base class."))
+      case (true, Nil) => UnsupportedDescriptor(tpe, Seq("No subtypes defined for sealed base class."))
 
-    fields filter { _.descr.isInstanceOf[UnsupportedDescriptor] } match {
-      case errs @ Seq(_, _*) => UnsupportedDescriptor(tpe, errs flatMap { f => f.descr.asInstanceOf[UnsupportedDescriptor].errors map { err => "Field " + f.sym.name + ": " + err } })
-      case Seq() => {
+      case (true, children) => {
 
-        findConstructor(tpe, getters.map(_._2.resultType), tParams, tArgs) match {
-          case Left(err)              => UnsupportedDescriptor(tpe, Seq(err))
-          case Right((ctor, ctorTpe)) => CaseClassDescriptor(tpe, ctor, ctorTpe, fields)
+        val descendents = children map { d =>
+
+          val dTpe = verbosely[Type] { dTpe => d.tpe + " <: " + tpe + " instantiated as " + dTpe } {
+            val tArgs = (tpe.typeConstructor.typeParams, tpe.typeArgs).zipped.toMap
+            val dArgs = d.typeParams map { dp =>
+              val tArg = tArgs.keySet.find { tp => dp == tp.tpe.asSeenFrom(d.tpe, tpe.typeSymbol).typeSymbol }
+              tArg map { tArgs(_) } getOrElse dp.tpe
+            }
+
+            appliedType(d.tpe, dArgs)
+          }
+
+          analyzeType(dTpe, infer)
+        }
+
+        val (subTypes, errors) = partitionByType[UDTDescriptor, UnsupportedDescriptor](descendents)
+
+        errors match {
+          case _ :: _ => UnsupportedDescriptor(tpe, errors flatMap { case UnsupportedDescriptor(subType, errs) => errs map { err => "Subtype " + subType + " - " + err } })
+          case Nil    => BaseClassDescriptor(tpe, subTypes)
         }
       }
     }
   }
 
-  private def findConstructor(tpe: Type, params: Seq[Type], tParams: List[Symbol], tArgs: List[Type]): Either[String, (Symbol, Type)] = {
+  private def analyzeCaseClass(tpe: Type, infer: Type => Tree): UDTDescriptor = {
+
+    tpe.typeSymbol.superClass.isCaseClass match {
+
+      case true => UnsupportedDescriptor(tpe, Seq("Case-to-case inheritance is not supported."))
+
+      case false => {
+
+        val (tParams, tArgs) = tpe.typeConstructor.typeParams.zip(tpe.typeArgs).unzip
+        val getters = tpe.typeSymbol.caseFieldAccessors.map(f => (f, f.tpe.instantiateTypeParams(tParams, tArgs).asSeenFrom(tpe.prefix, f.owner.owner)))
+
+        val fields = getters map { case (fSym, fTpe) => FieldAccessor(fSym, fTpe, analyzeType(fTpe.resultType, infer)) }
+
+        fields filter { _.descr.isInstanceOf[UnsupportedDescriptor] } match {
+
+          case errs @ _ :: _ => {
+
+            val msgs = errs flatMap { f => (f: @unchecked) match { case FieldAccessor(fSym, _, UnsupportedDescriptor(fTpe, errors)) => errors map { err => "Field " + fSym.name + ": " + fTpe + " - " + err } } }
+            UnsupportedDescriptor(tpe, msgs)
+          }
+
+          case Nil => {
+
+            findCaseConstructor(tpe, getters.map(_._2.resultType), tParams, tArgs) match {
+              case Left(err)              => UnsupportedDescriptor(tpe, Seq(err))
+              case Right((ctor, ctorTpe)) => CaseClassDescriptor(tpe, ctor, ctorTpe, fields)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private def findCaseConstructor(tpe: Type, params: Seq[Type], tParams: List[Symbol], tArgs: List[Type]): Either[String, (Symbol, Type)] = {
 
     val signature = "(" + params.mkString(", ") + ")" + tpe
 
@@ -101,9 +157,15 @@ trait UDTDescriptors extends Logger {
 
     ctors match {
       case ctor :: Nil   => Right(ctor)
-      case c1 :: c2 :: _ => Left("Multiple constructors found with signature " + signature + ": { " + ctors.map(_._2).mkString(", ") + " }")
-      case Nil           => Left("No constructor found with signature " + signature + ": { " + candidates.map(_._2).mkString(", ") + " }")
+      case c1 :: c2 :: _ => Left("Multiple constructors found with signature " + signature + " in set { " + ctors.map(_._2).mkString(", ") + " }")
+      case Nil           => Left("No constructor found with signature " + signature + " in set { " + candidates.map(_._2).mkString(", ") + " }")
     }
+  }
+
+  private def partitionByType[T, S <: T: Manifest](items: List[T]): (List[T], List[S]) = {
+    val sClass = implicitly[Manifest[S]].erasure
+    val (sAsT, t) = items.partition { item => sClass.isAssignableFrom(item.getClass) }
+    (t, sAsT map { _.asInstanceOf[S] })
   }
 
   private lazy val primitives = Map(
@@ -118,6 +180,6 @@ trait UDTDescriptors extends Logger {
     definitions.StringClass -> (Literal(null: String), definitions.getClass("eu.stratosphere.pact.common.type.base.PactString"))
   )
 
-  private lazy val lists = Set(definitions.ArrayClass, definitions.SeqClass, definitions.ListClass, definitions.IterableClass, definitions.IteratorClass)
+  private lazy val lists = Set(definitions.ArrayClass, definitions.getClass("scala.collection.GenTraversableOnce"))
 }
 
