@@ -1,4 +1,4 @@
 <plugin>
   <name>Pact4s</name>
-  <classname>eu.stratosphere.pact4s.compiler.Pact4sCompilerPlugin</classname>
+  <classname>eu.stratosphere.pact4s.compiler.Pact4sPlugin</classname>
 </plugin>

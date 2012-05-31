@@ -1,15 +1,16 @@
 package eu.stratosphere.pact4s.compiler.util
 
-import scala.tools.nsc.Global
+import eu.stratosphere.pact4s.compiler.Pact4sGlobal
 
-trait Logger {
+trait Logger { this: Pact4sGlobal =>
 
-  val global: Global
   import global._
 
-  def messageTag: String = ""
-  def currentLevel: Severity = Severity.Debug
-  def currentPosition: Position = NoPosition
+  private var counter = 0;
+
+  var messageTag: String = ""
+  var currentLevel: Severity = Severity.Debug
+  var currentPosition: Position = NoPosition
 
   abstract sealed class Severity {
     protected val toInt: Int
@@ -17,8 +18,8 @@ trait Logger {
 
     final def report(pos: Position, msg: String) = {
       if (isEnabled) {
-        reportInner(pos, messageTag + "#" + Logger.counter + " - " + msg)
-        Logger.counter += 1
+        reportInner(pos, messageTag + "#" + "%03d".format(counter) + " - " + msg)
+        counter += 1
       }
     }
 
@@ -84,9 +85,5 @@ trait Logger {
   object Switch {
     implicit def toBoolean(switch: Switch): Boolean = switch.getState
   }
-}
-
-object Logger {
-  private var counter = 100;
 }
 

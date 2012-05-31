@@ -13,7 +13,7 @@ trait Traverse extends Transform {
   trait Traverser extends Transformer {
 
     private var path = Seq[Tree]()
-    def getPath = path
+    def currentPath = path
 
     def traverse(tree: Tree): Unit = {
       super.transform(tree)
