@@ -1,14 +1,13 @@
 package eu.stratosphere.pact4s.compiler.util
 
-import scala.collection.mutable
+import scala.tools.nsc.Global
 import scala.tools.nsc.transform.Transform
+import scala.tools.nsc.transform.TypingTransformers
 
-trait Traverse extends Transform {
+trait Traversers { this: TypingTransformers =>
 
+  val global: Global
   import global._
-
-  protected def newTraverser(unit: CompilationUnit): Traverser
-  override def newTransformer(unit: CompilationUnit) = newTraverser(unit)
 
   trait Traverser extends Transformer {
 
@@ -36,4 +35,6 @@ trait Traverse extends Transform {
       tree
     }
   }
+
+  class TypingTraverser(unit: CompilationUnit) extends TypingTransformer(unit) with Traverser
 }

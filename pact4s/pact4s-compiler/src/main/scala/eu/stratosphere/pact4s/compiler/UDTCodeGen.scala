@@ -3,25 +3,25 @@ package eu.stratosphere.pact4s.compiler
 import scala.tools.nsc.plugins.PluginComponent
 import scala.tools.nsc.symtab.Flags._
 import scala.tools.nsc.transform.Transform
-import scala.tools.nsc.transform.TypingTransformers
 
-import eu.stratosphere.pact4s.compiler.util.Logger
+import eu.stratosphere.pact4s.compiler.util._
 
-trait UDTCodeGen { this: Pact4sGlobal =>
+trait UDTCodeGeneration { this: Pact4sGlobal =>
 
   import global._
-  import Severity._
 
-  trait UDTCodeGenerator extends PluginComponent with Transform with TypingTransformers {
+  trait UDTCodeGenerator extends PluginComponent with Transform {
 
-    override val global: ThisGlobal = UDTCodeGen.this.global
-    override val phaseName = "Pact4s.UDTGenerator"
+    override val global: ThisGlobal = UDTCodeGeneration.this.global
+    override val phaseName = "Pact4s.UDTCodeGen"
+
+    val genSites: collection.Map[CompilationUnit, MutableMultiMap[Tree, UDTDescriptor]]
 
     override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) {
 
-      UDTCodeGen.this.messageTag = "Gen"
-      private val genSites = getGenSites(unit)
-      private val unitRoot = new Switch { override def guard = unit.toString.contains("WordCount.scala") }
+      UDTCodeGeneration.this.messageTag = "UDTCode"
+      private val genSites = UDTCodeGenerator.this.genSites(unit)
+      private val unitRoot = new EagerAutoSwitch[Tree] { override def guard = unit.toString.contains("WordCount.scala") }
 
       override def transform(tree: Tree): Tree = {
 
@@ -104,7 +104,7 @@ trait UDTCodeGen { this: Pact4sGlobal =>
 
           val wrappedBlock = Select(Block(wrapper, New(TypeTree(wrapper.symbol.tpe), List(List()))), "result")
           genSites(wrapper) ++= genSites(site)
-          genSites(site).clear()
+          genSites.remove(site)
 
           (wrappedBlock, wrapper.symbol)
         }
@@ -150,7 +150,7 @@ trait UDTCodeGen { this: Pact4sGlobal =>
       // Sanity check - make sure we've properly cleaned up after ourselves
       private def detectWrapperArtifacts(wrapper: Symbol)(tree: Tree): Tree = {
 
-        var detected = false
+        val detected = new ManualSwitch[Tree]
 
         visually (detected) {
           applyTransformation(tree) { tree =>
@@ -163,7 +163,7 @@ trait UDTCodeGen { this: Pact4sGlobal =>
               detected |= (tree.tpe filter { tpe => tpe.typeSymbol.hasTransOwner(wrapper) || tpe.termSymbol.hasTransOwner(wrapper) }).nonEmpty
             }
 
-            if (detected)
+            if (detected.state)
               log(Error) { "Wrapper artifact detected [" + tree.shortClass + "]: " + tree }
 
             tree
