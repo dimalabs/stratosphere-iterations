@@ -34,7 +34,7 @@ trait UDTAnalysis { this: Pact4sGlobal =>
 
         cache.getOrElseUpdate(tpe) {
           maybeVerbosely(seen(tpe)) { d => "Analyzed UDT[" + tpe + "] - " + d.getClass.getName } {
-            (tpe, infer) match {
+            tpe match {
               case OpaqueType(ref)                 => OpaqueDescriptor(tpe, ref)
               case PrimitiveType(default, wrapper) => PrimitiveDescriptor(tpe, default, wrapper)
               case ListType(elemTpe, bf)           => analyzeList(tpe)
@@ -131,6 +131,50 @@ trait UDTAnalysis { this: Pact4sGlobal =>
           case Nil           => Left("No constructor found with signature " + signature + " in set { " + candidates.map(_._2).mkString(", ") + " }")
         }
       }
+
+      private object OpaqueType {
+        def unapply(tpe: Type): Option[Tree] = infer(tpe) match {
+          case EmptyTree                          => None
+          case ref if ref.symbol == unanalyzedUdt => None
+          case ref                                => Some(ref)
+        }
+      }
+
+      private object PrimitiveType {
+
+        private lazy val primitives = Map(
+          definitions.BooleanClass -> (Literal(false), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+          definitions.ByteClass -> (Literal(0: Byte), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+          definitions.CharClass -> (Literal(0: Char), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+          definitions.DoubleClass -> (Literal(0: Double), definitions.getClass("eu.stratosphere.pact.common.type.base.PactDouble")),
+          definitions.FloatClass -> (Literal(0: Float), definitions.getClass("eu.stratosphere.pact.common.type.base.PactDouble")),
+          definitions.IntClass -> (Literal(0: Int), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+          definitions.LongClass -> (Literal(0: Long), definitions.getClass("eu.stratosphere.pact.common.type.base.PactLong")),
+          definitions.ShortClass -> (Literal(0: Short), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+          definitions.StringClass -> (Literal(null: String), definitions.getClass("eu.stratosphere.pact.common.type.base.PactString"))
+        )
+
+        def unapply(tpe: Type): Option[(Literal, Symbol)] = primitives.get(tpe.typeSymbol)
+      }
+
+      private object ListType {
+
+        def unapply(tpe: Type): Option[(Type, Tree)] = tpe match {
+          case _ if tpe.typeSymbol == definitions.ArrayClass => Some((tpe.typeArgs.head, EmptyTree))
+          case _ if tpe.baseClasses.contains(definitions.getClass("scala.collection.GenTraversableOnce")) => Some((tpe.typeArgs.head, EmptyTree))
+          case _ => None
+        }
+      }
+
+      private object CaseClassType {
+
+        def unapply(tpe: Type): Boolean = tpe.typeSymbol.isCaseClass
+      }
+
+      private object BaseClassType {
+
+        def unapply(tpe: Type): Boolean = tpe.typeSymbol.isClass
+      }
     }
 
     private class UDTAnalyzerCache {
@@ -152,59 +196,6 @@ trait UDTAnalysis { this: Pact4sGlobal =>
         case _                                => descriptor
       }
     }
-
-    private object OpaqueType {
-
-      def unapply(arg: (Type, Type => Tree)): Option[Tree] = {
-        val (tpe, infer) = arg
-
-        infer(tpe) match {
-          case EmptyTree                          => None
-          case ref if ref.symbol == unanalyzedUdt => None
-          case ref                                => Some(ref)
-        }
-      }
-    }
-
-    private object PrimitiveType {
-
-      private lazy val primitives = Map(
-        definitions.BooleanClass -> (Literal(false), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-        definitions.ByteClass -> (Literal(0: Byte), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-        definitions.CharClass -> (Literal(0: Char), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-        definitions.DoubleClass -> (Literal(0: Double), definitions.getClass("eu.stratosphere.pact.common.type.base.PactDouble")),
-        definitions.FloatClass -> (Literal(0: Float), definitions.getClass("eu.stratosphere.pact.common.type.base.PactDouble")),
-        definitions.IntClass -> (Literal(0: Int), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-        definitions.LongClass -> (Literal(0: Long), definitions.getClass("eu.stratosphere.pact.common.type.base.PactLong")),
-        definitions.ShortClass -> (Literal(0: Short), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-        definitions.StringClass -> (Literal(null: String), definitions.getClass("eu.stratosphere.pact.common.type.base.PactString"))
-      )
-
-      def unapply(arg: (Type, Type => Tree)): Option[(Literal, Symbol)] = primitives.get(arg._1.typeSymbol)
-    }
-
-    private object ListType {
-
-      def unapply(arg: (Type, Type => Tree)): Option[(Type, Tree)] = {
-        val (tpe, _) = arg
-
-        if (tpe.typeSymbol == definitions.ArrayClass)
-          Some((tpe.typeArgs.head, EmptyTree))
-        else if (tpe.baseClasses.contains(definitions.getClass("scala.collection.GenTraversableOnce")))
-          Some((tpe.typeArgs.head, EmptyTree))
-        else
-          None
-      }
-    }
-
-    private object CaseClassType {
-
-      def unapply(arg: (Type, Type => Tree)): Boolean = arg._1.typeSymbol.isCaseClass
-    }
-
-    private object BaseClassType {
-
-      def unapply(arg: (Type, Type => Tree)): Boolean = arg._1.typeSymbol.isClass
-    }
   }
 }
+

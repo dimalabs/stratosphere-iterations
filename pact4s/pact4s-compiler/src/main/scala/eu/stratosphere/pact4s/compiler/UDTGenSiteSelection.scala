@@ -97,3 +97,4 @@ trait UDTGenSiteSelection { this: Pact4sGlobal =>
     }
   }
 }
+

@@ -340,3 +340,4 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
     }
   }
 }
+

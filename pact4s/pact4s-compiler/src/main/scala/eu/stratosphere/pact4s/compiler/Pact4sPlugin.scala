@@ -66,3 +66,4 @@ trait Pact4sGlobal extends TypingTransformers with Traversers with UDTAnalysis w
   case class CaseClassDescriptor(tpe: Type, ctor: Symbol, ctorTpe: Type, getters: Seq[FieldAccessor]) extends UDTDescriptor
   case class FieldAccessor(sym: Symbol, tpe: Type, descr: UDTDescriptor)
 }
+
