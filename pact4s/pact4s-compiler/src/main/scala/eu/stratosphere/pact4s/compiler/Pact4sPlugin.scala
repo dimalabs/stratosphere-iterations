@@ -59,11 +59,18 @@ trait Pact4sGlobal extends TypingTransformers with Traversers with UDTAnalysis w
 
   abstract sealed class UDTDescriptor { val tpe: Type }
   case class UnsupportedDescriptor(tpe: Type, errors: Seq[String]) extends UDTDescriptor
-  case class OpaqueDescriptor(tpe: Type, ref: Tree) extends UDTDescriptor
   case class PrimitiveDescriptor(tpe: Type, default: Literal, wrapperClass: Symbol) extends UDTDescriptor
   case class ListDescriptor(tpe: Type, listType: Type, elem: UDTDescriptor) extends UDTDescriptor
   case class BaseClassDescriptor(tpe: Type, subTypes: Seq[UDTDescriptor]) extends UDTDescriptor
   case class CaseClassDescriptor(tpe: Type, ctor: Symbol, ctorTpe: Type, getters: Seq[FieldAccessor]) extends UDTDescriptor
   case class FieldAccessor(sym: Symbol, tpe: Type, descr: UDTDescriptor)
+
+  case class OpaqueDescriptor(tpe: Type, ref: Tree) extends UDTDescriptor {
+    // Trees don't implement structural hashing or equality
+    override def hashCode() = (tpe, ref.toString).hashCode()
+    override def equals(that: Any) = that match {
+      case OpaqueDescriptor(thatTpe, thatRef) => (tpe, ref.toString).equals((thatTpe, thatRef.toString))
+    }
+  }
 }
 

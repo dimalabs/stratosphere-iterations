@@ -21,7 +21,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
       UDTCodeGeneration.this.messageTag = "UDTCode"
       private val genSites = UDTCodeGenerator.this.genSites(unit)
-      private val unitRoot = new EagerAutoSwitch[Tree] { override def guard = unit.toString.contains("WordCount.scala") }
+      private val unitRoot = new EagerAutoSwitch[Tree] { override def guard = unit.toString.contains("Test.scala") }
 
       override def transform(tree: Tree): Tree = {
 
