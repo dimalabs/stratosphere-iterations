@@ -1,3 +1,20 @@
+/**
+ * *********************************************************************************************************************
+ *
+ * Copyright (C) 2010 by the Stratosphere project (http://stratosphere.eu)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ *
+ * ********************************************************************************************************************
+ */
+
 package eu.stratosphere.pact4s.common.operators
 
 import eu.stratosphere.pact4s.common._
@@ -9,6 +26,9 @@ import eu.stratosphere.pact.common.contract._
 
 class RepeatOperator[SolutionItem: UDT](stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]) extends Serializable {
 
+  // This is undesirable for a huge number of iterations since it will cause
+  // the job graph to explode. But until PACT iterations are fully implemented,
+  // this will at least get small example programs up and running.
   def ^(numIterations: Int): DataStream[SolutionItem] => DataStream[SolutionItem] = Function.chain(List.fill(numIterations)(stepFunction))
 
   /*
