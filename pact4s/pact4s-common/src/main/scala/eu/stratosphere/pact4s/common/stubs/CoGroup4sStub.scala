@@ -49,10 +49,10 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
     leftIterator.initialize(leftRecords)
     rightIterator.initialize(rightRecords)
 
-    val output = userFunction.apply(leftIterator, rightIterator)
-
     outputRecord.copyFrom(leftIterator.getFirstRecord, leftForward, leftForward);
     outputRecord.copyFrom(rightIterator.getFirstRecord, rightForward, rightForward);
+
+    val output = userFunction.apply(leftIterator, rightIterator)
 
     serializer.serialize(output, outputRecord)
     out.collect(outputRecord)
@@ -63,12 +63,12 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
     leftIterator.initialize(leftRecords)
     rightIterator.initialize(rightRecords)
 
+    outputRecord.copyFrom(leftIterator.getFirstRecord, leftForward, leftForward);
+    outputRecord.copyFrom(rightIterator.getFirstRecord, rightForward, rightForward);
+
     val output = userFunction.apply(leftIterator, rightIterator)
 
     if (output.nonEmpty) {
-
-      outputRecord.copyFrom(leftIterator.getFirstRecord, leftForward, leftForward);
-      outputRecord.copyFrom(rightIterator.getFirstRecord, rightForward, rightForward);
 
       for (item <- output) {
         serializer.serialize(item, outputRecord)

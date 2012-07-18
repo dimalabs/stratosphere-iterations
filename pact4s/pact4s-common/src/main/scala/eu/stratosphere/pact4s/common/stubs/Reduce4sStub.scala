@@ -53,10 +53,9 @@ class Reduce4sStub[In, Out] extends ReduceStub {
   override def combine(records: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
     combineIterator.initialize(records)
+    combineRecord.copyFrom(combineIterator.getFirstRecord, combineForward, combineForward);
 
     val output = combineFunction.apply(combineIterator)
-
-    combineRecord.copyFrom(combineIterator.getFirstRecord, combineForward, combineForward);
 
     combineSerializer.serialize(output, combineRecord)
     out.collect(combineRecord)
@@ -65,10 +64,9 @@ class Reduce4sStub[In, Out] extends ReduceStub {
   override def reduce(records: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
     reduceIterator.initialize(records)
+    reduceRecord.copyFrom(reduceIterator.getFirstRecord, reduceForward, reduceForward);
 
     val output = reduceFunction.apply(reduceIterator)
-
-    reduceRecord.copyFrom(reduceIterator.getFirstRecord, reduceForward, reduceForward);
 
     reduceSerializer.serialize(output, reduceRecord)
     out.collect(reduceRecord)
