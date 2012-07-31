@@ -363,7 +363,7 @@ public abstract class SingleInputNode extends OptimizerNode {
 		SingleInputContract<?> c = (SingleInputContract<?>)super.getPactContract();
 		
 		// get constantSet annotation from stub
-		ConstantFields constantSet = c.getUserCodeClass().getAnnotation(ConstantFields.class);
+		ConstantFields constantSet = c.getUserCodeAnnotation(ConstantFields.class);
 		
 		// extract constantSet from annotation
 		if(constantSet == null) {
@@ -372,7 +372,7 @@ public abstract class SingleInputNode extends OptimizerNode {
 			this.constantSet = new FieldSet(constantSet.fields());
 		}
 		
-		ConstantFieldsExcept notConstantSet = c.getUserCodeClass().getAnnotation(ConstantFieldsExcept.class);
+		ConstantFieldsExcept notConstantSet = c.getUserCodeAnnotation(ConstantFieldsExcept.class);
 		
 		// extract notConstantSet from annotation
 		if(notConstantSet == null) {
