@@ -16,8 +16,9 @@
 package eu.stratosphere.nephele.taskmanager.runtime;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import eu.stratosphere.nephele.checkpointing.EphemeralCheckpoint;
 import eu.stratosphere.nephele.execution.RuntimeEnvironment;
@@ -26,11 +27,10 @@ import eu.stratosphere.nephele.io.AbstractID;
 import eu.stratosphere.nephele.io.GateID;
 import eu.stratosphere.nephele.io.InputGate;
 import eu.stratosphere.nephele.io.OutputGate;
-import eu.stratosphere.nephele.io.channels.AbstractInputChannel;
-import eu.stratosphere.nephele.io.channels.AbstractOutputChannel;
 import eu.stratosphere.nephele.io.channels.Buffer;
-import eu.stratosphere.nephele.io.channels.ChannelID;
+import eu.stratosphere.nephele.io.compression.CompressionBufferProvider;
 import eu.stratosphere.nephele.taskmanager.bufferprovider.AsynchronousEventListener;
+import eu.stratosphere.nephele.taskmanager.bufferprovider.BufferAvailabilityListener;
 import eu.stratosphere.nephele.taskmanager.bufferprovider.BufferProvider;
 import eu.stratosphere.nephele.taskmanager.bufferprovider.LocalBufferPool;
 import eu.stratosphere.nephele.taskmanager.bytebuffered.InputGateContext;
@@ -40,6 +40,8 @@ import eu.stratosphere.nephele.taskmanager.transferenvelope.TransferEnvelopeDisp
 import eu.stratosphere.nephele.types.Record;
 
 public final class RuntimeTaskContext implements BufferProvider, AsynchronousEventListener, TaskContext {
+
+	private static final Log LOG = LogFactory.getLog(RuntimeTaskContext.class);
 
 	private final LocalBufferPool localBufferPool;
 
@@ -53,6 +55,8 @@ public final class RuntimeTaskContext implements BufferProvider, AsynchronousEve
 
 	private final EnvelopeConsumptionLog envelopeConsumptionLog;
 
+	private CompressionBufferProvider compressionBufferProvider = null;
+
 	RuntimeTaskContext(final RuntimeTask task, final CheckpointState initialCheckpointState,
 			final TransferEnvelopeDispatcher transferEnvelopeDispatcher) {
 
@@ -65,7 +69,7 @@ public final class RuntimeTaskContext implements BufferProvider, AsynchronousEve
 		int nooc = 0;
 		for (int i = 0; i < environment.getNumberOfOutputGates(); ++i) {
 			final OutputGate<? extends Record> outputGate = environment.getOutputGate(i);
-			if(outputGate.isBroadcast()) {
+			if (outputGate.isBroadcast()) {
 				++nooc;
 			} else {
 				nooc += outputGate.getNumberOfOutputChannels();
@@ -93,6 +97,24 @@ public final class RuntimeTaskContext implements BufferProvider, AsynchronousEve
 	EphemeralCheckpoint getEphemeralCheckpoint() {
 
 		return this.ephemeralCheckpoint;
+	}
+
+	/**
+	 * Returns (and if necessary previously creates) a compression buffer provider for output gate contexts. This method
+	 * must not be called from input gate contexts since input gate contexts are supposed to have their own compression
+	 * buffer provider objects.
+	 * 
+	 * @return the compression buffer provider for the output gate context
+	 */
+	CompressionBufferProvider getCompressionBufferProvider() {
+
+		if (this.compressionBufferProvider == null) {
+			this.compressionBufferProvider = new CompressionBufferProvider(this, false);
+		} else {
+			this.compressionBufferProvider.increaseReferenceCounter();
+		}
+
+		return this.compressionBufferProvider;
 	}
 
 	/**
@@ -178,55 +200,9 @@ public final class RuntimeTaskContext implements BufferProvider, AsynchronousEve
 			return;
 		}
 
-		final RuntimeEnvironment environment = this.task.getRuntimeEnvironment();
-
-		// if (this.environment.getExecutingThread() != Thread.currentThread()) {
-		// throw new ConcurrentModificationException(
-		// "initialExecutionResourcesExhausted must be called from the task that executes the user code");
-		// }
-		
-		// collect outputChannelUtilization
-		final Map<ChannelID, Long> channelUtilization = new HashMap<ChannelID, Long>();
-		long totalOutputAmount = 0;
-		long averageOutputRecordSize = 0;
-		for (int i = 0; i < environment.getNumberOfOutputGates(); ++i) {
-			final OutputGate<? extends Record> outputGate = environment.getOutputGate(i);
-			for (int j = 0; j < outputGate.getNumberOfOutputChannels(); ++j) {
-				final AbstractOutputChannel<? extends Record> outputChannel = outputGate.getOutputChannel(j);
-				channelUtilization.put(outputChannel.getID(),
-						Long.valueOf(outputChannel.getAmountOfDataTransmitted()));
-				totalOutputAmount += outputChannel.getAmountOfDataTransmitted();
-			}
-		}
-
-		// FIXME (marrus) it is not about what we received but what we processed yet
-		boolean allClosed = true;
-
-		long totalInputAmount = 0;
-		for (int i = 0; i < environment.getNumberOfInputGates(); ++i) {
-			final InputGate<? extends Record> inputGate = environment.getInputGate(i);
-			for (int j = 0; j < inputGate.getNumberOfInputChannels(); ++j) {
-				final AbstractInputChannel<? extends Record> inputChannel = inputGate.getInputChannel(j);
-				channelUtilization.put(inputChannel.getID(),
-						Long.valueOf(inputChannel.getAmountOfDataTransmitted()));
-				totalInputAmount += inputChannel.getAmountOfDataTransmitted();
-				try {
-					if (!inputChannel.isClosed()) {
-						allClosed = false;
-					}
-				} catch (IOException e) {
-					e.printStackTrace();
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-			}
-		}
-
-		System.out.println("Making checkpoint decision for " + environment.getTaskNameWithIndex());
-		final boolean checkpointDecision = false; /*CheckpointDecision.getDecision(this.task, rus);*/
-		System.out.println("Checkpoint decision for " + environment.getTaskNameWithIndex() + " is "
-			+ checkpointDecision);
-		this.ephemeralCheckpoint.setCheckpointDecisionSynchronously(checkpointDecision);
+		// TODO: Remove this and implement decision logic for ephemeral checkpoint
+		LOG.error("Checkpoint state of " + this.task.getRuntimeEnvironment().getTaskNameWithIndex() + " is UNDECIDED");
+		this.ephemeralCheckpoint.setCheckpointDecisionSynchronously(false);
 
 	}
 
@@ -330,5 +306,14 @@ public final class RuntimeTaskContext implements BufferProvider, AsynchronousEve
 	public LocalBufferPool getLocalBufferPool() {
 
 		return this.localBufferPool;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public boolean registerBufferAvailabilityListener(final BufferAvailabilityListener bufferAvailabilityListener) {
+
+		return this.localBufferPool.registerBufferAvailabilityListener(bufferAvailabilityListener);
 	}
 }

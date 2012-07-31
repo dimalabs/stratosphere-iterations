@@ -18,6 +18,9 @@ package eu.stratosphere.nephele.io.channels.bytebuffered;
 import java.io.EOFException;
 import java.io.IOException;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import eu.stratosphere.nephele.event.task.AbstractEvent;
 import eu.stratosphere.nephele.event.task.AbstractTaskEvent;
 import eu.stratosphere.nephele.io.InputGate;
@@ -26,10 +29,9 @@ import eu.stratosphere.nephele.io.channels.AbstractInputChannel;
 import eu.stratosphere.nephele.io.channels.Buffer;
 import eu.stratosphere.nephele.io.channels.ChannelID;
 import eu.stratosphere.nephele.io.channels.ChannelType;
-import eu.stratosphere.nephele.io.channels.DeserializationBuffer;
 import eu.stratosphere.nephele.io.compression.CompressionEvent;
+import eu.stratosphere.nephele.io.compression.CompressionException;
 import eu.stratosphere.nephele.io.compression.CompressionLevel;
-import eu.stratosphere.nephele.io.compression.CompressionLoader;
 import eu.stratosphere.nephele.io.compression.Decompressor;
 import eu.stratosphere.nephele.types.Record;
 
@@ -47,32 +49,39 @@ import eu.stratosphere.nephele.types.Record;
 public abstract class AbstractByteBufferedInputChannel<T extends Record> extends AbstractInputChannel<T> {
 
 	/**
-	 * The deserialization buffer used to deserialize records.
+	 * The log object used to report warnings and errors.
 	 */
-	private final DeserializationBuffer<T> deserializationBuffer;
-
-	private Buffer compressedDataBuffer = null;
-
-	private ByteBufferedInputChannelBroker inputChannelBroker = null;
-
-	private volatile boolean brokerAggreedToCloseChannel = false;
+	private static final Log LOG = LogFactory.getLog(AbstractByteBufferedInputChannel.class);
 
 	/**
-	 * The Decompressor-Object to decompress incoming data
+	 * The deserializer used to deserialize records.
 	 */
-	private final Decompressor decompressor;
+	private final RecordDeserializer<T> deserializer;
 
 	/**
-	 * Buffer for the uncompressed data.
+	 * Buffer for the uncompressed (raw) data.
 	 */
-	private Buffer uncompressedDataBuffer = null;
+	private Buffer dataBuffer;
 
-	private volatile IOException ioException = null;
+	private ByteBufferedInputChannelBroker inputChannelBroker;
+
+	/**
+	 * The decompressor object to decompress incoming data
+	 */
+	private Decompressor decompressor = null;
+
+	/**
+	 * The exception observed in this channel while processing the buffers. Checked and thrown
+	 * per-buffer.
+	 */
+	private volatile IOException ioException;
 
 	/**
 	 * Stores the number of bytes read through this input channel since its instantiation.
 	 */
-	private long amountOfDataTransmitted = 0L;
+	private long amountOfDataTransmitted;
+
+	private volatile boolean brokerAggreedToCloseChannel;
 
 	/**
 	 * Creates a new network input channel.
@@ -84,69 +93,64 @@ public abstract class AbstractByteBufferedInputChannel<T extends Record> extends
 	 * @param type
 	 *        the type of record transported through this channel
 	 * @param channelID
-	 *        the channel ID to assign to the new channel, <code>null</code> to generate a new ID
+	 *        the ID of the channel
+	 * @param connectedChannelID
+	 *        the ID of the channel this channel is connected to
 	 * @param compressionLevel
 	 *        the level of compression to be used for this channel
 	 */
-	public AbstractByteBufferedInputChannel(InputGate<T> inputGate, int channelIndex,
-			RecordDeserializer<T> deserializer, ChannelID channelID, CompressionLevel compressionLevel) {
-		super(inputGate, channelIndex, channelID, compressionLevel);
-		this.deserializationBuffer = new DeserializationBuffer<T>(deserializer, false);
-
-		this.decompressor = CompressionLoader.getDecompressorByCompressionLevel(compressionLevel, this);
+	public AbstractByteBufferedInputChannel(final InputGate<T> inputGate, final int channelIndex,
+			final RecordDeserializer<T> deserializer, final ChannelID channelID, final ChannelID connectedChannelID,
+			final CompressionLevel compressionLevel) {
+		super(inputGate, channelIndex, channelID, connectedChannelID, compressionLevel);
+		this.deserializer = deserializer;
 	}
 
 	/**
 	 * Deserializes the next record from one of the data buffers.
 	 * 
 	 * @return the next record or <code>null</code> if all data buffers are exhausted
-	 * @throws ExecutionFailureException
-	 *         if the record cannot be deserialized
+	 * @throws IOException
+	 *         thrown if the record cannot be deserialized
 	 */
 	private T deserializeNextRecord(final T target) throws IOException {
 
-		if (this.uncompressedDataBuffer == null) {
+		if (this.dataBuffer == null) {
 
 			if (this.ioException != null) {
 				throw this.ioException;
 			}
 
-			requestReadBuffersFromBroker();
+			requestReadBufferFromBroker();
 
-			if (this.uncompressedDataBuffer == null) {
+			if (this.dataBuffer == null) {
 				return null;
 			}
 
 			if (this.decompressor != null) {
-				this.decompressor.decompress();
+				this.dataBuffer = this.decompressor.decompress(this.dataBuffer);
 			}
 		}
 
-		final T nextRecord = this.deserializationBuffer.readData(target, this.uncompressedDataBuffer);
+		final T nextRecord = this.deserializer.readData(target, this.dataBuffer);
 
-		if (this.uncompressedDataBuffer.remaining() == 0) {
+		if (this.dataBuffer.remaining() == 0) {
 			releasedConsumedReadBuffer();
 		}
 
 		return nextRecord;
 	}
 
-	private void requestReadBuffersFromBroker() {
+	private void requestReadBufferFromBroker() {
 
 		// this.leasedReadBuffer = this.inputChannelBroker.getReadBufferToConsume();
-		final BufferPairResponse bufferPair = this.inputChannelBroker.getReadBufferToConsume();
+		final Buffer buffer = this.inputChannelBroker.getReadBufferToConsume();
 
-		if (bufferPair == null) {
+		if (buffer == null) {
 			return;
 		}
 
-		this.compressedDataBuffer = bufferPair.getCompressedDataBuffer();
-		this.uncompressedDataBuffer = bufferPair.getUncompressedDataBuffer();
-
-		if (this.decompressor != null) {
-			this.decompressor.setCompressedDataBuffer(this.compressedDataBuffer);
-			this.decompressor.setUncompressedDataBuffer(this.uncompressedDataBuffer);
-		}
+		this.dataBuffer = buffer;
 	}
 
 	/**
@@ -168,9 +172,7 @@ public abstract class AbstractByteBufferedInputChannel<T extends Record> extends
 	@Override
 	public boolean isClosed() throws IOException {
 
-		// TODO: check for decompressor
-
-		if (this.uncompressedDataBuffer != null) {
+		if (this.dataBuffer != null) {
 			return false;
 		}
 
@@ -191,22 +193,20 @@ public abstract class AbstractByteBufferedInputChannel<T extends Record> extends
 	@Override
 	public void close() throws IOException, InterruptedException {
 
-		this.deserializationBuffer.clear();
-		if (this.uncompressedDataBuffer != null) {
+		this.deserializer.clear();
+		if (this.dataBuffer != null) {
 			releasedConsumedReadBuffer();
 		}
 
 		// This code fragment makes sure the isClosed method works in case the channel input has not been fully consumed
-		if (this.getType() == ChannelType.NETWORK) {
-			if (!this.brokerAggreedToCloseChannel) {
-				while (!this.brokerAggreedToCloseChannel) {
-
-					requestReadBuffersFromBroker();
-					if (this.uncompressedDataBuffer != null || this.compressedDataBuffer != null) {
-						releasedConsumedReadBuffer();
-					}
-					Thread.sleep(500);
+		if (this.getType() == ChannelType.NETWORK || this.getType() == ChannelType.INMEMORY) {
+			while (!this.brokerAggreedToCloseChannel) {
+				requestReadBufferFromBroker();
+				if (this.dataBuffer != null) {
+					releasedConsumedReadBuffer();
+					continue;
 				}
+				Thread.sleep(200);
 			}
 		}
 
@@ -222,15 +222,32 @@ public abstract class AbstractByteBufferedInputChannel<T extends Record> extends
 
 	private void releasedConsumedReadBuffer() {
 
-		this.inputChannelBroker.releaseConsumedReadBuffer();
 		// Keep track of number of bytes transmitted through this channel
-		this.amountOfDataTransmitted += this.uncompressedDataBuffer.size();
-		this.uncompressedDataBuffer = null;
-		this.compressedDataBuffer = null;
+		this.amountOfDataTransmitted += this.dataBuffer.size();
+
+		this.inputChannelBroker.releaseConsumedReadBuffer(this.dataBuffer);
+		this.dataBuffer = null;
 	}
 
 	public void setInputChannelBroker(ByteBufferedInputChannelBroker inputChannelBroker) {
 		this.inputChannelBroker = inputChannelBroker;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void initializeDecompressor() throws CompressionException {
+
+		if (this.decompressor != null) {
+			throw new IllegalStateException("Decompressor has already been initialized for channel " + getID());
+		}
+
+		if (this.inputChannelBroker == null) {
+			throw new IllegalStateException("Input channel broker has not been set");
+		}
+
+		this.decompressor = this.inputChannelBroker.getDecompressor();
 	}
 
 	public void checkForNetworkEvents() {
@@ -256,7 +273,7 @@ public abstract class AbstractByteBufferedInputChannel<T extends Record> extends
 				.getCurrentInternalCompressionLibraryIndex());
 		} else {
 			// TODO: Handle unknown event
-			System.out.println("Received unknown event:" + event);
+			LOG.error("Received unknown event: " + event);
 		}
 	}
 
@@ -282,12 +299,12 @@ public abstract class AbstractByteBufferedInputChannel<T extends Record> extends
 
 		this.brokerAggreedToCloseChannel = true;
 
-		this.deserializationBuffer.clear();
+		this.deserializer.clear();
 
 		// The buffers are recycled by the input channel wrapper
 
 		if (this.decompressor != null) {
-			this.decompressor.shutdown(getID());
+			this.decompressor.shutdown();
 		}
 	}
 

@@ -31,7 +31,6 @@ import eu.stratosphere.nephele.event.job.ManagementEvent;
 import eu.stratosphere.nephele.event.job.RecentJobEvent;
 import eu.stratosphere.nephele.event.job.VertexAssignmentEvent;
 import eu.stratosphere.nephele.event.job.VertexEvent;
-import eu.stratosphere.nephele.execution.Environment;
 import eu.stratosphere.nephele.execution.ExecutionListener;
 import eu.stratosphere.nephele.execution.ExecutionState;
 import eu.stratosphere.nephele.executiongraph.CheckpointState;
@@ -84,42 +83,21 @@ public final class EventCollector extends TimerTask implements ProfilingListener
 		private final EventCollector eventCollector;
 
 		/**
-		 * The ID of the job vertex this wrapper object belongs to.
+		 * The vertex this listener belongs to.
 		 */
-		private final JobVertexID jobVertexID;
-
-		/**
-		 * The name of task represented by the associated vertex.
-		 */
-		private final String taskName;
-
-		/**
-		 * The index of the vertex in the subtask group.
-		 */
-		private final int indexInSubtaskGroup;
-
-		/**
-		 * The total number of vertices in the vertex's subtask group.
-		 */
-		private final int totalNumberOfSubtasks;
+		private final ExecutionVertex vertex;
 
 		/**
 		 * Constructs a new execution listener object.
 		 * 
 		 * @param eventCollector
 		 *        the event collector to forward the created event to
-		 * @param jobVertexID
-		 *        the ID of the job vertex this wrapper object belongs to
-		 * @param environment
-		 *        the environment of the vertex this listener is created for
+		 * @param vertex
+		 *        the vertex this listener belongs to.
 		 */
-		public ExecutionListenerWrapper(final EventCollector eventCollector, final JobVertexID jobVertexID,
-				final Environment environment) {
+		public ExecutionListenerWrapper(final EventCollector eventCollector, final ExecutionVertex vertex) {
 			this.eventCollector = eventCollector;
-			this.jobVertexID = jobVertexID;
-			this.taskName = environment.getTaskName();
-			this.indexInSubtaskGroup = environment.getIndexInSubtaskGroup();
-			this.totalNumberOfSubtasks = environment.getCurrentNumberOfSubtasks();
+			this.vertex = vertex;
 		}
 
 		/**
@@ -131,9 +109,14 @@ public final class EventCollector extends TimerTask implements ProfilingListener
 
 			final long timestamp = System.currentTimeMillis();
 
+			final JobVertexID jobVertexID = this.vertex.getGroupVertex().getJobVertexID();
+			final String taskName = this.vertex.getGroupVertex().getName();
+			final int totalNumberOfSubtasks = this.vertex.getGroupVertex().getCurrentNumberOfGroupMembers();
+			final int indexInSubtaskGroup = this.vertex.getIndexInVertexGroup();
+
 			// Create a new vertex event
-			final VertexEvent vertexEvent = new VertexEvent(timestamp, this.jobVertexID, this.taskName,
-				this.totalNumberOfSubtasks, this.indexInSubtaskGroup, newExecutionState, optionalMessage);
+			final VertexEvent vertexEvent = new VertexEvent(timestamp, jobVertexID, taskName, totalNumberOfSubtasks,
+				indexInSubtaskGroup, newExecutionState, optionalMessage);
 
 			this.eventCollector.addEvent(jobID, vertexEvent);
 
@@ -197,6 +180,11 @@ public final class EventCollector extends TimerTask implements ProfilingListener
 		private final boolean isProfilingAvailable;
 
 		/**
+		 * The time stamp of the job submission
+		 */
+		private final long submissionTimestamp;
+
+		/**
 		 * Constructs a new job status listener wrapper.
 		 * 
 		 * @param eventCollector
@@ -205,12 +193,16 @@ public final class EventCollector extends TimerTask implements ProfilingListener
 		 *        the name of the job
 		 * @param isProfilingAvailable
 		 *        <code>true</code> if profiling events are collected for the job, <code>false</code> otherwise
+		 * @param submissionTimestamp
+		 *        the submission time stamp of the job
 		 */
 		public JobStatusListenerWrapper(final EventCollector eventCollector, final String jobName,
-				final boolean isProfilingAvailable) {
+				final boolean isProfilingAvailable, final long submissionTimestamp) {
+
 			this.eventCollector = eventCollector;
 			this.jobName = jobName;
 			this.isProfilingAvailable = isProfilingAvailable;
+			this.submissionTimestamp = submissionTimestamp;
 		}
 
 		/**
@@ -231,7 +223,8 @@ public final class EventCollector extends TimerTask implements ProfilingListener
 			// Update recent job event
 			final JobStatus jobStatus = InternalJobStatus.toJobStatus(newJobStatus);
 			if (jobStatus != null) {
-				this.eventCollector.updateRecentJobEvent(jobID, this.jobName, this.isProfilingAvailable, jobStatus);
+				this.eventCollector.updateRecentJobEvent(jobID, this.jobName, this.isProfilingAvailable,
+					this.submissionTimestamp, jobStatus);
 
 				this.eventCollector.addEvent(jobID,
 					new JobEvent(System.currentTimeMillis(), jobStatus, optionalMessage));
@@ -440,17 +433,20 @@ public final class EventCollector extends TimerTask implements ProfilingListener
 	 *        the name of the new job
 	 * @param isProfilingEnabled
 	 *        <code>true</code> if profiling events are collected for the job, <code>false</code> otherwise
-	 * @param initialJobStatus
-	 *        the initial status of the job
+	 * @param submissionTimestamp
+	 *        the submission time stamp of the job
+	 * @param jobStatus
+	 *        the status of the job
 	 */
 	private void updateRecentJobEvent(final JobID jobID, final String jobName, final boolean isProfilingEnabled,
-			final JobStatus jobStatus) {
+			final long submissionTimestamp, final JobStatus jobStatus) {
 
 		final long currentTime = System.currentTimeMillis();
 		final RecentJobEvent recentJobEvent = new RecentJobEvent(jobID, jobName, jobStatus, isProfilingEnabled,
-			currentTime);
+			submissionTimestamp, currentTime);
 
 		synchronized (this.recentJobs) {
+
 			this.recentJobs.put(jobID, recentJobEvent);
 		}
 	}
@@ -466,8 +462,11 @@ public final class EventCollector extends TimerTask implements ProfilingListener
 	 *        the execution graph representing the job
 	 * @param profilingAvailable
 	 *        indicates if profiling data is available for this job
+	 * @param submissionTimestamp
+	 *        the submission time stamp of the job
 	 */
-	public void registerJob(final ExecutionGraph executionGraph, final boolean profilingAvailable) {
+	public void registerJob(final ExecutionGraph executionGraph, final boolean profilingAvailable,
+			final long submissionTimestamp) {
 
 		final Iterator<ExecutionVertex> it = new ExecutionGraphIterator(executionGraph, true);
 
@@ -476,8 +475,7 @@ public final class EventCollector extends TimerTask implements ProfilingListener
 			final ExecutionVertex vertex = it.next();
 
 			// Register the listener object which will pass state changes on to the collector
-			vertex.registerExecutionListener(new ExecutionListenerWrapper(this, vertex.getGroupVertex()
-				.getJobVertexID(), vertex.getEnvironment()));
+			vertex.registerExecutionListener(new ExecutionListenerWrapper(this, vertex));
 
 			// Register the listener object which will pass assignment changes on to the collector
 			vertex
@@ -488,7 +486,7 @@ public final class EventCollector extends TimerTask implements ProfilingListener
 
 		// Register one job status listener wrapper for the entire job
 		executionGraph.registerJobStatusListener(new JobStatusListenerWrapper(this, executionGraph.getJobName(),
-			profilingAvailable));
+			profilingAvailable, submissionTimestamp));
 
 	}
 

@@ -71,11 +71,15 @@ constructTaskManagerClassPath() {
 			add=1
 		elif [[ "$jarfile" =~ 'httpcore' ]]; then
 			add=1
+		elif [[ "$jarfile" =~ 'guava' ]]; then
+			add=1
 		elif [[ "$jarfile" =~ 'httpclient' ]]; then
 			add=1
 		elif [[ "$jarfile" =~ 'commons-codec' ]]; then
 			add=1
 		elif [[ "$jarfile" =~ 'aws-java-sdk' ]]; then
+			add=1
+		elif [[ "$jarfile" =~ 'guava' ]]; then
 			add=1
 		fi
 
@@ -110,7 +114,12 @@ case $STARTSTOP in
 				exit 1
      			fi
 		fi
-		echo starting Nephele task manager on host $HOSTNAME
+
+                # Rotate log files
+                rotateLogFile $log
+                rotateLogFile $out
+
+		echo Starting Nephele task manager on host $HOSTNAME
 		$JAVA_HOME/bin/java $JVM_ARGS $NEPHELE_OPTS $log_setting -classpath $NEPHELE_TM_CLASSPATH eu.stratosphere.nephele.taskmanager.TaskManager -configDir $NEPHELE_CONF_DIR > "$out" 2>&1 < /dev/null &
 		echo $! > $pid
 	;;
@@ -118,13 +127,13 @@ case $STARTSTOP in
 	(stop)
 		if [ -f $pid ]; then
 			if kill -0 `cat $pid` > /dev/null 2>&1; then
-				echo stopping Nephele task manager on host $HOSTNAME
+				echo Stopping Nephele task manager on host $HOSTNAME
 				kill `cat $pid`
 			else
-				echo no Nephele task manager to stop on host $HOSTNAME
+				echo No Nephele task manager to stop on host $HOSTNAME
 			fi
 		else
-			echo no Nephele task manager to stop on host $HOSTNAME
+			echo No Nephele task manager to stop on host $HOSTNAME
 		fi
 	;;
 

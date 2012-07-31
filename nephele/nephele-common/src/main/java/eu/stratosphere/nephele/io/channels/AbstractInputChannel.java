@@ -15,20 +15,14 @@
 
 package eu.stratosphere.nephele.io.channels;
 
-import java.io.DataInput;
-import java.io.DataOutput;
 import java.io.EOFException;
 import java.io.IOException;
-import java.lang.reflect.Constructor;
 
-import eu.stratosphere.nephele.configuration.GlobalConfiguration;
 import eu.stratosphere.nephele.io.InputGate;
 import eu.stratosphere.nephele.io.compression.CompressionException;
 import eu.stratosphere.nephele.io.compression.CompressionLevel;
-import eu.stratosphere.nephele.io.compression.Decompressor;
 import eu.stratosphere.nephele.jobgraph.JobID;
 import eu.stratosphere.nephele.types.Record;
-import eu.stratosphere.nephele.util.StringUtils;
 
 /**
  * InputChannel is an abstract base class to all different kinds of concrete
@@ -41,22 +35,25 @@ import eu.stratosphere.nephele.util.StringUtils;
  */
 public abstract class AbstractInputChannel<T extends Record> extends AbstractChannel {
 
-	private InputGate<T> inputGate = null;
+	private final InputGate<T> inputGate;
 
 	/**
 	 * Constructs an input channel with a given input gate associated.
 	 * 
 	 * @param inputGate
+	 *        the input gate this channel is connected to
 	 * @param channelIndex
-	 *        the channel's index at the associated input gate
+	 *        the index of the channel in the input gate
 	 * @param channelID
-	 *        the channel ID to assign to the new channel, <code>null</code> to generate a new ID
+	 *        the ID of the channel
+	 * @param connectedChannelID
+	 *        the ID of the channel this channel is connected to
 	 * @param compressionLevel
 	 *        the level of compression to be used for this channel
 	 */
-	public AbstractInputChannel(InputGate<T> inputGate, int channelIndex, ChannelID channelID,
-			CompressionLevel compressionLevel) {
-		super(channelIndex, channelID, compressionLevel);
+	protected AbstractInputChannel(final InputGate<T> inputGate, final int channelIndex, final ChannelID channelID,
+			final ChannelID connectedChannelID, final CompressionLevel compressionLevel) {
+		super(channelIndex, channelID, connectedChannelID, compressionLevel);
 		this.inputGate = inputGate;
 	}
 
@@ -81,18 +78,6 @@ public abstract class AbstractInputChannel<T extends Record> extends AbstractCha
 	 */
 	public abstract T readRecord(T target) throws IOException;
 
-	@Override
-	public void read(DataInput in) throws IOException {
-
-		super.read(in);
-	}
-
-	@Override
-	public void write(DataOutput out) throws IOException {
-
-		super.write(out);
-	}
-
 	/**
 	 * Immediately closes the input channel. The corresponding output channels are
 	 * notified if necessary. Any remaining records in any buffers or queue is considered
@@ -105,60 +90,13 @@ public abstract class AbstractInputChannel<T extends Record> extends AbstractCha
 	 */
 	public abstract void close() throws IOException, InterruptedException;
 
-	// TODO: See if type safety can be improved here
-	@SuppressWarnings("unchecked")
-	public Decompressor getDecompressor(int bufferSize) throws CompressionException {
-
-		if (getCompressionLevel() == CompressionLevel.NO_COMPRESSION)
-			throw new CompressionException("CompressionLevel is set to NO_COMPRESSION");
-
-		String configurationKey = null;
-
-		switch (this.getType()) {
-		case FILE:
-			configurationKey = "channel.file.decompressor";
-			break;
-		case NETWORK:
-			configurationKey = "channel.network.decompressor";
-			break;
-		}
-
-		if (configurationKey == null)
-			throw new CompressionException("Cannot determine configuration key for the channel type " + this.getType());
-
-		String className = GlobalConfiguration.getString(configurationKey, null);
-		if (className == null)
-			throw new CompressionException("Configuration does not contain an entry for key " + configurationKey);
-
-		Class<? extends Decompressor> decompressionClass = null;
-
-		try {
-			decompressionClass = (Class<? extends Decompressor>) Class.forName(className);
-		} catch (ClassNotFoundException e) {
-			throw new CompressionException("Cannot find decompressor class: " + StringUtils.stringifyException(e));
-		}
-
-		Constructor<? extends Decompressor> constructor = null;
-
-		try {
-			constructor = decompressionClass.getConstructor(int.class, CompressionLevel.class);
-		} catch (SecurityException e) {
-			throw new CompressionException(StringUtils.stringifyException(e));
-		} catch (NoSuchMethodException e) {
-			throw new CompressionException("Cannot find matching constructor for decompression class: "
-				+ StringUtils.stringifyException(e));
-		}
-
-		Decompressor decompressor = null;
-
-		try {
-			decompressor = constructor.newInstance(bufferSize, getCompressionLevel());
-		} catch (Exception e) {
-			throw new CompressionException(StringUtils.stringifyException(e));
-		}
-
-		return decompressor;
-	}
+	/**
+	 * Initializes the decompressor object for this input channel.
+	 * 
+	 * @throws CompressionException
+	 *         thrown if an error occurs during the initialization process
+	 */
+	public abstract void initializeDecompressor() throws CompressionException;
 
 	/**
 	 * {@inheritDoc}

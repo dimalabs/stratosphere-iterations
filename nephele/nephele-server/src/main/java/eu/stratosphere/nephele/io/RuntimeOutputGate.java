@@ -31,6 +31,7 @@ import eu.stratosphere.nephele.io.channels.ChannelType;
 import eu.stratosphere.nephele.io.channels.bytebuffered.FileOutputChannel;
 import eu.stratosphere.nephele.io.channels.bytebuffered.NetworkOutputChannel;
 import eu.stratosphere.nephele.io.channels.bytebuffered.InMemoryOutputChannel;
+import eu.stratosphere.nephele.io.compression.CompressionException;
 import eu.stratosphere.nephele.io.compression.CompressionLevel;
 import eu.stratosphere.nephele.jobgraph.JobID;
 import eu.stratosphere.nephele.types.Record;
@@ -164,49 +165,6 @@ public class RuntimeOutputGate<T extends Record> extends AbstractGate<T> impleme
 		this.outputChannels.clear();
 	}
 
-	public AbstractOutputChannel<T> replaceChannel(ChannelID oldChannelID, ChannelType newChannelType,
-			boolean followsPushModel) {
-
-		AbstractOutputChannel<T> oldOutputChannel = null;
-
-		for (int i = 0; i < this.outputChannels.size(); i++) {
-			final AbstractOutputChannel<T> outputChannel = this.outputChannels.get(i);
-			if (outputChannel.getID().equals(oldChannelID)) {
-				oldOutputChannel = outputChannel;
-				break;
-			}
-		}
-
-		if (oldOutputChannel == null) {
-			return null;
-		}
-
-		AbstractOutputChannel<T> newOutputChannel = null;
-
-		switch (newChannelType) {
-		case FILE:
-			newOutputChannel = new FileOutputChannel<T>(this, oldOutputChannel.getChannelIndex(), oldOutputChannel
-				.getID(), oldOutputChannel.getCompressionLevel());
-			break;
-		case INMEMORY:
-			newOutputChannel = new InMemoryOutputChannel<T>(this, oldOutputChannel.getChannelIndex(), oldOutputChannel
-				.getID(), oldOutputChannel.getCompressionLevel());
-			break;
-		case NETWORK:
-			newOutputChannel = new NetworkOutputChannel<T>(this, oldOutputChannel.getChannelIndex(), oldOutputChannel
-				.getID(), oldOutputChannel.getCompressionLevel());
-			break;
-		default:
-			return null;
-		}
-
-		newOutputChannel.setConnectedChannelID(oldOutputChannel.getConnectedChannelID());
-
-		this.outputChannels.set(newOutputChannel.getChannelIndex(), newOutputChannel);
-
-		return newOutputChannel;
-	}
-
 	/**
 	 * {@inheritDoc}
 	 */
@@ -247,11 +205,10 @@ public class RuntimeOutputGate<T extends Record> extends AbstractGate<T> impleme
 	 */
 	@Override
 	public NetworkOutputChannel<T> createNetworkOutputChannel(final OutputGate<T> outputGate,
-			final ChannelID channelID, final CompressionLevel compressionLevel) {
+			final ChannelID channelID, final ChannelID connectedChannelID, final CompressionLevel compressionLevel) {
 
 		final NetworkOutputChannel<T> enoc = new NetworkOutputChannel<T>(outputGate, this.outputChannels.size(),
-			channelID,
-			compressionLevel);
+			channelID, connectedChannelID, compressionLevel);
 		addOutputChannel(enoc);
 
 		return enoc;
@@ -262,10 +219,10 @@ public class RuntimeOutputGate<T extends Record> extends AbstractGate<T> impleme
 	 */
 	@Override
 	public FileOutputChannel<T> createFileOutputChannel(final OutputGate<T> outputGate, final ChannelID channelID,
-			final CompressionLevel compressionLevel) {
+			final ChannelID connectedChannelID, final CompressionLevel compressionLevel) {
 
 		final FileOutputChannel<T> efoc = new FileOutputChannel<T>(outputGate, this.outputChannels.size(), channelID,
-			compressionLevel);
+			connectedChannelID, compressionLevel);
 		addOutputChannel(efoc);
 
 		return efoc;
@@ -276,10 +233,10 @@ public class RuntimeOutputGate<T extends Record> extends AbstractGate<T> impleme
 	 */
 	@Override
 	public InMemoryOutputChannel<T> createInMemoryOutputChannel(final OutputGate<T> outputGate,
-			final ChannelID channelID, final CompressionLevel compressionLevel) {
+			final ChannelID channelID, final ChannelID connectedChannelID, final CompressionLevel compressionLevel) {
 
 		final InMemoryOutputChannel<T> einoc = new InMemoryOutputChannel<T>(outputGate, this.outputChannels.size(),
-			channelID, compressionLevel);
+			channelID, connectedChannelID, compressionLevel);
 		addOutputChannel(einoc);
 
 		return einoc;
@@ -433,6 +390,27 @@ public class RuntimeOutputGate<T extends Record> extends AbstractGate<T> impleme
 
 		while (it.hasNext()) {
 			it.next().releaseAllResources();
+		}
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void initializeCompressors() throws CompressionException {
+
+		// In-memory channels to not use compression, so there is nothing to initialize
+		if (getChannelType() == ChannelType.INMEMORY) {
+			return;
+		}
+
+		// Check if this channel is configured to use compression
+		if (getCompressionLevel() == CompressionLevel.NO_COMPRESSION) {
+			return;
+		}
+
+		for (int i = 0; i < this.outputChannels.size(); ++i) {
+			this.outputChannels.get(i).initializeCompressor();
 		}
 	}
 }

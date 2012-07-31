@@ -15,18 +15,28 @@
 
 package eu.stratosphere.pact.runtime.task.util;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
+import java.io.DataInputStream;
 import java.io.DataOutput;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
+import com.google.common.base.Preconditions;
+
 import eu.stratosphere.nephele.configuration.Configuration;
+import eu.stratosphere.pact.common.contract.DataDistribution;
 import eu.stratosphere.pact.common.generic.types.TypeComparatorFactory;
 import eu.stratosphere.pact.common.generic.types.TypePairComparatorFactory;
 import eu.stratosphere.pact.common.generic.types.TypeSerializerFactory;
-import eu.stratosphere.pact.runtime.task.chaining.ChainedTask;
-import eu.stratosphere.pact.runtime.task.util.OutputEmitter.ShipStrategy;
+import eu.stratosphere.pact.common.stubs.Stub;
+import eu.stratosphere.pact.common.util.InstantiationUtil;
+import eu.stratosphere.pact.runtime.shipping.ShipStrategy;
+import eu.stratosphere.pact.runtime.task.PactDriver;
+import eu.stratosphere.pact.runtime.task.chaining.ChainedDriver;
 
 /**
  * Configuration class which stores all relevant parameters required to set up the Pact tasks.
@@ -79,6 +89,8 @@ public class TaskConfig
 	
 	// --------------------------------------------------------------------------------------------
 
+	private static final String DRIVER_CLASS = "pact.driver.class";
+	
 	private static final String STUB_CLASS = "pact.stub.class";
 
 	private static final String STUB_PARAM_PREFIX = "pact.stub.param.";
@@ -90,6 +102,10 @@ public class TaskConfig
 	private static final String OUTPUT_SHIP_STRATEGY_PREFIX = "pact.out.shipstrategy.";
 	
 	private static final String OUTPUT_TYPE_SERIALIZER_FACTORY = "pact.out.serializer";
+	
+	private static final String OUTPUT_DATA_DISTRIBUTION_CLASS = "pact.out.distribution.class";
+	
+	private static final String OUTPUT_DATA_DISTRIBUTION_STATE = "pact.out.distribution.state";
 	
 	private static final String OUTPUT_TYPE_COMPARATOR_FACTORY_PREFIX = "pact.out.comparator.";
 	
@@ -133,7 +149,19 @@ public class TaskConfig
 	private static final String SORT_SPILLING_THRESHOLD = "pact.sort.spillthreshold";
 
 	// --------------------------------------------------------------------------------------------
-	
+
+  private static final String NUMBER_OF_EVENTS_UNTIL_INTERRUPT = "pact.iterative.numberOfEventsUntilInterrupt.";
+
+  private static final String INPUT_GATE_CACHED = "pact.iterative.inputGateCached.";
+
+  private static final String INPUT_GATE_CACHE_MEMORY_FRACTION = "pact.iterative.inputGateCacheMemoryFraction";
+
+  private static final String NUMBER_OF_ITERATIONS = "pact.iterative.numberOfIterations";
+
+  private static final String BACKCHANNEL_MEMORY_FRACTION = "pact.iterative.backChannelMemoryFraction";
+
+  // --------------------------------------------------------------------------------------------
+
 	protected final Configuration config;			// the actual configuration holding the values
 
 	
@@ -147,6 +175,32 @@ public class TaskConfig
 	}
 	
 	// --------------------------------------------------------------------------------------------
+	//                                     Pact Driver
+	// --------------------------------------------------------------------------------------------
+	
+	public void setDriver(@SuppressWarnings("rawtypes") Class<? extends PactDriver> driver) {
+		this.config.setString(DRIVER_CLASS, driver.getName());
+	}
+	
+	public <S extends Stub, OT> Class<? extends PactDriver<S, OT>> getDriver()
+	{
+		final String className = this.config.getString(DRIVER_CLASS, null);
+		if (className == null) {
+			throw new CorruptConfigurationException("The pact driver class is missing.");
+		}
+		
+		try {
+			@SuppressWarnings("unchecked")
+			final Class<PactDriver<S, OT>> pdClazz = (Class<PactDriver<S, OT>>) (Class<?>) PactDriver.class;
+			return Class.forName(className).asSubclass(pdClazz);
+		} catch (ClassNotFoundException cnfex) {
+			throw new CorruptConfigurationException("The given driver class cannot be found.");
+		} catch (ClassCastException ccex) {
+			throw new CorruptConfigurationException("The given driver class does not implement the pact driver interface.");
+		}
+	}
+	
+	// --------------------------------------------------------------------------------------------
 	//                                User code class Access
 	// --------------------------------------------------------------------------------------------
 
@@ -157,9 +211,9 @@ public class TaskConfig
 	public <T> Class<? extends T> getStubClass(Class<T> stubClass, ClassLoader cl)
 		throws ClassNotFoundException, ClassCastException
 	{
-		String stubClassName = this.config.getString(STUB_CLASS, null);
+		final String stubClassName = this.config.getString(STUB_CLASS, null);
 		if (stubClassName == null) {
-			throw new IllegalStateException("stub class missing");
+			throw new CorruptConfigurationException("The stub class is missing.");
 		}
 		return Class.forName(stubClassName, true, cl).asSubclass(stubClass);
 	}
@@ -378,6 +432,56 @@ public class TaskConfig
 		return OUTPUT_PARAMETERS_PREFIX + outputNum + '.';
 	}
 	
+	public void setOutputDataDistribution(DataDistribution distribution)
+	{
+		this.config.setString(OUTPUT_DATA_DISTRIBUTION_CLASS, distribution.getClass().getName());
+		
+		final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		final DataOutputStream dos = new DataOutputStream(baos);
+		try {
+			distribution.write(dos);
+		} catch (IOException e) {
+			throw new RuntimeException("Error serializing the DataDistribution: " + e.getMessage(), e);
+		}
+		final String stateEncoded = baos.toString();
+		this.config.setString(OUTPUT_DATA_DISTRIBUTION_STATE, stateEncoded);
+	}
+	
+	public DataDistribution getOutputDataDistribution(final ClassLoader cl) throws ClassNotFoundException
+	{
+		final String className = this.config.getString(OUTPUT_DATA_DISTRIBUTION_CLASS, null);
+		if (className == null) {
+			return null;
+		}
+		
+		final Class<? extends DataDistribution> clazz;
+		try {
+			clazz = Class.forName(className, true, cl).asSubclass(DataDistribution.class);
+		} catch (ClassCastException ccex) {
+			throw new CorruptConfigurationException("The class noted in the configuration as the data distribution " +
+					"is no subclass of DataDistribution.");
+		}
+		
+		final DataDistribution distribution = InstantiationUtil.instantiate(clazz, DataDistribution.class);
+		
+		final String stateEncoded = this.config.getString(OUTPUT_DATA_DISTRIBUTION_STATE, null);
+		if (stateEncoded == null) {
+			throw new CorruptConfigurationException(
+						"The configuration contained the data distribution type, but no serialized state.");
+		}
+		
+		final ByteArrayInputStream bais = new ByteArrayInputStream(stateEncoded.getBytes());
+		final DataInputStream in = new DataInputStream(bais);
+		
+		try {
+			distribution.read(in);
+			return distribution;
+		} catch (Exception ex) {
+			throw new RuntimeException("The deserialization of the encoded data distribution state caused an error"
+				+ ex.getMessage() == null ? "." : ": " + ex.getMessage(), ex);
+		}
+	}
+	
 	// --------------------------------------------------------------------------------------------
 	//                       Parameters to configure the memory and I/O behavior
 	// --------------------------------------------------------------------------------------------
@@ -388,6 +492,12 @@ public class TaskConfig
 	
 	public int getGroupSize(int groupIndex) {
 		return this.config.getInteger(INPUT_GROUP_SIZE_PREFIX + groupIndex, -1);
+	}
+	
+	public void addInputToGroup(int groupIndex) {
+		String grp = INPUT_GROUP_SIZE_PREFIX + groupIndex;
+		this.config.setInteger(grp, this.config.getInteger(grp, 0)+1);
+		this.config.setInteger(NUM_INPUTS, this.config.getInteger(NUM_INPUTS, 0)+1);
 	}
 	
 	// --------------------------------------------------------------------------------------------
@@ -471,7 +581,7 @@ public class TaskConfig
 		return this.config.getInteger(CHAINING_NUM_STUBS, 0);
 	}
 	
-	public void addChainedTask(@SuppressWarnings("rawtypes") Class<? extends ChainedTask> chainedTaskClass, TaskConfig conf, String taskName)
+	public void addChainedTask(@SuppressWarnings("rawtypes") Class<? extends ChainedDriver> chainedTaskClass, TaskConfig conf, String taskName)
 	{
 		int numChainedYet = this.config.getInteger(CHAINING_NUM_STUBS, 0);
 		
@@ -487,7 +597,7 @@ public class TaskConfig
 		return new TaskConfig(new DelegatingConfiguration(this.config, CHAINING_TASKCONFIG_PREFIX + chainPos + '.'));
 	}
 
-	public Class<? extends ChainedTask<?, ?>> getChainedTask(int chainPos)
+	public Class<? extends ChainedDriver<?, ?>> getChainedTask(int chainPos)
 	throws ClassNotFoundException, ClassCastException
 	{
 		String className = this.config.getString(CHAINING_TASK_PREFIX + chainPos, null);
@@ -495,7 +605,7 @@ public class TaskConfig
 			throw new IllegalStateException("Chained Task Class missing");
 		
 		@SuppressWarnings("unchecked")
-		final Class<ChainedTask<?, ?>> clazz = (Class<ChainedTask<?, ?>>) (Class<?>) ChainedTask.class;
+		final Class<ChainedDriver<?, ?>> clazz = (Class<ChainedDriver<?, ?>>) (Class<?>) ChainedDriver.class;
 		return Class.forName(className).asSubclass(clazz);
 	}
 	
@@ -503,6 +613,64 @@ public class TaskConfig
 	{
 		return this.config.getString(CHAINING_TASKNAME_PREFIX + chainPos, null);
 	}
+
+	// --------------------------------------------------------------------------------------------
+	// Parameters for iterations
+	// --------------------------------------------------------------------------------------------
+
+  public void setBackChannelMemoryFraction(float fraction) {
+    Preconditions.checkArgument(fraction > 0 && fraction < 1);
+    config.setFloat(BACKCHANNEL_MEMORY_FRACTION, fraction);
+  }
+
+  public float getBackChannelMemoryFraction() {
+    float backChannelMemoryFraction = config.getFloat(BACKCHANNEL_MEMORY_FRACTION, 0);
+    Preconditions.checkState(backChannelMemoryFraction > 0);
+    return backChannelMemoryFraction;
+  }
+
+  public void setNumberOfIterations(int numberOfIterations) {
+    Preconditions.checkArgument(numberOfIterations > 0);
+    config.setInteger(NUMBER_OF_ITERATIONS, numberOfIterations);
+  }
+
+  public int getNumberOfIterations() {
+    int numberOfIterations = config.getInteger(NUMBER_OF_ITERATIONS, 0);
+    Preconditions.checkState(numberOfIterations > 0);
+    return numberOfIterations;
+  }
+
+  public boolean isCachedInputGate(int inputGateIndex) {
+    return config.getBoolean(INPUT_GATE_CACHED + inputGateIndex, false);
+  }
+
+  public void setGateCached(int inputGateIndex) {
+    config.setBoolean(INPUT_GATE_CACHED + inputGateIndex, true);
+  }
+
+  public float getInputGateCacheMemoryFraction() {
+    float inputGateCacheMemoryFraction = config.getFloat(INPUT_GATE_CACHE_MEMORY_FRACTION, 0);
+    Preconditions.checkState(inputGateCacheMemoryFraction > 0);
+    return inputGateCacheMemoryFraction;
+  }
+
+  public void setInputGateCacheMemoryFraction(float fraction) {
+    Preconditions.checkArgument(fraction > 0 && fraction < 1);
+    config.setFloat(INPUT_GATE_CACHE_MEMORY_FRACTION, fraction);
+  }
+
+  public boolean isIterativeInputGate(int inputGateIndex) {
+    return getNumberOfEventsUntilInterruptInIterativeGate(inputGateIndex) > 0;
+  }
+
+  public void setGateIterativeWithNumberOfEventsUntilInterrupt(int inputGateIndex, int numEvents) {
+    Preconditions.checkArgument(numEvents > 0);
+    config.setInteger(NUMBER_OF_EVENTS_UNTIL_INTERRUPT + inputGateIndex, numEvents);
+  }
+
+  public int getNumberOfEventsUntilInterruptInIterativeGate(int inputGateIndex) {
+    return config.getInteger(NUMBER_OF_EVENTS_UNTIL_INTERRUPT + inputGateIndex, 0);
+  }
 	
 	// --------------------------------------------------------------------------------------------
 	//                              Utility class for nested Configurations

@@ -25,24 +25,18 @@ import java.io.IOException;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.core.classloader.annotations.SuppressStaticInitializationFor;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
-import eu.stratosphere.nephele.io.DefaultRecordDeserializer;
 import eu.stratosphere.nephele.io.OutputGate;
 import eu.stratosphere.nephele.io.channels.AbstractChannel;
 import eu.stratosphere.nephele.io.channels.Buffer;
 import eu.stratosphere.nephele.io.channels.ChannelID;
 import eu.stratosphere.nephele.io.channels.SerializationBuffer;
 import eu.stratosphere.nephele.io.compression.CompressionLevel;
-import eu.stratosphere.nephele.io.compression.CompressionLoader;
-import eu.stratosphere.nephele.io.compression.Decompressor;
 import eu.stratosphere.nephele.types.StringRecord;
 
 /**
@@ -66,9 +60,6 @@ public class FileOutputChannelTest {
 	@Mock
 	ChannelID connected;
 
-	@Mock
-	DefaultRecordDeserializer<StringRecord> deserializer;
-
 	/**
 	 * Set up mocks
 	 * 
@@ -86,28 +77,20 @@ public class FileOutputChannelTest {
 	 * @throws InterruptedException
 	 */
 	@Test
-	@PrepareForTest(CompressionLoader.class)
 	public void writeRecordTest() throws IOException, InterruptedException {
 
 		final StringRecord record = new StringRecord("abc");
-		final Decompressor decompressorMock = mock(Decompressor.class);
 		this.uncompressedDataBuffer = mock(Buffer.class);
-		BufferPairResponse bufferPair = new BufferPairResponse(this.uncompressedDataBuffer, this.uncompressedDataBuffer);
 		// BufferPairResponse bufferPair = mock(BufferPairResponse.class);
 		// when(bufferPair.getUncompressedDataBuffer()).thenReturn(this.uncompressedDataBuffer,
 		// this.uncompressedDataBuffer, this.uncompressedDataBuffer,null);
 		// when(bufferPair.getCompressedDataBuffer()).thenReturn(this.uncompressedDataBuffer,
 		// this.uncompressedDataBuffer, this.uncompressedDataBuffer,null);
-		PowerMockito.mockStatic(CompressionLoader.class);
-		when(
-			CompressionLoader.getDecompressorByCompressionLevel(Matchers.any(CompressionLevel.class),
-				Matchers.any(FileInputChannel.class))).thenReturn(
-			decompressorMock);
 
 		@SuppressWarnings("unchecked")
 		final OutputGate<StringRecord> outGate = mock(OutputGate.class);
 		final ByteBufferedOutputChannelBroker outputBroker = mock(ByteBufferedOutputChannelBroker.class);
-		when(outputBroker.requestEmptyWriteBuffers()).thenReturn(bufferPair);
+		when(outputBroker.requestEmptyWriteBuffer()).thenReturn(this.uncompressedDataBuffer);
 
 		when(outputBroker.hasDataLeftToTransmit()).thenReturn(true);
 
@@ -121,8 +104,8 @@ public class FileOutputChannelTest {
 		when(this.uncompressedDataBuffer.remaining()).thenReturn(0);
 
 		// setup test-object
-		FileOutputChannel<StringRecord> fileOutputChannel = new FileOutputChannel<StringRecord>(outGate, 1, null,
-			CompressionLevel.NO_COMPRESSION);
+		FileOutputChannel<StringRecord> fileOutputChannel = new FileOutputChannel<StringRecord>(outGate, 1,
+			new ChannelID(), new ChannelID(), CompressionLevel.NO_COMPRESSION);
 		fileOutputChannel.setByteBufferedOutputChannelBroker(outputBroker);
 
 		Whitebox.setInternalState(fileOutputChannel, "serializationBuffer", this.serializationBuffer);

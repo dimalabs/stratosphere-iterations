@@ -48,6 +48,7 @@ import eu.stratosphere.nephele.checkpointing.CheckpointUtils;
 import eu.stratosphere.nephele.configuration.ConfigConstants;
 import eu.stratosphere.nephele.configuration.Configuration;
 import eu.stratosphere.nephele.configuration.GlobalConfiguration;
+import eu.stratosphere.nephele.deployment.TaskDeploymentDescriptor;
 import eu.stratosphere.nephele.discovery.DiscoveryException;
 import eu.stratosphere.nephele.discovery.DiscoveryService;
 import eu.stratosphere.nephele.execution.Environment;
@@ -107,7 +108,7 @@ public class TaskManager implements TaskOperationProtocol, PluginCommunicationPr
 
 	private final PluginCommunicationProtocol pluginCommunicationService;
 
-	private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+	private final ExecutorService executorService = Executors.newCachedThreadPool();
 
 	private static final int handlerCount = 1;
 
@@ -280,7 +281,8 @@ public class TaskManager implements TaskOperationProtocol, PluginCommunicationPr
 
 		// Get the directory for storing temporary files
 		final String[] tmpDirPaths = GlobalConfiguration.getString(ConfigConstants.TASK_MANAGER_TMP_DIR_KEY,
-														ConfigConstants.DEFAULT_TASK_MANAGER_TMP_PATH).split(":");
+			ConfigConstants.DEFAULT_TASK_MANAGER_TMP_PATH).split(File.pathSeparator);
+
 		checkTempDirs(tmpDirPaths);
 
 		// Initialize the byte buffered channel manager
@@ -328,8 +330,6 @@ public class TaskManager implements TaskOperationProtocol, PluginCommunicationPr
 
 		// Add shutdown hook for clean up tasks
 		Runtime.getRuntime().addShutdownHook(new TaskManagerCleanUp(this));
-
-		LOG.info(CheckpointUtils.getSummary());
 	}
 
 	/**
@@ -512,31 +512,44 @@ public class TaskManager implements TaskOperationProtocol, PluginCommunicationPr
 	 * {@inheritDoc}
 	 */
 	@Override
-	public List<TaskSubmissionResult> submitTasks(final List<TaskSubmissionWrapper> tasks) throws IOException {
+	public List<TaskSubmissionResult> submitTasks(final List<TaskDeploymentDescriptor> tasks) throws IOException {
 
 		final List<TaskSubmissionResult> submissionResultList = new SerializableArrayList<TaskSubmissionResult>();
 		final List<Task> tasksToStart = new ArrayList<Task>();
 
 		// Make sure all tasks are fully registered before they are started
-		for (final TaskSubmissionWrapper tsw : tasks) {
+		for (final TaskDeploymentDescriptor tdd : tasks) {
 
-			final RuntimeEnvironment re = tsw.getEnvironment();
-			final ExecutionVertexID id = tsw.getVertexID();
-			final Configuration jobConfiguration = tsw.getConfiguration();
-			final CheckpointState initialCheckpointState = tsw.getInitialCheckpointState();
-			final Set<ChannelID> activeOutputChannels = tsw.getActiveOutputChannels();
+			final JobID jobID = tdd.getJobID();
+			final ExecutionVertexID vertexID = tdd.getVertexID();
+			RuntimeEnvironment re;
+			try {
+				re = new RuntimeEnvironment(tdd, this.memoryManager, this.ioManager, new TaskInputSplitProvider(jobID,
+					vertexID, this.globalInputSplitProvider));
+			} catch (Throwable t) {
+				final TaskSubmissionResult result = new TaskSubmissionResult(vertexID,
+					AbstractTaskResult.ReturnCode.DEPLOYMENT_ERROR);
+				result.setDescription(StringUtils.stringifyException(t));
+				LOG.error(result.getDescription());
+				submissionResultList.add(result);
+				continue;
+			}
+
+			final Configuration jobConfiguration = tdd.getJobConfiguration();
+			final CheckpointState initialCheckpointState = tdd.getInitialCheckpointState();
+			final Set<ChannelID> activeOutputChannels = null; // TODO: Fix me
 
 			// Register the task
-			final Task task = createAndRegisterTask(id, jobConfiguration, re, initialCheckpointState,
+			final Task task = createAndRegisterTask(vertexID, jobConfiguration, re, initialCheckpointState,
 				activeOutputChannels);
 			if (task == null) {
-				final TaskSubmissionResult result = new TaskSubmissionResult(id,
+				final TaskSubmissionResult result = new TaskSubmissionResult(vertexID,
 					AbstractTaskResult.ReturnCode.TASK_NOT_FOUND);
-				result.setDescription("Task " + re.getTaskNameWithIndex() + " (" + id + ") was already running");
+				result.setDescription("Task " + re.getTaskNameWithIndex() + " (" + vertexID + ") was already running");
 				LOG.error(result.getDescription());
 				submissionResultList.add(result);
 			} else {
-				submissionResultList.add(new TaskSubmissionResult(id, AbstractTaskResult.ReturnCode.SUCCESS));
+				submissionResultList.add(new TaskSubmissionResult(vertexID, AbstractTaskResult.ReturnCode.SUCCESS));
 				tasksToStart.add(task);
 			}
 		}
@@ -617,11 +630,6 @@ public class TaskManager implements TaskOperationProtocol, PluginCommunicationPr
 			final Environment ee = task.getEnvironment();
 
 			if (registerTask) {
-				// Register task manager components with the task
-				task.registerMemoryManager(this.memoryManager);
-				task.registerIOManager(this.ioManager);
-				task.registerInputSplitProvider(new TaskInputSplitProvider(ee.getJobID(), id,
-					this.globalInputSplitProvider));
 
 				// Register the task with the byte buffered channel manager
 				this.byteBufferedChannelManager.register(task, activeOutputChannels);
@@ -685,21 +693,11 @@ public class TaskManager implements TaskOperationProtocol, PluginCommunicationPr
 				}
 			}
 
-			// Check if there are still vertices running that belong to the same job
-			int numberOfVerticesBelongingToThisJob = 0;
-			final Iterator<Task> iterator = this.runningTasks.values().iterator();
-			while (iterator.hasNext()) {
-				final Task candidateTask = iterator.next();
-				if (task.getJobID().equals(candidateTask.getJobID())) {
-					numberOfVerticesBelongingToThisJob++;
-				}
-			}
-
-			// If there are no other vertices belonging to the same job, we can unregister the job's class loader
-			if (numberOfVerticesBelongingToThisJob == 0) {
-				try {
-					LibraryCacheManager.unregister(task.getJobID());
-				} catch (IOException e) {
+			// Unregister task from library cache manager
+			try {
+				LibraryCacheManager.unregister(task.getJobID());
+			} catch (IOException e) {
+				if (LOG.isDebugEnabled()) {
 					LOG.debug("Unregistering the job vertex ID " + id + " caused an IOException");
 				}
 			}
@@ -853,12 +851,14 @@ public class TaskManager implements TaskOperationProtocol, PluginCommunicationPr
 	 */
 	private void checkTaskExecution() {
 
-		final Iterator<Task> it = this.runningTasks.values().iterator();
+		final Iterator<Map.Entry<ExecutionVertexID, Task>> it = this.runningTasks.entrySet().iterator();
 		while (it.hasNext()) {
-			final Task task = it.next();
+			final Map.Entry<ExecutionVertexID, Task> task = it.next();
 
-			if (task.isTerminated()) {
-				task.markAsFailed();
+			if (task.getValue().isTerminated()) {
+				if (this.runningTasks.containsKey(task.getKey())) {
+					task.getValue().markAsFailed();
+				}
 			}
 		}
 	}
@@ -997,31 +997,37 @@ public class TaskManager implements TaskOperationProtocol, PluginCommunicationPr
 
 		return tmp.requestData(data);
 	}
-	
+
 	/**
 	 * Checks, whether the given strings describe existing directories that are writable. If that is not
 	 * the case, an exception is raised.
 	 * 
-	 * @param tempDirs An array of strings which are checked to be paths to writable directories.
-	 * @throws Exception Thrown, if any of the mentioned checks fails.
+	 * @param tempDirs
+	 *        An array of strings which are checked to be paths to writable directories.
+	 * @throws Exception
+	 *         Thrown, if any of the mentioned checks fails.
 	 */
-	private static final void checkTempDirs(String[] tempDirs) throws Exception
-	{
-		for (int i = 0; i < tempDirs.length; i++) {
+	private static final void checkTempDirs(final String[] tempDirs) throws Exception {
+
+		for (int i = 0; i < tempDirs.length; ++i) {
+
 			final String dir = tempDirs[i];
 			if (dir == null) {
-				throw new Exception("Temporary file directory #" + (i+1) + " is null.");
+				throw new Exception("Temporary file directory #" + (i + 1) + " is null.");
 			}
-			
+
 			final File f = new File(dir);
+
 			if (!f.exists()) {
-				throw new Exception("Temporary file directory #" + (i+1) + " does not exist.");
+				throw new Exception("Temporary file directory #" + (i + 1) + " does not exist.");
 			}
+
 			if (!f.isDirectory()) {
-				throw new Exception("Temporary file directory #" + (i+1) + " is not a directory.");
+				throw new Exception("Temporary file directory #" + (i + 1) + " is not a directory.");
 			}
+
 			if (!f.canWrite()) {
-				throw new Exception("Temporary file directory #" + (i+1) + " is not writable.");
+				throw new Exception("Temporary file directory #" + (i + 1) + " is not writable.");
 			}
 		}
 	}

@@ -15,6 +15,7 @@
 
 package eu.stratosphere.nephele.checkpointing;
 
+import java.io.File;
 import java.io.IOException;
 
 import org.apache.commons.logging.Log;
@@ -40,17 +41,11 @@ public final class CheckpointUtils {
 
 	public static final String DISTRIBUTED_CHECKPOINT_PATH_KEY = "checkpoint.distributed.path";
 
-	public static final String DEFAULT_LOCAL_CHECKPOINT_PATH = "file:///tmp";
-
 	public static final String COMPLETED_CHECKPOINT_SUFFIX = "_final";
 
 	private static Path LOCAL_CHECKPOINT_PATH = null;
 
 	private static Path DISTRIBUTED_CHECKPOINT_PATH = null;
-
-	private static double CP_UPPER = -1.0;
-
-	private static double CP_LOWER = -1.0;
 
 	private static CheckpointMode CHECKPOINT_MODE = null;
 
@@ -60,8 +55,13 @@ public final class CheckpointUtils {
 	public static Path getLocalCheckpointPath() {
 
 		if (LOCAL_CHECKPOINT_PATH == null) {
-			LOCAL_CHECKPOINT_PATH = new Path(GlobalConfiguration.getString(LOCAL_CHECKPOINT_PATH_KEY,
-				DEFAULT_LOCAL_CHECKPOINT_PATH));
+
+			String localCheckpointPath = GlobalConfiguration.getString(LOCAL_CHECKPOINT_PATH_KEY, null);
+			if (localCheckpointPath == null) {
+				LOCAL_CHECKPOINT_PATH = new Path(new File(System.getProperty("java.io.tmpdir")).toURI());
+			} else {
+				LOCAL_CHECKPOINT_PATH = new Path(localCheckpointPath);
+			}
 		}
 
 		return LOCAL_CHECKPOINT_PATH;
@@ -133,6 +133,10 @@ public final class CheckpointUtils {
 				return true;
 			}
 
+			if (!allowDistributedCheckpoints()) {
+				return false;
+			}
+
 			final Path distributedCheckpointPath = getDistributedCheckpointPath();
 			if (distributedCheckpointPath == null) {
 				return false;
@@ -167,7 +171,7 @@ public final class CheckpointUtils {
 			if (!removeCheckpointMetaData(new Path(localChPath + Path.SEPARATOR + METADATA_PREFIX + "_" + vertexID))) {
 
 				final Path distributedChPath = getDistributedCheckpointPath();
-				if (distributedChPath != null) {
+				if (distributedChPath != null && allowDistributedCheckpoints()) {
 					removeCheckpointMetaData(new Path(distributedChPath + Path.SEPARATOR + METADATA_PREFIX + "_"
 						+ vertexID));
 				}
@@ -220,8 +224,6 @@ public final class CheckpointUtils {
 				CHECKPOINT_MODE = CheckpointMode.ALWAYS;
 			} else if ("network".equals(mode)) {
 				CHECKPOINT_MODE = CheckpointMode.NETWORK;
-			} else if ("dynamic".equals(mode)) {
-				CHECKPOINT_MODE = CheckpointMode.DYNAMIC;
 			} else {
 				CHECKPOINT_MODE = CheckpointMode.NEVER;
 			}
@@ -230,43 +232,8 @@ public final class CheckpointUtils {
 		return CHECKPOINT_MODE;
 	}
 
-	public static double getCPLower() {
+	public static boolean allowDistributedCheckpoints() {
 
-		if (CP_LOWER < 0.0f) {
-			CP_LOWER = Double.parseDouble(GlobalConfiguration.getString("checkpoint.lowerbound", "0.9"));
-		}
-
-		return CP_LOWER;
-	}
-
-	public static double getCPUpper() {
-
-		if (CP_UPPER < 0.0f) {
-			CP_UPPER = Double.parseDouble(GlobalConfiguration.getString("checkpoint.upperbound", "0.9"));
-		}
-
-		return CP_UPPER;
-	}
-
-	public static boolean usePACT() {
-
-		return GlobalConfiguration.getBoolean("checkpoint.usepact", false);
-	}
-
-	public static boolean useAVG() {
-
-		return GlobalConfiguration.getBoolean("checkpoint.useavg", false);
-	}
-
-	public static boolean createDistributedCheckpoint() {
-
-		return GlobalConfiguration.getBoolean("checkpoint.distributed", false);
-	}
-
-	public static String getSummary() {
-
-		return "Checkpointing Summary: UpperBound=" + getCPUpper() + " LowerBound=" + getCPLower()
-			+ " ForcedValues: usePACT=" + usePACT() + " useAVG=" + useAVG()
-			+ " mode=" + getCheckpointMode();
+		return false;
 	}
 }

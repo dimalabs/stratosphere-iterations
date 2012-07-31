@@ -23,6 +23,7 @@ import org.apache.commons.logging.LogFactory;
 import eu.stratosphere.nephele.event.task.AbstractEvent;
 import eu.stratosphere.nephele.io.channels.Buffer;
 import eu.stratosphere.nephele.io.channels.bytebuffered.ByteBufferedChannelCloseEvent;
+import eu.stratosphere.nephele.taskmanager.bufferprovider.BufferAvailabilityListener;
 import eu.stratosphere.nephele.taskmanager.bufferprovider.BufferProvider;
 import eu.stratosphere.nephele.taskmanager.bytebuffered.AbstractOutputChannelForwarder;
 import eu.stratosphere.nephele.taskmanager.bytebuffered.OutputChannelForwardingChain;
@@ -67,9 +68,11 @@ final class ReplayOutputChannelBroker extends AbstractOutputChannelForwarder imp
 				this.nextEnvelopeToSend = uee.getExpectedSequenceNumber();
 			}
 		} else if (event instanceof ReceiverNotFoundEvent) {
-			final ReceiverNotFoundEvent rnfe = (ReceiverNotFoundEvent) event;
-			LOG.warn("Cannot find receiver " + rnfe.getReceiverID() + " for envelope " + rnfe.getSequenceNumber()
-				+ ", next envelope to send is " + this.nextEnvelopeToSend);
+			if (LOG.isDebugEnabled()) {
+				final ReceiverNotFoundEvent rnfe = (ReceiverNotFoundEvent) event;
+				LOG.debug("Cannot find receiver " + rnfe.getReceiverID() + " for envelope " + rnfe.getSequenceNumber()
+					+ ", next envelope to send is " + this.nextEnvelopeToSend);
+			}
 		} else {
 			LOG.warn("Received unknown event: " + event);
 		}
@@ -148,5 +151,14 @@ final class ReplayOutputChannelBroker extends AbstractOutputChannelForwarder imp
 	public void reportAsynchronousEvent() {
 
 		this.bufferProvider.reportAsynchronousEvent();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public boolean registerBufferAvailabilityListener(final BufferAvailabilityListener bufferAvailabilityListener) {
+
+		return this.bufferProvider.registerBufferAvailabilityListener(bufferAvailabilityListener);
 	}
 }

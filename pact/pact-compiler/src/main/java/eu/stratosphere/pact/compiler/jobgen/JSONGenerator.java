@@ -18,8 +18,9 @@ package eu.stratosphere.pact.compiler.jobgen;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Hashtable;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
 
@@ -30,11 +31,11 @@ import eu.stratosphere.pact.compiler.CompilerException;
 import eu.stratosphere.pact.compiler.GlobalProperties;
 import eu.stratosphere.pact.compiler.LocalProperties;
 import eu.stratosphere.pact.compiler.PartitionProperty;
-//import eu.stratosphere.pact.compiler.OutputContract;
 import eu.stratosphere.pact.compiler.plan.OptimizedPlan;
 import eu.stratosphere.pact.compiler.plan.OptimizerNode;
 import eu.stratosphere.pact.compiler.plan.PactConnection;
 import eu.stratosphere.pact.compiler.plan.PactConnection.TempMode;
+import eu.stratosphere.pact.compiler.plan.UnionNode;
 
 /**
  * Translator for @see eu.stratosphere.pact.compiler.plan.OptimizedPlan into a JSON representation.
@@ -104,6 +105,8 @@ public class JSONGenerator implements Visitor<OptimizerNode> {
 	@Override
 	public boolean preVisit(OptimizerNode visitable) {
 
+		if (visitable instanceof UnionNode) return true;
+		
 		// visit each node and assign a unique id
 		if (!this.nodeIds.containsKey(visitable)) {
 			this.nodeIds.put(visitable, this.nodeCnt++);
@@ -116,13 +119,7 @@ public class JSONGenerator implements Visitor<OptimizerNode> {
 	@Override
 	public void postVisit(OptimizerNode visitable) {
 
-		// start a new node
-		this.jsonString.append("\t{\n");
-
-		// output node id
-		this.jsonString.append("\t\t\"id\": " + this.nodeIds.get(visitable));
-
-		// output node type
+		// determine node type
 		String type;
 		switch (visitable.getPactType()) {
 		case DataSink:
@@ -131,10 +128,19 @@ public class JSONGenerator implements Visitor<OptimizerNode> {
 		case DataSource:
 			type = "source";
 			break;
+		case Union:
+			return;
 		default:
 			type = "pact";
 			break;
 		}
+		
+		// start a new node
+		this.jsonString.append("\t{\n");
+
+		// output node id
+		this.jsonString.append("\t\t\"id\": " + this.nodeIds.get(visitable));
+		
 		this.jsonString.append(",\n\t\t\"type\": \"" + type + "\"");
 
 		// output node contents
@@ -164,33 +170,46 @@ public class JSONGenerator implements Visitor<OptimizerNode> {
 			+ (visitable.getDegreeOfParallelism() >= 1 ? visitable.getDegreeOfParallelism() : "default") + "\"");
 
 		// output node predecessors
-		List<List<PactConnection>> connLists = visitable.getIncomingConnections();
+		List<PactConnection> inConns = visitable.getIncomingConnections();
 		String child1name = "", child2name = "";
 
-		if (connLists != null && connLists.size() > 0) {
+		if (inConns != null && inConns.size() > 0) {
 			// start predecessor list
 			this.jsonString.append(",\n\t\t\"predecessors\": [");
 			int connCnt = 0;
-			int inputCnt = 0;
-			for(List<PactConnection> oneList : connLists) {
+			int inputNum = 0;
+			for(PactConnection conn : inConns) {
 				
-				for (PactConnection conn : oneList) {
-	
-					this.jsonString.append(inputCnt == 0 ? "\n" : ",\n");
+				
+				OptimizerNode inputNode = conn.getSourcePact();
+				List<OptimizerNode> inConnForInput;
+				
+				if (inputNode instanceof UnionNode) {
+					inConnForInput = new LinkedList<OptimizerNode>();
+					for (PactConnection inputOfUnion : inputNode.getIncomingConnections()) {
+						inConnForInput.add(inputOfUnion.getSourcePact());
+					}
+				}
+				else {
+					inConnForInput = Collections.singletonList(inputNode);
+				}
+				
+				for (OptimizerNode source : inConnForInput) {
+					this.jsonString.append(connCnt == 0 ? "\n" : ",\n");
 					if (connCnt == 0) {
 						child1name += child1name.length() > 0 ? ", " : ""; 
-						child1name += conn.getSourcePact().getPactContract().getName();
+						child1name += source.getPactContract().getName();
 					} else if (connCnt == 1) {
 						child2name += child2name.length() > 0 ? ", " : ""; 
-						child2name = conn.getSourcePact().getPactContract().getName();
+						child2name = source.getPactContract().getName();
 					}
 	
 					// output predecessor id
-					this.jsonString.append("\t\t\t{\"id\": " + this.nodeIds.get(conn.getSourcePact()));
+					this.jsonString.append("\t\t\t{\"id\": " + this.nodeIds.get(source));
 	
 					// output connection side
-					if (connLists.size() == 2) {
-						this.jsonString.append(", \"side\": \"" + (connCnt == 0 ? "first" : "second") + "\"");
+					if (inConns.size() == 2) {
+						this.jsonString.append(", \"side\": \"" + (inputNum == 0 ? "first" : "second") + "\"");
 					}
 					// output shipping strategy and channel type
 					String shipStrategy = null;
@@ -218,6 +237,7 @@ public class JSONGenerator implements Visitor<OptimizerNode> {
 					case PARTITION_LOCAL_HASH:
 						shipStrategy = "Partition local";
 						channelType = "memory";
+						break;
 					case SFR:
 						shipStrategy = "SFR";
 						channelType = "network";
@@ -241,9 +261,10 @@ public class JSONGenerator implements Visitor<OptimizerNode> {
 	
 					this.jsonString.append('}');
 					
-					inputCnt++;
+					connCnt++;
 				}
-				connCnt++;
+					
+				inputNum++;
 			}
 			// finish predecessors
 			this.jsonString.append("\t\t]");
@@ -324,7 +345,7 @@ public class JSONGenerator implements Visitor<OptimizerNode> {
 
 			addProperty(jsonString, "Partitioning", gp.getPartitioning().name(), true);
 			if (gp.getPartitioning() != PartitionProperty.NONE) {
-				addProperty(jsonString, "Partitioned on", Arrays.toString(gp.getPartitionedFields()), false);
+				addProperty(jsonString, "Partitioned on", gp.getPartitionedFields().toString(), false);
 			}
 			if (gp.getOrdering() != null) {
 				addProperty(jsonString, "Order", gp.getOrdering().toString(), false);	

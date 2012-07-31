@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import eu.stratosphere.pact.common.contract.Ordering;
 import eu.stratosphere.pact.common.util.FieldSet;
 import eu.stratosphere.pact.compiler.plan.OptimizerNode;
+import eu.stratosphere.pact.compiler.plan.UnionNode;
 
 /**
  * This class represents local properties of the data. A local property is a property that exists
@@ -125,7 +126,7 @@ public final class LocalProperties implements Cloneable {
 		if (ordering != null) {
 			ArrayList<Integer> involvedIndexes = ordering.getInvolvedIndexes();
 			for (int i = 0; i < involvedIndexes.size(); i++) {
-				if (!node.isFieldKept(input, involvedIndexes.get(i))) {
+				if (node.isFieldKept(input, involvedIndexes.get(i)) == false) {
 					ordering = ordering.createNewOrderingUpToIndex(i);
 					break;
 				}
@@ -135,7 +136,7 @@ public final class LocalProperties implements Cloneable {
 		// check, whether the local key grouping is preserved
 		if (this.groupedFields != null) {
 			for (Integer index : this.groupedFields) {
-				if (!node.isFieldKept(input, index)) {
+				if (node.isFieldKept(input, index) == false) {
 					this.groupedFields = null;
 					this.grouped = false;
 					break;
@@ -147,7 +148,6 @@ public final class LocalProperties implements Cloneable {
 		}
 		
 		return !isTrivial();
-		
 	}
 	
 	public LocalProperties createInterestingLocalProperties(OptimizerNode node, int input) {
@@ -157,11 +157,15 @@ public final class LocalProperties implements Cloneable {
 		FieldSet newGroupedFields = null;
 		
 		
+		// no interesting LocalProperties for input of Unions
+		if (node instanceof UnionNode) return null;
+		
+		
 		// check, whether the local key grouping is preserved		
 		if (this.groupedFields != null) {
 			boolean groupingPreserved = true;
 			for (Integer index : this.groupedFields) {
-				if (!node.isFieldKept(input, index)) {
+				if (node.isFieldKept(input, index) == false) {
 					groupingPreserved = false;
 					break;
 				}
@@ -178,7 +182,7 @@ public final class LocalProperties implements Cloneable {
 			boolean orderingPreserved = true;
 			ArrayList<Integer> involvedIndexes = ordering.getInvolvedIndexes();
 			for (int i = 0; i < involvedIndexes.size(); i++) {
-				if (!node.isFieldKept(input, i)) {
+				if (node.isFieldKept(input, i) == false) {
 					orderingPreserved = false;
 					break;
 				}
@@ -189,7 +193,7 @@ public final class LocalProperties implements Cloneable {
 			}
 		}
 		
-		if (!newGrouped && newOrdering == null) {
+		if (newGrouped == false && newOrdering == null) {
 			return null;	
 		}
 		else {
@@ -222,21 +226,24 @@ public final class LocalProperties implements Cloneable {
 				}
 				
 				for (int i = 0; i < groupedFields.size(); i++) {
-					if (!groupedFields.contains(otherIndexes.get(i))) {
+					if (groupedFields.contains(otherIndexes.get(i)) == false) {
 						return false;
 					}
 				}
 				groupingFulfilled = true;
 			}
 			
-			if (!groupingFulfilled) {
+			if (groupingFulfilled == false) {
 				return false;
 			}
 		}
 		// check the order
-    return !(this.ordering != null && !this.ordering.isMetBy(other.getOrdering()));
-
-  }
+		if (this.ordering != null && this.ordering.isMetBy(other.getOrdering()) == false) {
+			return false;
+		}
+		
+		return true;
+	}
 
 	// ------------------------------------------------------------------------
 
@@ -271,9 +278,13 @@ public final class LocalProperties implements Cloneable {
 		}
 
 		LocalProperties other = (LocalProperties) obj;
-    return (ordering == other.getOrdering() || (ordering != null && ordering.equals(other.getOrdering())))
-        && this.grouped == other.grouped
-        && (this.groupedFields == other.groupedFields || (this.groupedFields != null && this.groupedFields.equals(other.groupedFields)));
+		if ((ordering == other.getOrdering() || (ordering != null && ordering.equals(other.getOrdering())))
+			&& this.grouped == other.grouped 
+			&& (this.groupedFields == other.groupedFields || (this.groupedFields != null && this.groupedFields.equals(other.groupedFields)))) {
+			return true;
+		} else {
+			return false;
+		}
 	}
 
 	/*
