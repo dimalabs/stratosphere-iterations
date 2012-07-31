@@ -78,8 +78,6 @@ trait DataSource4sContract[Out] extends Pact4sContract { this: GenericDataSource
 
   val outputUDT: UDT[Out]
   val fieldSelector: FieldSelector[_ => Out]
-
-  override def annotations = Seq(Annotations.getExplicitModifications(fieldSelector.getFields))
 }
 
 object DataSource4sContract {
@@ -91,8 +89,6 @@ trait DataSink4sContract[In] extends Pact4sOneInputContract { this: GenericDataS
 
   val inputUDT: UDT[In]
   val fieldSelector: FieldSelector[In => _]
-
-  override def annotations = Seq(Annotations.getReads(fieldSelector.getFields))
 }
 
 object DataSink4sContract {

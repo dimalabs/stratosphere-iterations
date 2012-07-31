@@ -81,7 +81,7 @@ class DelimetedInput4sStub[Out] extends DelimitedInputFormat {
     this.userFunction = parameters.userFunction
   }
 
-  override def readRecord(record: PactRecord, source: Array[Byte], numBytes: Int): Boolean = {
+  override def readRecord(record: PactRecord, source: Array[Byte], offset: Int, numBytes: Int): Boolean = {
 
     val output = userFunction.apply(source)
 

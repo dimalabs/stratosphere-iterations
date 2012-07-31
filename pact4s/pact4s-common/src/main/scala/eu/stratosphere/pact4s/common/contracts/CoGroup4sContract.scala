@@ -21,7 +21,6 @@ import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
-import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode;
 
 trait CoGroup4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContract { this: CoGroupContract =>
 
@@ -34,13 +33,17 @@ trait CoGroup4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContrac
   val userFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]
 
   override def annotations = Seq(
+    Annotations.getConstantFieldsFirst(coGroupUDF.getForwardedFields._1),
+    Annotations.getConstantFieldsSecond(coGroupUDF.getForwardedFields._2)
+  /*
     Annotations.getReadsFirst(coGroupUDF.getReadFields._1),
     Annotations.getReadsSecond(coGroupUDF.getReadFields._2),
     Annotations.getExplicitModifications(coGroupUDF.getWriteFields),
     Annotations.getImplicitOperationFirst(ImplicitOperationMode.Projection),
     Annotations.getImplicitOperationSecond(ImplicitOperationMode.Projection),
-    Annotations.getExplicitProjectionsFirst(coGroupUDF.getForwardedFields._1),
-    Annotations.getExplicitProjectionsSecond(coGroupUDF.getForwardedFields._2)
+    Annotations.getExplicitCopiesFirst(coGroupUDF.getForwardedFields._1),
+    Annotations.getExplicitCopiesSecond(coGroupUDF.getForwardedFields._2)
+    */
   )
 
   override def persistConfiguration() = {

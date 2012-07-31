@@ -150,8 +150,8 @@ object KMeansPlain {
 
     val PointInputPattern = """(\d+)\|(\d+\.\d+)\|(\d+\.\d+)\|""".r
 
-    override def readRecord(record: PactRecord, line: Array[Byte], numBytes: Int): Boolean = {
-      val PointInputPattern(id, x, y) = new String(line)
+    override def readRecord(record: PactRecord, line: Array[Byte], offset: Int, numBytes: Int): Boolean = {
+      val PointInputPattern(id, x, y) = new String(line, offset, numBytes)
       record.setNumFields(3)
       record.setField(0, id.toInt)
       record.setField(1, x.toDouble)

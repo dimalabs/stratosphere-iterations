@@ -93,11 +93,11 @@ case class InputDistribution(dataDistribution: Class[_ <: InputDataDistribution[
 
 abstract class InputDataDistribution[Key: UDT] extends DataDistribution {
 
-  def getSplitBorder(splitId: Int, totalSplits: Int): Key
+  def getBucketUpperBound(bucketNum: Int, totalBuckets: Int): Key
 
-  final override def getSplit(splitId: Int, totalSplits: Int): PactRecord = {
+  final override def getBucketBoundary(bucketNum: Int, totalBuckets: Int): PactRecord = {
 
-    val key = getSplitBorder(splitId, totalSplits)
+    val key = getBucketUpperBound(bucketNum, totalBuckets)
     val record = new PactRecord
 
     val udt = implicitly[UDT[Key]]

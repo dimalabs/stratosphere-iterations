@@ -23,7 +23,6 @@ import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
-import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode;
 
 trait Map4sContract[In, Out] extends Pact4sOneInputContract { this: MapContract =>
 
@@ -32,15 +31,18 @@ trait Map4sContract[In, Out] extends Pact4sOneInputContract { this: MapContract 
   val mapUDF: UDF1[In => _]
   val userFunction: Either[In => Out, In => Iterator[Out]]
 
+  private def outCardBound = userFunction.fold({ _ => Annotations.CARD_INPUTCARD }, { _ => Annotations.CARD_UNKNOWN })
+
   override def annotations = Seq(
+    Annotations.getConstantFieldsExcept(mapUDF.getWriteFields ++ mapUDF.getDiscardedFields),
+    Annotations.getOutCardBounds(outCardBound, outCardBound)
+  /*
     Annotations.getReads(mapUDF.getReadFields),
     Annotations.getExplicitModifications(mapUDF.getWriteFields),
     Annotations.getImplicitOperation(ImplicitOperationMode.Copy),
     Annotations.getExplicitProjections(mapUDF.getDiscardedFields),
-    Annotations.getOutCardBounds(outCardBound, outCardBound)
+    */
   )
-
-  private def outCardBound = userFunction.fold({ _ => Annotations.CARD_INPUTCARD }, { _ => Annotations.CARD_UNKNOWN })
 
   override def persistConfiguration() = {
 

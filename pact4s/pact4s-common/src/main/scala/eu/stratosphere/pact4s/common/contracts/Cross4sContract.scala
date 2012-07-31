@@ -21,7 +21,6 @@ import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
-import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode;
 
 trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { this: CrossContract =>
 
@@ -32,6 +31,9 @@ trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { thi
   val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
 
   override def annotations = Seq(
+    Annotations.getConstantFieldsFirstExcept(crossUDF.getWriteFields ++ crossUDF.getDiscardedFields._1),
+    Annotations.getConstantFieldsSecondExcept(crossUDF.getWriteFields ++ crossUDF.getDiscardedFields._2)
+  /*
     Annotations.getReadsFirst(crossUDF.getReadFields._1),
     Annotations.getReadsSecond(crossUDF.getReadFields._2),
     Annotations.getExplicitModifications(crossUDF.getWriteFields),
@@ -39,6 +41,7 @@ trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { thi
     Annotations.getImplicitOperationSecond(ImplicitOperationMode.Copy),
     Annotations.getExplicitProjectionsFirst(crossUDF.getDiscardedFields._1),
     Annotations.getExplicitProjectionsSecond(crossUDF.getDiscardedFields._2)
+    */
   )
 
   override def persistConfiguration() = {

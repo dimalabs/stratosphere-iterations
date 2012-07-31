@@ -21,7 +21,6 @@ import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
-import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode;
 
 trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContract { this: MatchContract =>
 
@@ -34,6 +33,9 @@ trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContract {
   val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
 
   override def annotations = Seq(
+    Annotations.getConstantFieldsFirstExcept(joinUDF.getWriteFields ++ joinUDF.getDiscardedFields._1),
+    Annotations.getConstantFieldsSecondExcept(joinUDF.getWriteFields ++ joinUDF.getDiscardedFields._2)
+  /*
     Annotations.getReadsFirst(joinUDF.getReadFields._1),
     Annotations.getReadsSecond(joinUDF.getReadFields._2),
     Annotations.getExplicitModifications(joinUDF.getWriteFields),
@@ -41,6 +43,7 @@ trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContract {
     Annotations.getImplicitOperationSecond(ImplicitOperationMode.Copy),
     Annotations.getExplicitProjectionsFirst(joinUDF.getDiscardedFields._1),
     Annotations.getExplicitProjectionsSecond(joinUDF.getDiscardedFields._2)
+    */
   )
 
   override def persistConfiguration() = {

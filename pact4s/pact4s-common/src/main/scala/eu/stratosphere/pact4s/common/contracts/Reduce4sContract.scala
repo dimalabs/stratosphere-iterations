@@ -21,7 +21,6 @@ import eu.stratosphere.pact4s.common.analyzer._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
-import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode;
 
 trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputContract { this: ReduceContract =>
 
@@ -34,14 +33,17 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputContract { this: Redu
   val userReduceFunction: Iterator[In] => Out
 
   private def combinableAnnotation = userCombineFunction map { _ => Annotations.getCombinable() } toSeq
-  private def getAllReadFields = (combineUDF.getReadFields ++ reduceUDF.getReadFields).distinct.toArray
+  //private def getAllReadFields = (combineUDF.getReadFields ++ reduceUDF.getReadFields).distinct.toArray
 
   override def annotations = combinableAnnotation ++ Seq(
+    Annotations.getConstantFields(reduceUDF.getForwardedFields),
+    Annotations.getOutCardBounds(Annotations.CARD_UNBOUNDED, Annotations.CARD_INPUTCARD)
+  /*
     Annotations.getReads(getAllReadFields),
     Annotations.getExplicitModifications(reduceUDF.getWriteFields),
     Annotations.getImplicitOperation(ImplicitOperationMode.Projection),
     Annotations.getExplicitCopies(reduceUDF.getForwardedFields),
-    Annotations.getOutCardBounds(Annotations.CARD_UNBOUNDED, Annotations.CARD_INPUTCARD)
+    */
   )
 
   override def persistConfiguration() = {

@@ -20,7 +20,6 @@ import java.util.Arrays;
 
 import eu.stratosphere.pact.common.contract.ReduceContract;
 import eu.stratosphere.pact.common.stubs.StubAnnotation;
-import eu.stratosphere.pact.common.stubs.StubAnnotation.ImplicitOperation.ImplicitOperationMode;
 
 @SuppressWarnings("all")
 public class Annotations {
@@ -35,56 +34,28 @@ public class Annotations {
 
 	public static final int CARD_SECONDINPUTCARD = StubAnnotation.OutCardBounds.SECONDINPUTCARD;
 
-	public static Annotation getImplicitOperation(ImplicitOperationMode implicitOperation) {
-		return new ImplicitOperation(implicitOperation);
+	public static Annotation getConstantFields(int[] fields) {
+		return new ConstantFields(fields);
 	}
 
-	public static Annotation getImplicitOperationFirst(ImplicitOperationMode implicitOperation) {
-		return new ImplicitOperationFirst(implicitOperation);
+	public static Annotation getConstantFieldsFirst(int[] fields) {
+		return new ConstantFieldsFirst(fields);
 	}
 
-	public static Annotation getImplicitOperationSecond(ImplicitOperationMode implicitOperation) {
-		return new ImplicitOperationSecond(implicitOperation);
+	public static Annotation getConstantFieldsSecond(int[] fields) {
+		return new ConstantFieldsSecond(fields);
 	}
 
-	public static Annotation getReads(int[] fields) {
-		return new Reads(fields);
+	public static Annotation getConstantFieldsExcept(int[] fields) {
+		return new ConstantFieldsExcept(fields);
 	}
 
-	public static Annotation getReadsFirst(int[] fields) {
-		return new ReadsFirst(fields);
+	public static Annotation getConstantFieldsFirstExcept(int[] fields) {
+		return new ConstantFieldsFirstExcept(fields);
 	}
 
-	public static Annotation getReadsSecond(int[] fields) {
-		return new ReadsSecond(fields);
-	}
-
-	public static Annotation getExplicitCopies(int[] fields) {
-		return new ExplicitCopies(fields);
-	}
-
-	public static Annotation getExplicitCopiesFirst(int[] fields) {
-		return new ExplicitCopiesFirst(fields);
-	}
-
-	public static Annotation getExplicitCopiesSecond(int[] fields) {
-		return new ExplicitCopiesSecond(fields);
-	}
-
-	public static Annotation getExplicitProjections(int[] fields) {
-		return new ExplicitProjections(fields);
-	}
-
-	public static Annotation getExplicitProjectionsFirst(int[] fields) {
-		return new ExplicitProjectionsFirst(fields);
-	}
-
-	public static Annotation getExplicitProjectionsSecond(int[] fields) {
-		return new ExplicitProjectionsSecond(fields);
-	}
-
-	public static Annotation getExplicitModifications(int[] fields) {
-		return new ExplicitModifications(fields);
+	public static Annotation getConstantFieldsSecondExcept(int[] fields) {
+		return new ConstantFieldsSecondExcept(fields);
 	}
 
 	public static Annotation getOutCardBounds(int lowerBound, int upperBound) {
@@ -93,46 +64,6 @@ public class Annotations {
 
 	public static Annotation getCombinable() {
 		return new Combinable();
-	}
-
-	private static abstract class ImplicitOperations<T extends Annotation> implements Annotation {
-
-		private final Class<T> clazz;
-
-		private final ImplicitOperationMode implicitOperation;
-
-		public ImplicitOperations(Class<T> clazz, ImplicitOperationMode implicitOperation) {
-			this.clazz = clazz;
-			this.implicitOperation = implicitOperation;
-		}
-
-		public ImplicitOperationMode implicitOperation() {
-			return implicitOperation;
-		}
-
-		@Override
-		public Class<? extends Annotation> annotationType() {
-			return clazz;
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			if (obj == null || !annotationType().isAssignableFrom(obj.getClass()))
-				return false;
-
-			if (!annotationType().equals(((Annotation) obj).annotationType()))
-				return false;
-
-			ImplicitOperationMode otherOperation = getOtherOperation((T) obj);
-			return implicitOperation.equals(otherOperation);
-		}
-
-		protected abstract ImplicitOperationMode getOtherOperation(T other);
-
-		@Override
-		public int hashCode() {
-			return (127 * "implicitOperation".hashCode()) ^ implicitOperation.hashCode();
-		}
 	}
 
 	private static abstract class Fields<T extends Annotation> implements Annotation {
@@ -175,168 +106,80 @@ public class Annotations {
 		}
 	}
 
-	private static class ImplicitOperation extends ImplicitOperations<StubAnnotation.ImplicitOperation> implements
-			StubAnnotation.ImplicitOperation {
+	private static class ConstantFields extends Fields<StubAnnotation.ConstantFields> implements
+			StubAnnotation.ConstantFields {
 
-		public ImplicitOperation(ImplicitOperationMode implicitOperation) {
-			super(StubAnnotation.ImplicitOperation.class, implicitOperation);
+		public ConstantFields(int[] fields) {
+			super(StubAnnotation.ConstantFields.class, fields);
 		}
 
 		@Override
-		protected ImplicitOperationMode getOtherOperation(StubAnnotation.ImplicitOperation other) {
-			return other.implicitOperation();
-		}
-	}
-
-	private static class ImplicitOperationFirst extends ImplicitOperations<StubAnnotation.ImplicitOperationFirst>
-			implements StubAnnotation.ImplicitOperationFirst {
-
-		public ImplicitOperationFirst(ImplicitOperationMode implicitOperation) {
-			super(StubAnnotation.ImplicitOperationFirst.class, implicitOperation);
-		}
-
-		@Override
-		protected ImplicitOperationMode getOtherOperation(StubAnnotation.ImplicitOperationFirst other) {
-			return other.implicitOperation();
-		}
-	}
-
-	private static class ImplicitOperationSecond extends ImplicitOperations<StubAnnotation.ImplicitOperationSecond>
-			implements StubAnnotation.ImplicitOperationSecond {
-
-		public ImplicitOperationSecond(ImplicitOperationMode implicitOperation) {
-			super(StubAnnotation.ImplicitOperationSecond.class, implicitOperation);
-		}
-
-		@Override
-		protected ImplicitOperationMode getOtherOperation(StubAnnotation.ImplicitOperationSecond other) {
-			return other.implicitOperation();
-		}
-	}
-
-	private static class Reads extends Fields<StubAnnotation.Reads> implements StubAnnotation.Reads {
-
-		public Reads(int[] fields) {
-			super(StubAnnotation.Reads.class, fields);
-		}
-
-		@Override
-		protected int[] getOtherFields(StubAnnotation.Reads other) {
+		protected int[] getOtherFields(StubAnnotation.ConstantFields other) {
 			return other.fields();
 		}
 	}
 
-	private static class ReadsFirst extends Fields<StubAnnotation.ReadsFirst> implements StubAnnotation.ReadsFirst {
+	private static class ConstantFieldsFirst extends Fields<StubAnnotation.ConstantFieldsFirst> implements
+			StubAnnotation.ConstantFieldsFirst {
 
-		public ReadsFirst(int[] fields) {
-			super(StubAnnotation.ReadsFirst.class, fields);
+		public ConstantFieldsFirst(int[] fields) {
+			super(StubAnnotation.ConstantFieldsFirst.class, fields);
 		}
 
 		@Override
-		protected int[] getOtherFields(StubAnnotation.ReadsFirst other) {
+		protected int[] getOtherFields(StubAnnotation.ConstantFieldsFirst other) {
 			return other.fields();
 		}
 	}
 
-	private static class ReadsSecond extends Fields<StubAnnotation.ReadsSecond> implements StubAnnotation.ReadsSecond {
+	private static class ConstantFieldsSecond extends Fields<StubAnnotation.ConstantFieldsSecond> implements
+			StubAnnotation.ConstantFieldsSecond {
 
-		public ReadsSecond(int[] fields) {
-			super(StubAnnotation.ReadsSecond.class, fields);
+		public ConstantFieldsSecond(int[] fields) {
+			super(StubAnnotation.ConstantFieldsSecond.class, fields);
 		}
 
 		@Override
-		protected int[] getOtherFields(StubAnnotation.ReadsSecond other) {
+		protected int[] getOtherFields(StubAnnotation.ConstantFieldsSecond other) {
 			return other.fields();
 		}
 	}
 
-	private static class ExplicitCopies extends Fields<StubAnnotation.ExplicitCopies> implements
-			StubAnnotation.ExplicitCopies {
+	private static class ConstantFieldsExcept extends Fields<StubAnnotation.ConstantFieldsExcept> implements
+			StubAnnotation.ConstantFieldsExcept {
 
-		public ExplicitCopies(int[] fields) {
-			super(StubAnnotation.ExplicitCopies.class, fields);
+		public ConstantFieldsExcept(int[] fields) {
+			super(StubAnnotation.ConstantFieldsExcept.class, fields);
 		}
 
 		@Override
-		protected int[] getOtherFields(StubAnnotation.ExplicitCopies other) {
+		protected int[] getOtherFields(StubAnnotation.ConstantFieldsExcept other) {
 			return other.fields();
 		}
 	}
 
-	private static class ExplicitCopiesFirst extends Fields<StubAnnotation.ExplicitCopiesFirst> implements
-			StubAnnotation.ExplicitCopiesFirst {
+	private static class ConstantFieldsFirstExcept extends Fields<StubAnnotation.ConstantFieldsFirstExcept> implements
+			StubAnnotation.ConstantFieldsFirstExcept {
 
-		public ExplicitCopiesFirst(int[] fields) {
-			super(StubAnnotation.ExplicitCopiesFirst.class, fields);
+		public ConstantFieldsFirstExcept(int[] fields) {
+			super(StubAnnotation.ConstantFieldsFirstExcept.class, fields);
 		}
 
 		@Override
-		protected int[] getOtherFields(StubAnnotation.ExplicitCopiesFirst other) {
+		protected int[] getOtherFields(StubAnnotation.ConstantFieldsFirstExcept other) {
 			return other.fields();
 		}
 	}
 
-	private static class ExplicitCopiesSecond extends Fields<StubAnnotation.ExplicitCopiesSecond> implements
-			StubAnnotation.ExplicitCopiesSecond {
+	private static class ConstantFieldsSecondExcept extends Fields<StubAnnotation.ConstantFieldsSecondExcept> implements
+			StubAnnotation.ConstantFieldsSecondExcept {
 
-		public ExplicitCopiesSecond(int[] fields) {
-			super(StubAnnotation.ExplicitCopiesSecond.class, fields);
+		public ConstantFieldsSecondExcept(int[] fields) {
+			super(StubAnnotation.ConstantFieldsSecondExcept.class, fields);
 		}
 
 		@Override
-		protected int[] getOtherFields(StubAnnotation.ExplicitCopiesSecond other) {
-			return other.fields();
-		}
-	}
-
-	private static class ExplicitProjections extends Fields<StubAnnotation.ExplicitProjections> implements
-			StubAnnotation.ExplicitProjections {
-
-		public ExplicitProjections(int[] fields) {
-			super(StubAnnotation.ExplicitProjections.class, fields);
-		}
-
-		@Override
-		protected int[] getOtherFields(StubAnnotation.ExplicitProjections other) {
-			return other.fields();
-		}
-	}
-
-	private static class ExplicitProjectionsFirst extends Fields<StubAnnotation.ExplicitProjectionsFirst> implements
-			StubAnnotation.ExplicitProjectionsFirst {
-
-		public ExplicitProjectionsFirst(int[] fields) {
-			super(StubAnnotation.ExplicitProjectionsFirst.class, fields);
-		}
-
-		@Override
-		protected int[] getOtherFields(StubAnnotation.ExplicitProjectionsFirst other) {
-			return other.fields();
-		}
-	}
-
-	private static class ExplicitProjectionsSecond extends Fields<StubAnnotation.ExplicitProjectionsSecond> implements
-			StubAnnotation.ExplicitProjectionsSecond {
-
-		public ExplicitProjectionsSecond(int[] fields) {
-			super(StubAnnotation.ExplicitProjectionsSecond.class, fields);
-		}
-
-		@Override
-		protected int[] getOtherFields(StubAnnotation.ExplicitProjectionsSecond other) {
-			return other.fields();
-		}
-	}
-
-	private static class ExplicitModifications extends Fields<StubAnnotation.ExplicitModifications> implements
-			StubAnnotation.ExplicitModifications {
-
-		public ExplicitModifications(int[] fields) {
-			super(StubAnnotation.ExplicitModifications.class, fields);
-		}
-
-		@Override
-		protected int[] getOtherFields(StubAnnotation.ExplicitModifications other) {
+		protected int[] getOtherFields(StubAnnotation.ConstantFieldsSecondExcept other) {
 			return other.fields();
 		}
 	}

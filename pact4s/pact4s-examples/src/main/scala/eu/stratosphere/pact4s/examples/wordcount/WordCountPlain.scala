@@ -97,9 +97,9 @@ object WordCountPlain {
 
   class LineInFormat extends DelimitedInputFormat {
 
-    override def readRecord(record: PactRecord, line: Array[Byte], numBytes: Int): Boolean = {
+    override def readRecord(record: PactRecord, line: Array[Byte], offset: Int, numBytes: Int): Boolean = {
       record.setNumFields(1)
-      record.setField(0, new PactString(new String(line)))
+      record.setField(0, new PactString(new String(line, offset, numBytes)))
       true
     }
   }
