@@ -73,20 +73,45 @@ trait Pact4sGlobal extends TypingTransformers with Traversers with UDTAnalysis w
   lazy val pactRecordClass = definitions.getClass("eu.stratosphere.pact.common.type.PactRecord")
   lazy val pactValueClass = definitions.getClass("eu.stratosphere.pact.common.type.Value")
   lazy val pactListClass = definitions.getClass("eu.stratosphere.pact.common.type.base.PactList")
+  lazy val pactIntegerClass = definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")
 
   abstract sealed class UDTDescriptor { val tpe: Type }
+
   case class UnsupportedDescriptor(tpe: Type, errors: Seq[String]) extends UDTDescriptor
   case class PrimitiveDescriptor(tpe: Type, default: Literal, wrapperClass: Symbol) extends UDTDescriptor
   case class ListDescriptor(tpe: Type, listType: Type, elem: UDTDescriptor) extends UDTDescriptor
   case class BaseClassDescriptor(tpe: Type, subTypes: Seq[UDTDescriptor]) extends UDTDescriptor
-  case class CaseClassDescriptor(tpe: Type, ctor: Symbol, ctorTpe: Type, getters: Seq[FieldAccessor]) extends UDTDescriptor
+
+  case class CaseClassDescriptor(tpe: Type, ctor: Symbol, ctorTpe: Type, getters: Seq[FieldAccessor]) extends UDTDescriptor {
+    // Hack: ignore the ctorTpe, since two instances representing the same
+    // ctor function type don't appear to be considered structurally equal.
+    override def hashCode = (tpe, ctor, getters).hashCode
+    override def equals(that: Any) = that match {
+      case CaseClassDescriptor(thatTpe, thatCtor, _, thatGetters) => (tpe, ctor, getters).equals(thatTpe, thatCtor, thatGetters)
+      case _ => false
+    }
+  }
+
   case class FieldAccessor(sym: Symbol, tpe: Type, descr: UDTDescriptor)
 
+  case class RecursiveDescriptor(tpe: Type, unpack: () => UDTDescriptor) extends UDTDescriptor {
+    // Use the string representation of the unpacked descriptor to
+    // approximate structural hashing and equality without triggering
+    // an endless recursion.
+    override def hashCode = (tpe, unpack().toString).hashCode
+    override def equals(that: Any) = that match {
+      case RecursiveDescriptor(thatTpe, thatUnpack) => (tpe, unpack().toString).equals((thatTpe, thatUnpack().toString))
+      case _                                        => false
+    }
+  }
+
   case class OpaqueDescriptor(tpe: Type, ref: Tree) extends UDTDescriptor {
-    // Trees don't implement structural hashing or equality
+    // Use string representation of Trees to approximate structural hashing and
+    // equality, since Tree doesn't provide an implementation of these methods.
     override def hashCode() = (tpe, ref.toString).hashCode()
     override def equals(that: Any) = that match {
       case OpaqueDescriptor(thatTpe, thatRef) => (tpe, ref.toString).equals((thatTpe, thatRef.toString))
+      case _                                  => false
     }
   }
 }

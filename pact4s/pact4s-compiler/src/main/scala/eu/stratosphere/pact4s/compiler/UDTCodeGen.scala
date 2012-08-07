@@ -228,15 +228,18 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
         mkValAndGetter(udtClassSym, "fieldTypes", OVERRIDE | FINAL, valTpe) { _ =>
 
-          // TODO (Joe): Tag summation types
-          // TODO (Joe): Box recursive types
           def getFieldTypes(desc: UDTDescriptor): Seq[(Boolean, Tree)] = desc match {
             case OpaqueDescriptor(_, ref)                             => Seq((false, Select(ref, "fieldTypes")))
             case PrimitiveDescriptor(_, _, sym)                       => Seq((true, gen.mkClassOf(sym.tpe)))
             case ListDescriptor(_, _, PrimitiveDescriptor(_, _, sym)) => Seq((true, gen.mkClassOf(appliedType(pactListClass.tpe, List(sym.tpe)))))
+            // Box non-primitive list elements
             case ListDescriptor(_, _, _)                              => Seq((true, gen.mkClassOf(appliedType(pactListClass.tpe, List(pactRecordClass.tpe)))))
+            // Box inner instances of recursive types
+            case RecursiveDescriptor(_, _)                            => Seq((true, gen.mkClassOf(pactRecordClass.tpe)))
+            // Flatten product types
             case CaseClassDescriptor(_, _, _, getters)                => getters flatMap { getter => getFieldTypes(getter.descr) }
-            case BaseClassDescriptor(_, subTypes)                     => Seq() // not implemented
+            // Tag and flatten summation types
+            case BaseClassDescriptor(_, subTypes)                     => (true, gen.mkClassOf(pactIntegerClass.tpe)) +: (subTypes flatMap { subType => getFieldTypes(subType) })
           }
 
           val fieldSets = getFieldTypes(desc).foldRight(Seq[(Boolean, Seq[Tree])]()) { (f, z) =>

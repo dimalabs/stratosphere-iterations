@@ -40,13 +40,24 @@ abstract class Test extends PactProgram with TestGeneratedImplicits {
 
   //val udtTestInst = implicitly[analyzer.UDT[(String, (Int, Int, String))]]
 
-  case class Point(x: Int, y: Int)
-  val pointUdt1 = implicitly[UDT[Point]]
-  val pointUdt2 = implicitly[UDT[Point]]
+  abstract sealed class Foo
+  case class Bar(x: Int) extends Foo
+  case class Baz(x: Int, y: Foo) extends Foo
+
+  val barUdt1 = implicitly[UDT[Bar]]
+  val bazUdt1 = implicitly[UDT[Baz]]
+  val fooUdt1 = implicitly[UDT[Foo]]
+  val barUdt2 = implicitly[UDT[Bar]]
+  val bazUdt2 = implicitly[UDT[Baz]]
+  val fooUdt2 = implicitly[UDT[Foo]]
 }
 
 trait TestGeneratedImplicits { this: Test =>
 
-  val pointUdt3 = implicitly[UDT[Point]]
-  val pointUdt4 = implicitly[UDT[Point]]
+  val barUdt3 = implicitly[UDT[Bar]]
+  val bazUdt3 = implicitly[UDT[Baz]]
+  val fooUdt3 = implicitly[UDT[Foo]]
+  val barUdt4 = implicitly[UDT[Bar]]
+  val bazUdt4 = implicitly[UDT[Baz]]
+  val fooUdt4 = implicitly[UDT[Foo]]
 }

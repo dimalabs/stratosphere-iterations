@@ -40,7 +40,7 @@ trait UDTAnalysis { this: Pact4sGlobal =>
 
       def analyze(tpe: Type): UDTDescriptor = {
         val normed = tpe.map { t => if (t.typeSymbol.isMemberOf(definitions.getModule("java.lang"))) t.normalize else t }
-        cache.resolveReferences(analyzeType(normed))
+        analyzeType(normed)
       }
 
       private def analyzeType(tpe: Type): UDTDescriptor = {
@@ -199,19 +199,11 @@ trait UDTAnalysis { this: Pact4sGlobal =>
       private val cache = collection.mutable.Map[Type, UDTDescriptor]()
 
       def getOrElseUpdate(tpe: Type)(orElse: => UDTDescriptor): UDTDescriptor = cache.getOrElseUpdate(tpe, {
-        cache(tpe) = OpaqueDescriptor(tpe, EmptyTree)
+        cache(tpe) = RecursiveDescriptor(tpe, () => cache(tpe))
         val result = orElse
         cache(tpe) = result
         result
       })
-
-      def resolveReferences(descriptor: UDTDescriptor): UDTDescriptor = descriptor match {
-        case OpaqueDescriptor(tpe, EmptyTree) => cache(tpe)
-        case d: ListDescriptor                => d.copy(elem = resolveReferences(d.elem))
-        case d: BaseClassDescriptor           => d.copy(subTypes = d.subTypes map resolveReferences _)
-        case d: CaseClassDescriptor           => d.copy(getters = d.getters map { f => f.copy(descr = resolveReferences(f.descr)) })
-        case _                                => descriptor
-      }
     }
   }
 }

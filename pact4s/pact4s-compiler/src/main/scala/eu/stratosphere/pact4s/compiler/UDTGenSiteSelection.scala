@@ -67,10 +67,10 @@ trait UDTGenSiteSelection { this: Pact4sGlobal =>
 
       private def collectInferences(descr: UDTDescriptor): Seq[Tree] = descr match {
         case OpaqueDescriptor(_, ref)              => Seq(ref)
-        case PrimitiveDescriptor(_, _, _)          => Seq()
         case ListDescriptor(_, _, elem)            => collectInferences(elem)
         case BaseClassDescriptor(_, subTypes)      => subTypes flatMap { collectInferences(_) }
         case CaseClassDescriptor(_, _, _, getters) => getters flatMap { f => collectInferences(f.descr) }
+        case _                                     => Seq()
       }
 
       private def updateGenSite(desc: UDTDescriptor) = {
