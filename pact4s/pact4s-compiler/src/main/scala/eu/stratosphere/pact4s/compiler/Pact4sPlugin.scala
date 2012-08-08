@@ -83,8 +83,9 @@ trait Pact4sGlobal extends TypingTransformers with Traversers with UDTAnalysis w
   case class BaseClassDescriptor(tpe: Type, subTypes: Seq[UDTDescriptor]) extends UDTDescriptor
 
   case class CaseClassDescriptor(tpe: Type, ctor: Symbol, ctorTpe: Type, getters: Seq[FieldAccessor]) extends UDTDescriptor {
-    // Hack: ignore the ctorTpe, since two instances representing the same
-    // ctor function type don't appear to be considered structurally equal.
+    // Hack: ignore the ctorTpe, since two Type instances representing
+    // the same ctor function type don't appear to be considered equal. 
+    // Equality of the tpe and ctor fields implies equality of ctorTpe anyway.
     override def hashCode = (tpe, ctor, getters).hashCode
     override def equals(that: Any) = that match {
       case CaseClassDescriptor(thatTpe, thatCtor, _, thatGetters) => (tpe, ctor, getters).equals(thatTpe, thatCtor, thatGetters)

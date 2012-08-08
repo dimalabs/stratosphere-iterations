@@ -106,9 +106,9 @@ case class SequentialDataSourceFormat[Out: UDT](val blockSize: Option[Long] = No
   }
 }
 
-case class DelimetedDataSourceFormat[Out: UDT](val readFunction: Array[Byte] => Out, val delimeter: Option[String] = None) extends DataSourceFormat[Out] {
+case class DelimetedDataSourceFormat[Out: UDT](val readFunction: (Array[Byte], Int, Int) => Out, val delimeter: Option[String] = None) extends DataSourceFormat[Out] {
 
-  def this(readFunction: Array[Byte] => Out, delimeter: String) = this(readFunction, Some(delimeter))
+  def this(readFunction: (Array[Byte], Int, Int) => Out, delimeter: String) = this(readFunction, Some(delimeter))
 
   override val stub = classOf[DelimetedInput4sStub[Out]]
 
@@ -129,9 +129,9 @@ object DelimetedDataSourceFormat {
   def apply[Out: UDT](parseFunction: String => Out): DelimetedDataSourceFormat[Out] = DelimetedDataSourceFormat(asReadFunction(parseFunction) _, None)
   def apply[Out: UDT](parseFunction: String => Out, delimeter: String): DelimetedDataSourceFormat[Out] = DelimetedDataSourceFormat(asReadFunction(parseFunction) _, Some(delimeter))
 
-  private def asReadFunction[Out: UDT](parseFunction: String => Out)(source: Array[Byte]): Out = {
+  private def asReadFunction[Out: UDT](parseFunction: String => Out)(source: Array[Byte], offset: Int, numBytes: Int): Out = {
 
-    parseFunction(new String(source))
+    parseFunction(new String(source, offset, numBytes))
   }
 }
 

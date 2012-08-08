@@ -33,7 +33,7 @@ case class BinaryInputParameters[Out](
 
 case class DelimetedInputParameters[Out](
   val serializer: UDTSerializer[Out],
-  val userFunction: Array[Byte] => Out)
+  val userFunction: (Array[Byte], Int, Int) => Out)
   extends StubParameters
 
 case class FixedLengthInputParameters[Out](
@@ -71,7 +71,7 @@ class BinaryInput4sStub[Out] extends BinaryInputFormat {
 class DelimetedInput4sStub[Out] extends DelimitedInputFormat {
 
   private var serializer: UDTSerializer[Out] = _
-  private var userFunction: Array[Byte] => Out = _
+  private var userFunction: (Array[Byte], Int, Int) => Out = _
 
   override def configure(config: Configuration) {
     super.configure(config)
@@ -83,7 +83,7 @@ class DelimetedInput4sStub[Out] extends DelimitedInputFormat {
 
   override def readRecord(record: PactRecord, source: Array[Byte], offset: Int, numBytes: Int): Boolean = {
 
-    val output = userFunction.apply(source)
+    val output = userFunction.apply(source, offset, numBytes)
 
     if (output != null)
       serializer.serialize(output, record)
