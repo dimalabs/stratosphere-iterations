@@ -195,7 +195,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
             val udtTpe = appliedType(udtClass.tpe, List(desc.tpe))
 
-            val tree = mkVal(owner, unit.freshTermName("udtInst(") + ")", PRIVATE | IMPLICIT, udtTpe) { valSym =>
+            val tree = mkVal(owner, unit.freshTermName("udtInst(") + ")", PRIVATE | IMPLICIT, false, udtTpe) { valSym =>
 
               val udtClassDef = mkUdtClass(valSym, desc)
               Block(udtClassDef, Typed(New(TypeTree(udtClassDef.symbol.tpe), List(List())), TypeTree(udtTpe)))
@@ -228,29 +228,26 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
         mkValAndGetter(udtClassSym, "fieldTypes", OVERRIDE | FINAL, valTpe) { _ =>
 
-          def getFieldTypes(desc: UDTDescriptor): Seq[(Boolean, Tree)] = desc match {
-            case OpaqueDescriptor(_, ref)                             => Seq((false, Select(ref, "fieldTypes")))
-            case PrimitiveDescriptor(_, _, sym)                       => Seq((true, gen.mkClassOf(sym.tpe)))
-            case ListDescriptor(_, _, PrimitiveDescriptor(_, _, sym)) => Seq((true, gen.mkClassOf(appliedType(pactListClass.tpe, List(sym.tpe)))))
+          def getFieldTypes(desc: UDTDescriptor): Seq[Tree] = desc match {
+            case OpaqueDescriptor(_, ref)                             => Seq(Select(ref, "fieldTypes"))
+            case PrimitiveDescriptor(_, _, sym)                       => Seq(gen.mkClassOf(sym.tpe))
+            case ListDescriptor(_, _, PrimitiveDescriptor(_, _, sym)) => Seq(gen.mkClassOf(appliedType(pactListClass.tpe, List(sym.tpe))))
             // Box non-primitive list elements
-            case ListDescriptor(_, _, _)                              => Seq((true, gen.mkClassOf(appliedType(pactListClass.tpe, List(pactRecordClass.tpe)))))
+            case ListDescriptor(_, _, _)                              => Seq(gen.mkClassOf(appliedType(pactListClass.tpe, List(pactRecordClass.tpe))))
             // Box inner instances of recursive types
-            case RecursiveDescriptor(_, _)                            => Seq((true, gen.mkClassOf(pactRecordClass.tpe)))
+            case RecursiveDescriptor(_, _)                            => Seq(gen.mkClassOf(pactRecordClass.tpe))
             // Flatten product types
             case CaseClassDescriptor(_, _, _, getters)                => getters flatMap { getter => getFieldTypes(getter.descr) }
             // Tag and flatten summation types
-            case BaseClassDescriptor(_, subTypes)                     => (true, gen.mkClassOf(pactIntegerClass.tpe)) +: (subTypes flatMap { subType => getFieldTypes(subType) })
+            case BaseClassDescriptor(_, subTypes)                     => gen.mkClassOf(pactIntegerClass.tpe) +: (subTypes flatMap { subType => getFieldTypes(subType) })
           }
 
-          val fieldSets = getFieldTypes(desc).foldRight(Seq[(Boolean, Seq[Tree])]()) { (f, z) =>
-            val (compose, field) = f
-            z match {
-              case (true, group) :: rest if compose => (true, field +: group) +: rest
-              case _                                => (compose, Seq(field)) +: z
+          val fieldSets = getFieldTypes(desc).foldRight(Seq[Tree]()) { (f, z) =>
+            (f, z) match {
+              case (_: Select, _)                => f +: z
+              case (_, ArrayValue(tpe, fs) :: r) => ArrayValue(tpe, f +: fs) +: r
+              case _                             => ArrayValue(TypeTree(elemTpe), List(f)) +: z
             }
-          } map {
-            case (false, Seq(ref)) => ref
-            case (true, group)     => ArrayValue(TypeTree(elemTpe), group.toList)
           }
 
           fieldSets match {
@@ -273,9 +270,85 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
       private def mkUdtSerializerClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 
-        mkClass(owner, "UDTSerializerImpl", FINAL, List(appliedType(udtSerializerClass.tpe, List(desc.tpe)))) { classSym =>
-          List(mkSerialize(classSym, desc), mkDeserialize(classSym, desc))
+        mkClass(owner, "UDTSerializerImpl", FINAL, List(appliedType(udtSerializerClass.tpe, List(desc.tpe)), definitions.SerializableClass.tpe)) { classSym =>
+          mkIndexes(classSym, desc) ++ mkInners(classSym, desc) ++ mkPactHolders(classSym, desc) ++ List(mkSerialize(classSym, desc), mkDeserialize(classSym, desc))
         }
+      }
+
+      private def mkIndexes(udtSerClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
+
+        def getWidths(desc: UDTDescriptor): Seq[Tree] = desc match {
+          case OpaqueDescriptor(_, ref)              => Seq(Select(ref, "numFields"))
+          case CaseClassDescriptor(_, _, _, getters) => getters flatMap { getter => getWidths(getter.descr) }
+          case BaseClassDescriptor(_, subTypes)      => Literal(1) +: (subTypes flatMap { subType => getWidths(subType) })
+          case _                                     => Seq(Literal(1))
+        }
+
+        val intTpe = definitions.IntClass.tpe
+        val arrTpe = appliedType(definitions.ArrayClass.tpe, List(intTpe))
+        val iterTpe = appliedType(definitions.IteratorClass.tpe, List(intTpe))
+
+        val iter = mkVal(udtSerClassSym, "idxIter", PRIVATE, true, iterTpe) { _ =>
+          Select(Apply(Select(Select(Ident("scala"), "Predef"), "intArrayOps"), List(Ident("indexMap"))), "iterator")
+        }
+
+        val rhs = getWidths(desc) map {
+          case _: Literal => (intTpe, Apply(Select(Select(This(udtSerClassSym), "idxIter"), "next"), Nil))
+          case w          => (arrTpe, Apply(TypeApply(Select(Apply(Select(Select(This(udtSerClassSym), "idxIter"), "take"), List(w)), "toArray"), List(TypeTree(intTpe))), List(Select(Select(Ident("reflect"), "Manifest"), "Int"))))
+        }
+
+        val indexes = rhs.zipWithIndex map { case ((tpe, rhs), i) => mkVal(udtSerClassSym, "idx" + i, PRIVATE, false, tpe) { _ => rhs } }
+
+        (iter +: indexes) toList
+      }
+
+      private def mkInners(udtSerClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
+
+        def getInnerTypes(desc: UDTDescriptor): Seq[Option[OpaqueDescriptor]] = desc match {
+          case d: OpaqueDescriptor                   => Seq(Some(d))
+          case CaseClassDescriptor(_, _, _, getters) => getters flatMap { getter => getInnerTypes(getter.descr) }
+          case BaseClassDescriptor(_, subTypes)      => None +: (subTypes flatMap { subType => getInnerTypes(subType) })
+          case _                                     => Seq(None)
+        }
+
+        getInnerTypes(desc).zipWithIndex flatMap {
+          case (Some(d), i) => Some((d, i))
+          case (None, _)    => None
+        } map {
+          case (OpaqueDescriptor(tpe, ref), i) => {
+            val udtSerTpe = appliedType(udtSerializerClass.tpe, List(tpe))
+            mkVal(udtSerClassSym, "ser" + i, PRIVATE, false, udtSerTpe) { _ => Apply(Select(ref, "createSerializer"), List(Ident("idx" + i))) }
+          }
+        } toList
+      }
+
+      private def mkPactHolders(udtSerClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
+
+        def getFieldTypes(desc: UDTDescriptor): Seq[Option[Type]] = desc match {
+          case OpaqueDescriptor(_, ref)                             => Seq(None)
+          case PrimitiveDescriptor(_, _, sym)                       => Seq(Some(sym.tpe))
+          case ListDescriptor(_, _, PrimitiveDescriptor(_, _, sym)) => Seq(Some(appliedType(pactListClass.tpe, List(sym.tpe))))
+          case ListDescriptor(_, _, _)                              => Seq(Some(appliedType(pactListClass.tpe, List(pactRecordClass.tpe))))
+          case RecursiveDescriptor(_, _)                            => Seq(Some(pactRecordClass.tpe))
+          case CaseClassDescriptor(_, _, _, getters)                => getters flatMap { getter => getFieldTypes(getter.descr) }
+          case BaseClassDescriptor(_, subTypes)                     => Some(pactIntegerClass.tpe) +: (subTypes flatMap { subType => getFieldTypes(subType) })
+        }
+
+        val inits = getFieldTypes(desc).zipWithIndex flatMap {
+          case (Some(tpe), i) => Some((tpe, i))
+          case (None, _)      => None
+        }
+
+        val fields = inits map { case (tpe, i) => mkVar(udtSerClassSym, "w" + i, PRIVATE, true, tpe) { _ => New(TypeTree(tpe), List(List())) } } toList
+
+        val readObject = mkMethod(udtSerClassSym, "readObject", PRIVATE, List(("in", definitions.getClass("java.io.ObjectInputStream").tpe)), definitions.UnitClass.tpe) { _ =>
+          val first = Apply(Select(Ident("in"), "defaultReadObject"), Nil)
+          val rest = inits map { case (tpe, i) => Assign(Ident("w" + i), New(TypeTree(tpe), List(List()))) }
+          val ret = Literal(())
+          Block(((first +: rest) :+ ret): _*)
+        }
+
+        fields :+ readObject
       }
 
       private def mkSerialize(udtSerClassSym: Symbol, desc: UDTDescriptor): Tree = {
@@ -296,12 +369,30 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
       private def mkIdent(target: Symbol): Tree = Ident(target) setType target.tpe
 
-      private def mkVal(owner: Symbol, name: String, flags: Int, valTpe: Type)(value: Symbol => Tree): Tree = {
-        val valSym = owner.newValue(name) setFlag (flags | SYNTHETIC) setInfo valTpe
+      private def mkVar(owner: Symbol, name: String, flags: Long, transient: Boolean, valTpe: Type)(value: Symbol => Tree): Tree = {
+        val valSym = owner.newValue(name) setFlag (flags | SYNTHETIC | MUTABLE) setInfo valTpe
+        if (transient) valSym.addAnnotation(AnnotationInfo(definitions.TransientAttr.tpe, Nil, Nil))
         ValDef(valSym, value(valSym))
       }
 
-      private def mkMethod(owner: Symbol, name: String, flags: Int, args: List[(String, Type)], ret: Type)(impl: Symbol => Tree): Tree = {
+      private def mkVal(owner: Symbol, name: String, flags: Long, transient: Boolean, valTpe: Type)(value: Symbol => Tree): Tree = {
+        val valSym = owner.newValue(name) setFlag (flags | SYNTHETIC) setInfo valTpe
+        if (transient) valSym.addAnnotation(AnnotationInfo(definitions.TransientAttr.tpe, Nil, Nil))
+        ValDef(valSym, value(valSym))
+      }
+
+      private def mkValAndGetter(owner: Symbol, name: String, flags: Long, valTpe: Type)(value: Symbol => Tree): List[Tree] = {
+
+        val valDef = mkVal(owner, name + " ", PRIVATE, false, valTpe) { value }
+
+        val defDef = mkMethod(owner, name, flags | ACCESSOR, Nil, valTpe) { _ =>
+          Select(This(owner), name + " ")
+        }
+
+        List(valDef, defDef)
+      }
+
+      private def mkMethod(owner: Symbol, name: String, flags: Long, args: List[(String, Type)], ret: Type)(impl: Symbol => Tree): Tree = {
 
         val methodSym = owner.newMethod(name) setFlag (flags | SYNTHETIC)
 
@@ -315,18 +406,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
         DefDef(methodSym, Modifiers(flags | SYNTHETIC), List(valParams), impl(methodSym))
       }
 
-      private def mkValAndGetter(owner: Symbol, name: String, flags: Int, valTpe: Type)(value: Symbol => Tree): List[Tree] = {
-
-        val valDef = mkVal(owner, name + " ", PRIVATE, valTpe) { value }
-
-        val defDef = mkMethod(owner, name, flags | ACCESSOR, Nil, valTpe) { _ =>
-          Select(This(owner), name + " ")
-        }
-
-        List(valDef, defDef)
-      }
-
-      private def mkClass(owner: Symbol, name: String, flags: Int, parents: List[Type])(members: Symbol => List[Tree]): Tree = {
+      private def mkClass(owner: Symbol, name: String, flags: Long, parents: List[Type])(members: Symbol => List[Tree]): Tree = {
 
         val classSym = {
           if (name == null)
