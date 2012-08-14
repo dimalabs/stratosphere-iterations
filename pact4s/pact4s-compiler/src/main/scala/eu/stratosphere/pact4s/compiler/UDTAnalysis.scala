@@ -54,7 +54,7 @@ trait UDTAnalysis { this: Pact4sGlobal =>
             tpe match {
               case OpaqueType(ref)                 => OpaqueDescriptor(tpe, ref)
               case PrimitiveType(default, wrapper) => PrimitiveDescriptor(tpe, default, wrapper)
-              case ListType(elemTpe, bf)           => analyzeList(tpe)
+              case ListType(elemTpe, bf, iter)     => analyzeList(tpe, bf, iter)
               case CaseClassType()                 => analyzeCaseClass(tpe)
               case BaseClassType()                 => analyzeClassHierarchy(tpe)
               case _                               => UnsupportedDescriptor(tpe, Seq("Unsupported type"))
@@ -63,9 +63,9 @@ trait UDTAnalysis { this: Pact4sGlobal =>
         }
       }
 
-      private def analyzeList(tpe: Type): UDTDescriptor = analyzeType(tpe.typeArgs.head) match {
+      private def analyzeList(tpe: Type, bf: Tree, iter: Tree => Tree): UDTDescriptor = analyzeType(tpe.typeArgs.head) match {
         case UnsupportedDescriptor(_, errs) => UnsupportedDescriptor(tpe, errs)
-        case desc                           => ListDescriptor(tpe, tpe.typeConstructor, desc)
+        case desc                           => ListDescriptor(tpe, tpe.typeConstructor, bf, iter, desc)
       }
 
       private def analyzeClassHierarchy(tpe: Type): UDTDescriptor = {
@@ -159,26 +159,14 @@ trait UDTAnalysis { this: Pact4sGlobal =>
 
       private object PrimitiveType {
 
-        private lazy val primitives = Map(
-          definitions.BooleanClass -> (Literal(false), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-          definitions.ByteClass -> (Literal(0: Byte), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-          definitions.CharClass -> (Literal(0: Char), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-          definitions.DoubleClass -> (Literal(0: Double), definitions.getClass("eu.stratosphere.pact.common.type.base.PactDouble")),
-          definitions.FloatClass -> (Literal(0: Float), definitions.getClass("eu.stratosphere.pact.common.type.base.PactDouble")),
-          definitions.IntClass -> (Literal(0: Int), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-          definitions.LongClass -> (Literal(0: Long), definitions.getClass("eu.stratosphere.pact.common.type.base.PactLong")),
-          definitions.ShortClass -> (Literal(0: Short), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
-          definitions.StringClass -> (Literal(null: String), definitions.getClass("eu.stratosphere.pact.common.type.base.PactString"))
-        )
-
         def unapply(tpe: Type): Option[(Literal, Symbol)] = primitives.get(tpe.typeSymbol)
       }
 
       private object ListType {
 
-        def unapply(tpe: Type): Option[(Type, Tree)] = tpe match {
-          case _ if tpe.typeSymbol == definitions.ArrayClass => Some((tpe.typeArgs.head, EmptyTree))
-          case _ if tpe.baseClasses.contains(definitions.getClass("scala.collection.GenTraversableOnce")) => Some((tpe.typeArgs.head, EmptyTree))
+        def unapply(tpe: Type): Option[(Type, Tree, Tree => Tree)] = tpe match {
+          case _ if tpe.typeSymbol == definitions.ArrayClass => Some((tpe.typeArgs.head, EmptyTree, arr => Select(Apply(TypeApply(Select(Select(Ident("scala"), "Predef"), "genericArrayOps"), List(TypeTree(tpe.typeArgs.head))), List(arr)), "iterator")))
+          case _ if tpe.baseClasses.contains(definitions.getClass("scala.collection.GenTraversableOnce")) => Some((tpe.typeArgs.head, EmptyTree, arr => Select(arr, "toIterator")))
           case _ => None
         }
       }
@@ -193,6 +181,18 @@ trait UDTAnalysis { this: Pact4sGlobal =>
         def unapply(tpe: Type): Boolean = tpe.typeSymbol.isClass
       }
     }
+
+    private lazy val primitives = Map(
+      definitions.BooleanClass -> (Literal(false), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+      definitions.ByteClass -> (Literal(0: Byte), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+      definitions.CharClass -> (Literal(0: Char), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+      definitions.DoubleClass -> (Literal(0: Double), definitions.getClass("eu.stratosphere.pact.common.type.base.PactDouble")),
+      definitions.FloatClass -> (Literal(0: Float), definitions.getClass("eu.stratosphere.pact.common.type.base.PactDouble")),
+      definitions.IntClass -> (Literal(0: Int), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+      definitions.LongClass -> (Literal(0: Long), definitions.getClass("eu.stratosphere.pact.common.type.base.PactLong")),
+      definitions.ShortClass -> (Literal(0: Short), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
+      definitions.StringClass -> (Literal(null: String), definitions.getClass("eu.stratosphere.pact.common.type.base.PactString"))
+    )
 
     private class UDTAnalyzerCache {
 

@@ -72,14 +72,23 @@ trait Pact4sGlobal extends TypingTransformers with Traversers with UDTAnalysis w
   lazy val udtSerializerClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDTSerializer")
   lazy val pactRecordClass = definitions.getClass("eu.stratosphere.pact.common.type.PactRecord")
   lazy val pactValueClass = definitions.getClass("eu.stratosphere.pact.common.type.Value")
-  lazy val pactListClass = definitions.getClass("eu.stratosphere.pact.common.type.base.PactList")
+  lazy val pactListClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDT.PactListImpl")
   lazy val pactIntegerClass = definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")
 
   abstract sealed class UDTDescriptor { val tpe: Type }
 
   case class UnsupportedDescriptor(tpe: Type, errors: Seq[String]) extends UDTDescriptor
+
   case class PrimitiveDescriptor(tpe: Type, default: Literal, wrapperClass: Symbol) extends UDTDescriptor
-  case class ListDescriptor(tpe: Type, listType: Type, elem: UDTDescriptor) extends UDTDescriptor
+
+  case class ListDescriptor(tpe: Type, listType: Type, bf: Tree, iter: Tree => Tree, elem: UDTDescriptor) extends UDTDescriptor {
+    override def hashCode() = (tpe, listType, elem).hashCode()
+    override def equals(that: Any) = that match {
+      case ListDescriptor(thatTpe, thatListType, _, _, thatElem) => (tpe, listType, elem).equals((thatTpe, thatListType, thatElem))
+      case _ => false
+    }
+  }
+
   case class BaseClassDescriptor(tpe: Type, subTypes: Seq[UDTDescriptor]) extends UDTDescriptor
 
   case class CaseClassDescriptor(tpe: Type, ctor: Symbol, ctorTpe: Type, getters: Seq[FieldAccessor]) extends UDTDescriptor {

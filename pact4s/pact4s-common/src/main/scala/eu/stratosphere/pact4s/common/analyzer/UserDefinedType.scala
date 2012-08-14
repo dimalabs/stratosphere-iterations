@@ -24,6 +24,7 @@ import eu.stratosphere.pact4s.common.udts._
 
 import eu.stratosphere.pact.common.`type`.{ Key => PactKey }
 import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
+import eu.stratosphere.pact.common.`type`.base.PactList
 import eu.stratosphere.pact.common.`type`.PactRecord
 
 trait UDT[T] extends Serializable {
@@ -58,12 +59,14 @@ object UDT extends UDTLowPriorityImplicits {
   implicit val charUdt = new CharUDT
   implicit val doubleUdt = new DoubleUDT
   implicit val intUdt = new IntUDT
-  implicit val longUdt = new LongUDT
+  //implicit val longUdt = new LongUDT
   implicit val shortUdt = new ShortUDT
   implicit val stringUdt = new StringUDT
 
-  implicit def arrayUdt[T](implicit m: Manifest[T], udt: UDT[T]) = new ArrayUDT[T]
+  //implicit def arrayUdt[T](implicit m: Manifest[T], udt: UDT[T]) = new ArrayUDT[T]
   implicit def listUdt[T, L[T] <: GenTraversableOnce[T]](implicit udt: UDT[T], bf: CanBuildFrom[GenTraversableOnce[T], T, L[T]]) = new ListUDT[T, L]
+
+  class PactListImpl[T <: PactValue] extends PactList[T]
 
   import ProductFactories._
 
