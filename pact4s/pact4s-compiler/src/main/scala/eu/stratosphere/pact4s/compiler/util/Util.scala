@@ -24,4 +24,14 @@ object Util {
     val (sAsT, t) = items.partition { item => sClass.isAssignableFrom(item.getClass) }
     (t, sAsT map { _.asInstanceOf[S] })
   }
+  
+  class Counter {
+    private var value: Int = 0
+    
+    def next: Int = {
+      val current = value
+      value += 1
+      current
+    }
+  }
 }

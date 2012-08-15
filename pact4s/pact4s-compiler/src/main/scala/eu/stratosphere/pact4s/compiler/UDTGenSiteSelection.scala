@@ -54,8 +54,8 @@ trait UDTGenSiteSelection { this: Pact4sGlobal =>
           case TypeApply(s: Select, List(t)) if s.symbol == unanalyzedUdt => {
 
             getUDTDescriptor(t.tpe, tree) match {
-              case UnsupportedDescriptor(_, errs) => errs foreach { err => log(Error) { "Could not generate UDT[" + t.tpe + "]: " + err } }
-              case descr                          => updateGenSite(descr); collectInferences(descr) foreach { traverse(_) }
+              case UnsupportedDescriptor(_, _, errs) => errs foreach { err => log(Error) { "Could not generate UDT[" + t.tpe + "]: " + err } }
+              case descr                             => updateGenSite(descr); collectInferences(descr) foreach { traverse(_) }
             }
           }
 
@@ -66,11 +66,11 @@ trait UDTGenSiteSelection { this: Pact4sGlobal =>
       }
 
       private def collectInferences(descr: UDTDescriptor): Seq[Tree] = descr match {
-        case OpaqueDescriptor(_, ref)              => Seq(ref)
-        case ListDescriptor(_, _, _, _, elem)      => collectInferences(elem)
-        case BaseClassDescriptor(_, subTypes)      => subTypes flatMap { collectInferences(_) }
-        case CaseClassDescriptor(_, _, _, getters) => getters flatMap { f => collectInferences(f.descr) }
-        case _                                     => Seq()
+        case OpaqueDescriptor(_, _, ref)              => Seq(ref)
+        case ListDescriptor(_, _, _, _, _, elem)      => collectInferences(elem)
+        case BaseClassDescriptor(_, _, subTypes)      => subTypes flatMap { collectInferences(_) }
+        case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { f => collectInferences(f.descr) }
+        case _                                        => Seq()
       }
 
       private def updateGenSite(desc: UDTDescriptor) = {

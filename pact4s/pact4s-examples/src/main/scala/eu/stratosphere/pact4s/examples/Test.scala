@@ -46,38 +46,22 @@ abstract class Test extends PactProgram with TestGeneratedImplicits {
   //val udtTestInst = implicitly[analyzer.UDT[(String, (Int, Int, String))]]
 
   abstract sealed class Foo
-  case class Bar(x: Int, y: Long, z: Array[Long]) extends Foo
-  case class Baz(x: Int, y: Long, z: Foo) extends Foo
+  case class Bar(x: Int, y: Long, z: Seq[Long]) extends Foo
+  case class Baz(x: Int, y: Long, z: Array[Long]) extends Foo
 
-  case class Thing(x: Int, y: Long, f: Foo)
+  //case class Rec(x: Int, y: Long, f: Foo) extends Foo
 
-  val barUdt1 = implicitly[UDT[Bar]]
-  //val bazUdt1 = implicitly[UDT[Baz]]
   //val fooUdt1 = implicitly[UDT[Foo]]
-  //val barUdt2 = implicitly[UDT[Bar]]
-  //val bazUdt2 = implicitly[UDT[Baz]]
   //val fooUdt2 = implicitly[UDT[Foo]]
-  //val thingUdt1 = implicitly[UDT[Thing]]
-  //val thingUdt2 = implicitly[UDT[Thing]]
+  val barUdt1 = implicitly[UDT[Bar]]
+  val barUdt2 = implicitly[UDT[Bar]]
+  //val bazUdt1 = implicitly[UDT[Baz]]
+  //val bazUdt2 = implicitly[UDT[Baz]]
+  //val recUdt1 = implicitly[UDT[Thing]]
+  //val recUdt2 = implicitly[UDT[Thing]]
   //val optBarUdt1 = implicitly[UDT[Option[Baz]]]
   //val optBarUdt2 = implicitly[UDT[Option[Baz]]]
-
-  var pactList = new PactList[PactLong]() {}
-
-  private def testArray[T](v: Array[T]) = {
-
-    val iter = v.iterator
-    while (iter.hasNext)
-      println(iter.next)
-  }
-
-  private def testSeq[T](v: scala.collection.TraversableOnce[T]) = {
-    val iter = v.toIterator
-    while (iter.hasNext)
-      println(iter.next)
-  }
-
-} //
+}
 
 trait TestGeneratedImplicits { this: Test =>
 
