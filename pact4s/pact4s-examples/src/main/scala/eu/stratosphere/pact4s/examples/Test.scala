@@ -46,31 +46,79 @@ abstract class Test extends PactProgram with TestGeneratedImplicits {
   //val udtTestInst = implicitly[analyzer.UDT[(String, (Int, Int, String))]]
 
   abstract sealed class Foo
-  case class Bar(x: Int, y: Long, z: Seq[Long]) extends Foo
-  case class Baz(x: Int, y: Long, z: Array[Long]) extends Foo
+  case class Bar(x: Int, y: Long, z: Seq[Baz], zz: Baz) extends Foo
+  case class Baz(x: Int, y: Long, z: Array[(Int, Long)]) extends Foo
 
-  //case class Rec(x: Int, y: Long, f: Foo) extends Foo
+  case class Rec(x: Int, y: Long, f: Foo, g: Seq[Foo]) extends Foo
 
-  //val fooUdt1 = implicitly[UDT[Foo]]
-  //val fooUdt2 = implicitly[UDT[Foo]]
+  case class Thing[T](x: Long, y: Long, z: T)
+
+  abstract sealed class Simple
+  case class B(b: Long, ba: A) extends Simple
+  case class A(a: Long, ab: B) extends Simple
+
+  val fooUdt1 = implicitly[UDT[Foo]]
+  val fooUdt2 = implicitly[UDT[Foo]]
   val barUdt1 = implicitly[UDT[Bar]]
   val barUdt2 = implicitly[UDT[Bar]]
-  //val bazUdt1 = implicitly[UDT[Baz]]
-  //val bazUdt2 = implicitly[UDT[Baz]]
-  //val recUdt1 = implicitly[UDT[Thing]]
-  //val recUdt2 = implicitly[UDT[Thing]]
-  //val optBarUdt1 = implicitly[UDT[Option[Baz]]]
-  //val optBarUdt2 = implicitly[UDT[Option[Baz]]]
+  val bazUdt1 = implicitly[UDT[Baz]]
+  val bazUdt2 = implicitly[UDT[Baz]]
+  val recUdt1 = implicitly[UDT[Rec]]
+  val recUdt2 = implicitly[UDT[Rec]]
+  val optBarUdt1 = implicitly[UDT[Option[Bar]]]
+  val optBarUdt2 = implicitly[UDT[Option[Bar]]]
+  val optFooUdt1 = implicitly[UDT[Option[Foo]]]
+  val optFooUdt2 = implicitly[UDT[Option[Foo]]]
+
 }
 
 trait TestGeneratedImplicits { this: Test =>
 
-  /*
-  val barUdt3 = implicitly[UDT[Bar]]
-  val bazUdt3 = implicitly[UDT[Baz]]
+  val testUdt = implicitly[UDT[Simple]]
   val fooUdt3 = implicitly[UDT[Foo]]
-  val barUdt4 = implicitly[UDT[Bar]]
-  val bazUdt4 = implicitly[UDT[Baz]]
   val fooUdt4 = implicitly[UDT[Foo]]
-  */
+  val barUdt3 = implicitly[UDT[Bar]]
+  val barUdt4 = implicitly[UDT[Bar]]
+  val bazUdt3 = implicitly[UDT[Baz]]
+  val bazUdt4 = implicitly[UDT[Baz]]
+  val recUdt3 = implicitly[UDT[Rec]]
+  val recUdt4 = implicitly[UDT[Rec]]
+  val optBarUdt3 = implicitly[UDT[Option[Bar]]]
+  val optBarUdt4 = implicitly[UDT[Option[Bar]]]
+  val optFooUdt3 = implicitly[UDT[Option[Foo]]]
+  val optFooUdt4 = implicitly[UDT[Option[Foo]]]
+
+}
+
+class TestParent {
+  abstract sealed class Foo
+  case class B(b: Long, ba: A) extends Foo
+  case class A(a: Long, ab: B) extends Foo
+  val udtParent = implicitly[UDT[Foo]]
+}
+
+class TestChild extends TestParent {
+  val udtChild = implicitly[UDT[Foo]]
+} //
+
+class Outer {
+  case class Test[S, T](inner: S, outer: T)
+  case class X(ov: Long, ox: X)
+
+  class Inner {
+    type Y = Outer.this.X
+    case class Test[S, T](inner: S, outer: T)
+    case class X(iv: Long, ix: X, iy: Y)
+
+    private val plainUdt = implicitly[UDT[Test[X, Outer.this.X]]]
+    private val aliasUdt = implicitly[UDT[Test[X, Y]]]
+
+  }
+
+  class Sub extends Inner {
+    type Z = super.X
+
+    private val innerUdt = implicitly[UDT[Test[X, Y]]]
+    private val outerUdt = implicitly[UDT[Outer.this.Test[Y, Z]]]
+  }
 }

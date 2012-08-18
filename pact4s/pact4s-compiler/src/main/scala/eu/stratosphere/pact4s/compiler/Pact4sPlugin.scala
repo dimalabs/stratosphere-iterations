@@ -104,23 +104,12 @@ trait Pact4sGlobal extends TypingTransformers with Traversers with UDTAnalysis w
 
   case class FieldAccessor(sym: Symbol, tpe: Type, descr: UDTDescriptor)
 
-  case class RecursiveDescriptor(id: Int, tpe: Type, unpack: () => UDTDescriptor) extends UDTDescriptor {
-    // Use the string representation of the unpacked descriptor to
-    // approximate structural hashing and equality without triggering
-    // an endless recursion.
-    override def hashCode = (id, tpe, unpack().toString).hashCode
-    override def equals(that: Any) = that match {
-      case RecursiveDescriptor(thatId, thatTpe, thatUnpack) => (id, tpe, unpack().toString).equals((thatId, thatTpe, thatUnpack().toString))
-      case _ => false
-    }
-  }
-
-  case class OpaqueDescriptor(id: Int, tpe: Type, ref: Tree) extends UDTDescriptor {
+  case class OpaqueDescriptor(id: Int, tpe: Type, ref: Tree, rec: Boolean) extends UDTDescriptor {
     // Use string representation of Trees to approximate structural hashing and
     // equality, since Tree doesn't provide an implementation of these methods.
-    override def hashCode() = (id, tpe, ref.toString).hashCode()
+    override def hashCode() = (id, tpe, ref.toString, rec).hashCode()
     override def equals(that: Any) = that match {
-      case OpaqueDescriptor(thatId, thatTpe, thatRef) => (id, tpe, ref.toString).equals((thatId, thatTpe, thatRef.toString))
+      case OpaqueDescriptor(thatId, thatTpe, thatRef, thatRec) => (id, tpe, ref.toString, rec).equals((thatId, thatTpe, thatRef.toString, thatRec))
       case _ => false
     }
   }

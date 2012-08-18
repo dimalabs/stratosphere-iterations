@@ -30,50 +30,61 @@ trait UDTAnalysis { this: Pact4sGlobal =>
 
     def getUDTDescriptor(tpe: Type, site: Tree): UDTDescriptor = {
 
-      val infer = { tpe: Type => analyzer.inferImplicit(site, appliedType(udtClass.tpe, List(tpe)), true, false, localTyper.context).tree }
-      new UDTAnalyzerInstance(infer).analyze(tpe)
-    }
+      val currentThis = ThisType(localTyper.context.enclClass.owner)
 
-    private class UDTAnalyzerInstance(infer: Type => Tree) {
-
-      val cache = new UDTAnalyzerCache()
-
-      def analyze(tpe: Type): UDTDescriptor = {
-        val normed = tpe.map { t => if (t.typeSymbol.isMemberOf(definitions.getModule("java.lang"))) t.normalize else t }
-        analyzeType(normed)
+      val norm = { tpe: Type =>
+        // verbosely[Type] { n => "Normed " + tpe + " -> " + n + "; " + currentThis.typeSymbol.tpe + " " + currentThis.baseClasses.map(_.fullName) } {
+        // tpe.map { t => if (t.typeSymbol.isMemberOf(definitions.getModule("java.lang"))) t.normalize else t }
+        currentThis.baseClasses.foldLeft(tpe map { _.dealias }) { (tpe, base) => tpe.substThis(base, currentThis) }
+        // }
       }
 
-      private def analyzeType(tpe: Type): UDTDescriptor = {
+      val infer = { tpe: Type => analyzer.inferImplicit(site, appliedType(udtClass.tpe, List(tpe)), true, false, localTyper.context).tree }
+
+      new UDTAnalyzerInstance(norm, infer).analyze(tpe)
+    }
+
+    private class UDTAnalyzerInstance(normTpe: Type => Type, infer: Type => Tree) {
+
+      private val cache = new UDTAnalyzerCache()
+
+      def analyze(tpe: Type): UDTDescriptor = {
+
+        val normed = normTpe(tpe)
 
         // TODO (Joe): What if a case class implements GenTraversableOnce?
         // For example - Cons, Nil  <: List[T] <: GenTraversableOnce[T]
         // Or this one - Leaf, Node <: Tree[T] <: GenTraversableOnce[Tree[T]]
 
-        cache.getOrElseUpdate(tpe) {
-          maybeVerbosely(seen(tpe)) { d => "Analyzed UDT[" + tpe + "] - " + d.getClass.getName } {
-            tpe match {
-              case OpaqueType(ref)                 => OpaqueDescriptor(-1, tpe, ref)
-              case PrimitiveType(default, wrapper) => PrimitiveDescriptor(-1, tpe, default, wrapper)
-              case ListType(elemTpe, bf, iter)     => analyzeList(tpe, bf, iter)
-              case CaseClassType()                 => analyzeCaseClass(tpe)
-              case BaseClassType()                 => analyzeClassHierarchy(tpe)
-              case _                               => UnsupportedDescriptor(-1, tpe, Seq("Unsupported type"))
+        cache.getOrElseUpdate(normed) { id =>
+          maybeVerbosely(seen(normed)) { d => "Analyzed UDT[" + tpe + " ~> " + normed + "] - " + d.getClass.getName } {
+            normed match {
+              case OpaqueType(ref)                 => OpaqueDescriptor(id, normed, ref, false)
+              case PrimitiveType(default, wrapper) => PrimitiveDescriptor(id, normed, default, wrapper)
+              case ListType(elemTpe, bf, iter)     => analyzeList(id, normed, bf, iter)
+              case CaseClassType()                 => analyzeCaseClass(id, normed)
+              case BaseClassType()                 => analyzeClassHierarchy(id, normed)
+              case _                               => UnsupportedDescriptor(id, normed, Seq("Unsupported type"))
             }
           }
         }
       }
 
-      private def analyzeList(tpe: Type, bf: Tree, iter: Tree => Tree): UDTDescriptor = analyzeType(tpe.typeArgs.head) match {
-        case UnsupportedDescriptor(_, _, errs) => UnsupportedDescriptor(-1, tpe, errs)
-        case desc                              => ListDescriptor(-1, tpe, tpe.typeConstructor, bf, iter, desc)
+      private def analyzeList(id: Int, tpe: Type, bf: Tree, iter: Tree => Tree): UDTDescriptor = analyze(tpe.typeArgs.head) match {
+        case UnsupportedDescriptor(_, _, errs) => UnsupportedDescriptor(id, tpe, errs)
+        case desc => ListDescriptor(id, tpe, tpe.typeConstructor, bf, iter, desc match {
+          case elem: PrimitiveDescriptor => elem
+          case elem: OpaqueDescriptor    => elem
+          case elem                      => OpaqueDescriptor(elem.id, elem.tpe, infer(elem.tpe), false)
+        })
       }
 
-      private def analyzeClassHierarchy(tpe: Type): UDTDescriptor = {
+      private def analyzeClassHierarchy(id: Int, tpe: Type): UDTDescriptor = {
 
         (tpe.typeSymbol.isSealed, tpe.typeSymbol.children) match {
 
-          case (false, _)  => UnsupportedDescriptor(-1, tpe, Seq("Cannot statically determine subtypes for non-sealed base class."))
-          case (true, Nil) => UnsupportedDescriptor(-1, tpe, Seq("No subtypes defined for sealed base class."))
+          case (false, _)  => UnsupportedDescriptor(id, tpe, Seq("Cannot statically determine subtypes for non-sealed base class."))
+          case (true, Nil) => UnsupportedDescriptor(id, tpe, Seq("No subtypes defined for sealed base class."))
 
           case (true, children) => {
 
@@ -89,45 +100,45 @@ trait UDTAnalysis { this: Pact4sGlobal =>
                 appliedType(d.tpe, dArgs)
               }
 
-              analyzeType(dTpe)
+              analyze(dTpe)
             }
 
             val (subTypes, errors) = Util.partitionByType[UDTDescriptor, UnsupportedDescriptor](descendents)
 
             errors match {
-              case _ :: _ => UnsupportedDescriptor(-1, tpe, errors flatMap { case UnsupportedDescriptor(_, subType, errs) => errs map { err => "Subtype " + subType + " - " + err } })
-              case Nil    => BaseClassDescriptor(-1, tpe, subTypes)
+              case _ :: _ => UnsupportedDescriptor(id, tpe, errors flatMap { case UnsupportedDescriptor(_, subType, errs) => errs map { err => "Subtype " + subType + " - " + err } })
+              case Nil    => BaseClassDescriptor(id, tpe, subTypes)
             }
           }
         }
       }
 
-      private def analyzeCaseClass(tpe: Type): UDTDescriptor = {
+      private def analyzeCaseClass(id: Int, tpe: Type): UDTDescriptor = {
 
         tpe.typeSymbol.superClass.isCaseClass match {
 
-          case true => UnsupportedDescriptor(-1, tpe, Seq("Case-to-case inheritance is not supported."))
+          case true => UnsupportedDescriptor(id, tpe, Seq("Case-to-case inheritance is not supported."))
 
           case false => {
 
             val (tParams, tArgs) = tpe.typeConstructor.typeParams.zip(tpe.typeArgs).unzip
             val getters = tpe.typeSymbol.caseFieldAccessors.map(f => (f, f.tpe.instantiateTypeParams(tParams, tArgs).asSeenFrom(tpe.prefix, f.owner.owner)))
 
-            val fields = getters map { case (fSym, fTpe) => FieldAccessor(fSym, fTpe, analyzeType(fTpe.resultType)) }
+            val fields = getters map { case (fSym, fTpe) => FieldAccessor(fSym, fTpe, analyze(fTpe.resultType)) }
 
             fields filter { _.descr.isInstanceOf[UnsupportedDescriptor] } match {
 
               case errs @ _ :: _ => {
 
                 val msgs = errs flatMap { f => (f: @unchecked) match { case FieldAccessor(fSym, _, UnsupportedDescriptor(_, fTpe, errors)) => errors map { err => "Field " + fSym.name + ": " + fTpe + " - " + err } } }
-                UnsupportedDescriptor(-1, tpe, msgs)
+                UnsupportedDescriptor(id, tpe, msgs)
               }
 
               case Nil => {
 
                 findCaseConstructor(tpe, getters.map(_._2.resultType), tParams, tArgs) match {
-                  case Left(err)              => UnsupportedDescriptor(-1, tpe, Seq(err))
-                  case Right((ctor, ctorTpe)) => CaseClassDescriptor(-1, tpe, ctor, ctorTpe, fields)
+                  case Left(err)              => UnsupportedDescriptor(id, tpe, Seq(err))
+                  case Right((ctor, ctorTpe)) => CaseClassDescriptor(id, tpe, ctor, ctorTpe, fields)
                 }
               }
             }
@@ -180,6 +191,25 @@ trait UDTAnalysis { this: Pact4sGlobal =>
 
         def unapply(tpe: Type): Boolean = tpe.typeSymbol.isClass
       }
+
+      private class UDTAnalyzerCache {
+
+        private val caches = new scala.util.DynamicVariable[Map[Type, OpaqueDescriptor]](Map())
+        private val idGen = new Util.Counter()
+
+        def getOrElseUpdate(tpe: Type)(orElse: Int => UDTDescriptor): UDTDescriptor = {
+
+          val id = idGen.next
+          val cache = caches.value
+
+          cache.get(tpe) map { _.copy(id = id) } getOrElse {
+            val ref = OpaqueDescriptor(id, tpe, infer(tpe), true)
+            caches.withValue(cache + (tpe -> ref)) {
+              orElse(id)
+            }
+          }
+        }
+      }
     }
 
     private lazy val primitives = Map(
@@ -193,34 +223,6 @@ trait UDTAnalysis { this: Pact4sGlobal =>
       definitions.ShortClass -> (Literal(0: Short), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
       definitions.StringClass -> (Literal(null: String), definitions.getClass("eu.stratosphere.pact.common.type.base.PactString"))
     )
-
-    private class UDTAnalyzerCache {
-
-      private val cache = collection.mutable.Map[Type, UDTDescriptor]()
-      private val idGen = new Util.Counter()
-
-      def getOrElseUpdate(tpe: Type)(orElse: => UDTDescriptor): UDTDescriptor = {
-
-        val id = idGen.next
-
-        cache.get(tpe) map setId(id) getOrElse {
-          cache(tpe) = RecursiveDescriptor(id, tpe, () => cache(tpe))
-          val result = setId(id)(orElse)
-          cache(tpe) = result
-          result
-        }
-      }
-
-      private def setId(newId: Int)(desc: UDTDescriptor) = desc match {
-        case d: UnsupportedDescriptor => d.copy(id = newId)
-        case d: PrimitiveDescriptor   => d.copy(id = newId)
-        case d: ListDescriptor        => d.copy(id = newId)
-        case d: BaseClassDescriptor   => d.copy(id = newId)
-        case d: CaseClassDescriptor   => d.copy(id = newId)
-        case d: RecursiveDescriptor   => d.copy(id = newId)
-        case d: OpaqueDescriptor      => d.copy(id = newId)
-      }
-    }
   }
 }
 

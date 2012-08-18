@@ -55,7 +55,7 @@ trait UDTGenSiteSelection { this: Pact4sGlobal =>
 
             getUDTDescriptor(t.tpe, tree) match {
               case UnsupportedDescriptor(_, _, errs) => errs foreach { err => log(Error) { "Could not generate UDT[" + t.tpe + "]: " + err } }
-              case descr                             => updateGenSite(descr); collectInferences(descr) foreach { traverse(_) }
+              case desc                              => if (updateGenSite(desc)) collectInferences(desc) foreach { traverse(_) }
             }
           }
 
@@ -66,30 +66,34 @@ trait UDTGenSiteSelection { this: Pact4sGlobal =>
       }
 
       private def collectInferences(descr: UDTDescriptor): Seq[Tree] = descr match {
-        case OpaqueDescriptor(_, _, ref)              => Seq(ref)
+        case OpaqueDescriptor(_, _, ref, _)           => Seq(ref)
         case ListDescriptor(_, _, _, _, _, elem)      => collectInferences(elem)
         case BaseClassDescriptor(_, _, subTypes)      => subTypes flatMap { collectInferences(_) }
         case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { f => collectInferences(f.descr) }
         case _                                        => Seq()
       }
 
-      private def updateGenSite(desc: UDTDescriptor) = {
+      private def updateGenSite(desc: UDTDescriptor): Boolean = {
 
         findCommonLexicalParent(currentPath, genSitePaths(desc).toSeq) match {
 
+          case Some((oldPath, newPath)) if oldPath.head eq newPath.head => false
+
           case Some((oldPath, newPath)) => {
-            verbosely[Unit] { _ => "Updated GenSite[" + desc.tpe + "] " + oldPath.head.pos.line + ":" + oldPath.head.pos.column + " -> " + newPath.head.pos.line + ":" + newPath.head.pos.column } {
+            verbosely[Boolean] { _ => "Updated GenSite[" + desc.tpe + "] " + oldPath.head.pos.line + ":" + oldPath.head.pos.column + " -> " + newPath.head.pos.line + ":" + newPath.head.pos.column } {
               genSites(oldPath.head) -= desc
               genSites(newPath.head) += desc
               genSitePaths(desc) -= oldPath
               genSitePaths(desc) += newPath
+              true
             }
           }
 
           case None => {
-            verbosely[Unit] { _ => "Added GenSite[" + desc.tpe + "] " + currentPath.head.pos.line + ":" + currentPath.head.pos.column + " - " + desc.toString } {
+            verbosely[Boolean] { _ => "Added GenSite[" + desc.tpe + "] " + currentPath.head.pos.line + ":" + currentPath.head.pos.column + " - " + desc.toString } {
               genSites(currentPath.head) += desc
               genSitePaths(desc) += currentPath
+              true
             }
           }
         }
