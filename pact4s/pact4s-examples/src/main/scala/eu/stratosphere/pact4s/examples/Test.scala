@@ -57,6 +57,13 @@ abstract class Test extends PactProgram with TestGeneratedImplicits {
   case class B(b: Long, ba: A) extends Simple
   case class A(a: Long, ab: B) extends Simple
 
+  val boxedLongUdt1 = implicitly[UDT[java.lang.Long]]
+  val boxedLongUdt2 = implicitly[UDT[java.lang.Long]]
+  val boxedLongArrayUdt1 = implicitly[UDT[Array[java.lang.Long]]]
+  val boxedLongArrayUdt2 = implicitly[UDT[Array[java.lang.Long]]]
+  val boxedLongListUdt1 = implicitly[UDT[Seq[java.lang.Long]]]
+  val boxedLongListUdt2 = implicitly[UDT[Seq[java.lang.Long]]]
+
   val fooUdt1 = implicitly[UDT[Foo]]
   val fooUdt2 = implicitly[UDT[Foo]]
   val barUdt1 = implicitly[UDT[Bar]]
@@ -99,7 +106,7 @@ class TestParent {
 
 class TestChild extends TestParent {
   val udtChild = implicitly[UDT[Foo]]
-} //
+}
 
 class Outer {
   case class Test[S, T](inner: S, outer: T)
@@ -122,3 +129,4 @@ class Outer {
     private val outerUdt = implicitly[UDT[Outer.this.Test[Y, Z]]]
   }
 }
+

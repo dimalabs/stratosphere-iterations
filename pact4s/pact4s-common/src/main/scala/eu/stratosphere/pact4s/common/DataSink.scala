@@ -47,7 +47,7 @@ case class RawDataSinkFormat[In: UDT, F: SelectorBuilder[In, Unit]#Selector](val
 
   override def persistConfiguration(config: Configuration) {
 
-    val deserializer = inputUDT.createSerializer(fieldSelector.getFields)
+    val deserializer = inputUDT.getSerializer(fieldSelector.getFields)
 
     val stubParameters = RawOutputParameters(deserializer, writeFunction)
     stubParameters.persist(config)
@@ -65,7 +65,7 @@ case class BinaryDataSinkFormat[In: UDT, F: SelectorBuilder[In, Unit]#Selector](
 
   override def persistConfiguration(config: Configuration) {
 
-    val deserializer = inputUDT.createSerializer(fieldSelector.getFields)
+    val deserializer = inputUDT.getSerializer(fieldSelector.getFields)
 
     val stubParameters = BinaryOutputParameters(deserializer, writeFunction)
     stubParameters.persist(config)
@@ -101,7 +101,7 @@ case class DelimetedDataSinkFormat[In: UDT, F: SelectorBuilder[In, Unit]#Selecto
 
   override def persistConfiguration(config: Configuration) {
 
-    val deserializer = inputUDT.createSerializer(fieldSelector.getFields)
+    val deserializer = inputUDT.getSerializer(fieldSelector.getFields)
 
     val stubParameters = DelimetedOutputParameters(deserializer, writeFunction)
     stubParameters.persist(config)

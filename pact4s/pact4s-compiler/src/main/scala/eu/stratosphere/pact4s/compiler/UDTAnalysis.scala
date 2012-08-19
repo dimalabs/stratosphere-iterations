@@ -31,14 +31,7 @@ trait UDTAnalysis { this: Pact4sGlobal =>
     def getUDTDescriptor(tpe: Type, site: Tree): UDTDescriptor = {
 
       val currentThis = ThisType(localTyper.context.enclClass.owner)
-
-      val norm = { tpe: Type =>
-        // verbosely[Type] { n => "Normed " + tpe + " -> " + n + "; " + currentThis.typeSymbol.tpe + " " + currentThis.baseClasses.map(_.fullName) } {
-        // tpe.map { t => if (t.typeSymbol.isMemberOf(definitions.getModule("java.lang"))) t.normalize else t }
-        currentThis.baseClasses.foldLeft(tpe map { _.dealias }) { (tpe, base) => tpe.substThis(base, currentThis) }
-        // }
-      }
-
+      val norm = { tpe: Type => currentThis.baseClasses.foldLeft(tpe map { _.dealias }) { (tpe, base) => tpe.substThis(base, currentThis) } }
       val infer = { tpe: Type => analyzer.inferImplicit(site, appliedType(udtClass.tpe, List(tpe)), true, false, localTyper.context).tree }
 
       new UDTAnalyzerInstance(norm, infer).analyze(tpe)
@@ -59,12 +52,13 @@ trait UDTAnalysis { this: Pact4sGlobal =>
         cache.getOrElseUpdate(normed) { id =>
           maybeVerbosely(seen(normed)) { d => "Analyzed UDT[" + tpe + " ~> " + normed + "] - " + d.getClass.getName } {
             normed match {
-              case OpaqueType(ref)                 => OpaqueDescriptor(id, normed, ref, false)
+              case OpaqueType(ref) => OpaqueDescriptor(id, normed, ref, false)
               case PrimitiveType(default, wrapper) => PrimitiveDescriptor(id, normed, default, wrapper)
-              case ListType(elemTpe, bf, iter)     => analyzeList(id, normed, bf, iter)
-              case CaseClassType()                 => analyzeCaseClass(id, normed)
-              case BaseClassType()                 => analyzeClassHierarchy(id, normed)
-              case _                               => UnsupportedDescriptor(id, normed, Seq("Unsupported type"))
+              case BoxedPrimitiveType(default, wrapper, box, unbox) => BoxedPrimitiveDescriptor(id, normed, default, wrapper, box, unbox)
+              case ListType(elemTpe, bf, iter) => analyzeList(id, normed, bf, iter)
+              case CaseClassType() => analyzeCaseClass(id, normed)
+              case BaseClassType() => analyzeClassHierarchy(id, normed)
+              case _ => UnsupportedDescriptor(id, normed, Seq("Unsupported type"))
             }
           }
         }
@@ -73,9 +67,10 @@ trait UDTAnalysis { this: Pact4sGlobal =>
       private def analyzeList(id: Int, tpe: Type, bf: Tree, iter: Tree => Tree): UDTDescriptor = analyze(tpe.typeArgs.head) match {
         case UnsupportedDescriptor(_, _, errs) => UnsupportedDescriptor(id, tpe, errs)
         case desc => ListDescriptor(id, tpe, tpe.typeConstructor, bf, iter, desc match {
-          case elem: PrimitiveDescriptor => elem
-          case elem: OpaqueDescriptor    => elem
-          case elem                      => OpaqueDescriptor(elem.id, elem.tpe, infer(elem.tpe), false)
+          case elem: PrimitiveDescriptor      => elem
+          case elem: BoxedPrimitiveDescriptor => elem
+          case elem: OpaqueDescriptor         => elem
+          case elem                           => OpaqueDescriptor(elem.id, elem.tpe, infer(elem.tpe), false)
         })
       }
 
@@ -173,6 +168,11 @@ trait UDTAnalysis { this: Pact4sGlobal =>
         def unapply(tpe: Type): Option[(Literal, Symbol)] = primitives.get(tpe.typeSymbol)
       }
 
+      private object BoxedPrimitiveType {
+
+        def unapply(tpe: Type): Option[(Literal, Symbol, Tree => Tree, Tree => Tree)] = boxedPrimitives.get(tpe.typeSymbol)
+      }
+
       private object ListType {
 
         def unapply(tpe: Type): Option[(Type, Tree, Tree => Tree)] = tpe match {
@@ -223,6 +223,27 @@ trait UDTAnalysis { this: Pact4sGlobal =>
       definitions.ShortClass -> (Literal(0: Short), definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")),
       definitions.StringClass -> (Literal(null: String), definitions.getClass("eu.stratosphere.pact.common.type.base.PactString"))
     )
+
+    private lazy val boxedPrimitives = {
+
+      def getBoxInfo(prim: Symbol, primName: String, boxName: String) = {
+        val (default, wrapper) = primitives(prim)
+        val box = { t: Tree => Apply(Select(Select(Ident("scala"), "Predef"), primName + "2" + boxName), List(t)) }
+        val unbox = { t: Tree => Apply(Select(Select(Ident("scala"), "Predef"), boxName + "2" + primName), List(t)) }
+        (default, wrapper, box, unbox)
+      }
+
+      Map(
+        definitions.getClass("java.lang.Boolean") -> getBoxInfo(definitions.BooleanClass, "boolean", "Boolean"),
+        definitions.getClass("java.lang.Byte") -> getBoxInfo(definitions.ByteClass, "byte", "Byte"),
+        definitions.getClass("java.lang.Character") -> getBoxInfo(definitions.CharClass, "char", "Character"),
+        definitions.getClass("java.lang.Double") -> getBoxInfo(definitions.DoubleClass, "double", "Double"),
+        definitions.getClass("java.lang.Float") -> getBoxInfo(definitions.FloatClass, "float", "Float"),
+        definitions.getClass("java.lang.Integer") -> getBoxInfo(definitions.IntClass, "int", "Integer"),
+        definitions.getClass("java.lang.Long") -> getBoxInfo(definitions.LongClass, "long", "Long"),
+        definitions.getClass("java.lang.Short") -> getBoxInfo(definitions.ShortClass, "short", "Short")
+      )
+    }
   }
 }
 

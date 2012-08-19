@@ -46,11 +46,11 @@ trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { thi
 
   override def persistConfiguration() = {
 
-    val leftDeserializer = leftUDT.createSerializer(crossUDF.getReadFields._1)
+    val leftDeserializer = leftUDT.getSerializer(crossUDF.getReadFields._1)
     val leftDiscard = crossUDF.getDiscardedFields._1
-    val rightDeserializer = rightUDT.createSerializer(crossUDF.getReadFields._2)
+    val rightDeserializer = rightUDT.getSerializer(crossUDF.getReadFields._2)
     val rightDiscard = crossUDF.getDiscardedFields._2
-    val serializer = outputUDT.createSerializer(crossUDF.getWriteFields)
+    val serializer = outputUDT.getSerializer(crossUDF.getWriteFields)
 
     val stubParameters = new CrossParameters(leftDeserializer, leftDiscard, rightDeserializer, rightDiscard, serializer, userFunction)
     stubParameters.persist(this)

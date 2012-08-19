@@ -269,7 +269,7 @@ trait LanczosSOGeneratedImplicits { this: LanczosSO =>
       private val indexMap1 = indexMap.drop(1)
 
       @transient private var w0 = new PactString()
-      private val inner1 = implicitly[UDT[T]].createSerializer(indexMap1)
+      private val inner1 = implicitly[UDT[T]].getSerializer(indexMap1)
 
       override def serialize(item: TaggedItem[T], record: PactRecord) = {
         val TaggedItem(v0, v1) = item

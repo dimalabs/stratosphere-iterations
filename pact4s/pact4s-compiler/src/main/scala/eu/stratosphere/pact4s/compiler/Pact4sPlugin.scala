@@ -79,7 +79,15 @@ trait Pact4sGlobal extends TypingTransformers with Traversers with UDTAnalysis w
 
   case class UnsupportedDescriptor(id: Int, tpe: Type, errors: Seq[String]) extends UDTDescriptor
 
-  case class PrimitiveDescriptor(id: Int, tpe: Type, default: Literal, wrapperClass: Symbol) extends UDTDescriptor
+  case class PrimitiveDescriptor(id: Int, tpe: Type, default: Literal, wrapper: Symbol) extends UDTDescriptor
+
+  case class BoxedPrimitiveDescriptor(id: Int, tpe: Type, default: Literal, wrapper: Symbol, box: Tree => Tree, unbox: Tree => Tree) extends UDTDescriptor {
+    override def hashCode() = (id, tpe, default, wrapper, "BoxedPrimitiveDescriptor").hashCode()
+    override def equals(that: Any) = that match {
+      case BoxedPrimitiveDescriptor(thatId, thatTpe, thatDefault, thatWrapper, _, _) => (id, tpe, default, wrapper).equals(thatId, thatTpe, thatDefault, thatWrapper)
+      case _ => false
+    }
+  }
 
   case class ListDescriptor(id: Int, tpe: Type, listType: Type, bf: Tree, iter: Tree => Tree, elem: UDTDescriptor) extends UDTDescriptor {
     override def hashCode() = (id, tpe, listType, elem).hashCode()

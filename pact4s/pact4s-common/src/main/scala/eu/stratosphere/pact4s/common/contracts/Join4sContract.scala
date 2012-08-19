@@ -48,11 +48,11 @@ trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContract {
 
   override def persistConfiguration() = {
 
-    val leftDeserializer = leftUDT.createSerializer(joinUDF.getReadFields._1)
+    val leftDeserializer = leftUDT.getSerializer(joinUDF.getReadFields._1)
     val leftDiscard = joinUDF.getDiscardedFields._1
-    val rightDeserializer = rightUDT.createSerializer(joinUDF.getReadFields._2)
+    val rightDeserializer = rightUDT.getSerializer(joinUDF.getReadFields._2)
     val rightDiscard = joinUDF.getDiscardedFields._2
-    val serializer = outputUDT.createSerializer(joinUDF.getWriteFields)
+    val serializer = outputUDT.getSerializer(joinUDF.getWriteFields)
 
     val stubParameters = new JoinParameters(leftDeserializer, leftDiscard, rightDeserializer, rightDiscard, serializer, userFunction)
     stubParameters.persist(this)

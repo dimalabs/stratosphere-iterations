@@ -36,11 +36,29 @@ trait UDT[T] extends Serializable {
     fields map { fieldNum => fieldTypes(fieldNum).asInstanceOf[Class[_ <: PactKey]] } toArray
   }
 
-  def createSerializer(indexMap: Array[Int]): UDTSerializer[T]
+  def getSerializer(indexMap: Array[Int]): UDTSerializer[T] = {
+    val ser = createSerializer(indexMap)
+    ser.init()
+    ser
+  }
+
+  @transient private var defaultSerializer: UDTSerializer[T] = null
+
+  def getSerializerWithDefaultLayout: UDTSerializer[T] = {
+    // This method will be reentrant if T is a recursive type
+    if (defaultSerializer == null) {
+      defaultSerializer = createSerializer((0 until numFields) toArray)
+      defaultSerializer.init()
+    }
+    defaultSerializer
+  }
+
+  protected def createSerializer(indexMap: Array[Int]): UDTSerializer[T]
 }
 
 abstract class UDTSerializer[T] extends Serializable {
 
+  protected[analyzer] def init(): Unit = ()
   def serialize(item: T, record: PactRecord)
   def deserialize(record: PactRecord): T
 }
@@ -61,7 +79,7 @@ object UDT extends UDTLowPriorityImplicits {
   implicit val intUdt = new IntUDT
   //implicit val longUdt = new LongUDT
   implicit val shortUdt = new ShortUDT
-  implicit val stringUdt = new StringUDT
+  //implicit val stringUdt = new StringUDT
 
   //implicit def arrayUdt[T](implicit m: Manifest[T], udt: UDT[T]) = new ArrayUDT[T]
   implicit def listUdt[T, L[T] <: GenTraversableOnce[T]](implicit udt: UDT[T], bf: CanBuildFrom[GenTraversableOnce[T], T, L[T]]) = new ListUDT[T, L]

@@ -28,26 +28,42 @@ import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
 import eu.stratosphere.pact.common.`type`.base.PactList
 
-final class ListUDT[T, L[T] <: GenTraversableOnce[T]](implicit udt: UDT[T], bf: CanBuildFrom[GenTraversableOnce[T], T, L[T]]) extends UDT[L[T]] {
+final class ListUDT[T, L[T] <: GenTraversableOnce[T]](implicit udtInst: UDT[T], bf: CanBuildFrom[GenTraversableOnce[T], T, L[T]]) extends UDT[L[T]] {
 
   override val fieldTypes = Array[Class[_ <: PactValue]](classOf[PactList[PactRecord]])
 
-  override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[L[T]] {
+  override def createSerializer(indexMap: Array[Int]) = createSerializer(indexMap, udtInst)
+
+  private def createSerializer(indexMap: Array[Int], udtInst: UDT[T])(implicit bf: CanBuildFrom[GenTraversableOnce[T], T, L[T]]) = new UDTSerializer[L[T]] {
 
     private val index = indexMap(0)
-    private val inner = udt.createSerializer((0 until udt.numFields) toArray)
 
-    @transient private var pactField = new PactList[PactRecord]() {}
+    @transient private val udt = udtInst
+    private var inner: UDTSerializer[T] = null
+
+    override def init() = {
+      inner = udt.getSerializerWithDefaultLayout
+    }
 
     override def serialize(items: L[T], record: PactRecord) = {
-      if (index >= 0) {
-        pactField.clear()
+      // This method will be reentrant if T contains a List[T]
 
-        items.foreach { item =>
-          val record = new PactRecord()
-          inner.serialize(item, record)
-          record.updateBinaryRepresenation()
-          pactField.add(record)
+      if (index >= 0) {
+        record.updateBinaryRepresenation()
+
+        val pactField = new PactList[PactRecord]() {}
+        val it = items.toIterator
+
+        while (it.hasNext) {
+          val item = it.next
+          if (item != null) {
+            val record = new PactRecord()
+            inner.serialize(item, record)
+            record.updateBinaryRepresenation()
+            pactField.add(record)
+          } else {
+            pactField.add(null)
+          }
         }
 
         record.setField(index, pactField)
@@ -55,8 +71,10 @@ final class ListUDT[T, L[T] <: GenTraversableOnce[T]](implicit udt: UDT[T], bf: 
     }
 
     override def deserialize(record: PactRecord): L[T] = {
+      // This method will be reentrant if T contains a List[T]
 
       if (index >= 0) {
+        val pactField = new PactList[PactRecord]() {}
         record.getFieldInto(index, pactField)
         val items = pactField map { inner.deserialize(_) }
         val b = bf(items)
@@ -66,11 +84,6 @@ final class ListUDT[T, L[T] <: GenTraversableOnce[T]](implicit udt: UDT[T], bf: 
       } else {
         bf().result
       }
-    }
-
-    private def readObject(in: ObjectInputStream) = {
-      in.defaultReadObject()
-      pactField = new PactList[PactRecord]() {}
     }
   }
 }

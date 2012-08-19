@@ -28,26 +28,42 @@ import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
 import eu.stratosphere.pact.common.`type`.base.PactList
 
-final class ArrayUDT[T](implicit udt: UDT[T], m: Manifest[T]) extends UDT[Array[T]] {
+final class ArrayUDT[T](implicit udtInst: UDT[T], m: Manifest[T]) extends UDT[Array[T]] {
 
   override val fieldTypes = Array[Class[_ <: PactValue]](classOf[PactList[PactRecord]])
 
-  override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[Array[T]] {
+  override def createSerializer(indexMap: Array[Int]) = createSerializer(indexMap, udtInst)
+
+  private def createSerializer(indexMap: Array[Int], udtInst: UDT[T])(implicit m: Manifest[T]) = new UDTSerializer[Array[T]] {
 
     private val index = indexMap(0)
-    private val inner = udt.createSerializer((0 until udt.numFields) toArray)
 
-    @transient private var pactField = new PactList[PactRecord]() {}
+    @transient private val udt = udtInst
+    private var inner: UDTSerializer[T] = null
+
+    override def init() = {
+      inner = udt.getSerializerWithDefaultLayout
+    }
 
     override def serialize(items: Array[T], record: PactRecord) = {
-      if (index >= 0) {
-        pactField.clear()
+      // This method will be reentrant if T contains an Array[T]
 
-        items.foreach { item =>
-          val record = new PactRecord()
-          inner.serialize(item, record)
-          record.updateBinaryRepresenation()
-          pactField.add(record)
+      if (index >= 0) {
+        record.updateBinaryRepresenation()
+
+        val pactField = new PactList[PactRecord]() {}
+        val it = items.iterator
+
+        while (it.hasNext) {
+          val item = it.next
+          if (item != null) {
+            val record = new PactRecord()
+            inner.serialize(item, record)
+            record.updateBinaryRepresenation()
+            pactField.add(record)
+          } else {
+            pactField.add(null)
+          }
         }
 
         record.setField(index, pactField)
@@ -55,18 +71,15 @@ final class ArrayUDT[T](implicit udt: UDT[T], m: Manifest[T]) extends UDT[Array[
     }
 
     override def deserialize(record: PactRecord): Array[T] = {
+      // This method will be reentrant if T contains an Array[T]
 
       if (index >= 0) {
+        val pactField = new PactList[PactRecord]() {}
         record.getFieldInto(index, pactField)
         pactField map { inner.deserialize(_) } toArray
       } else {
         new Array[T](0)
       }
-    }
-
-    private def readObject(in: ObjectInputStream) = {
-      in.defaultReadObject()
-      pactField = new PactList[PactRecord]() {}
     }
   }
 }

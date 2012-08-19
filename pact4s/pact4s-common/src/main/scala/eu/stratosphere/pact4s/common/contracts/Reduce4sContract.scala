@@ -48,12 +48,12 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputContract { this: Redu
 
   override def persistConfiguration() = {
 
-    val combineDeserializer = userCombineFunction map { _ => inputUDT.createSerializer(combineUDF.getReadFields) }
-    val combineSerializer = userCombineFunction map { _ => inputUDT.createSerializer(combineUDF.getWriteFields) }
+    val combineDeserializer = userCombineFunction map { _ => inputUDT.getSerializer(combineUDF.getReadFields) }
+    val combineSerializer = userCombineFunction map { _ => inputUDT.getSerializer(combineUDF.getWriteFields) }
     val combineForward = userCombineFunction map { _ => combineUDF.getForwardedFields }
 
-    val reduceDeserializer = inputUDT.createSerializer(reduceUDF.getReadFields)
-    val reduceSerializer = outputUDT.createSerializer(reduceUDF.getWriteFields)
+    val reduceDeserializer = inputUDT.getSerializer(reduceUDF.getReadFields)
+    val reduceSerializer = outputUDT.getSerializer(reduceUDF.getWriteFields)
     val reduceForward = reduceUDF.getForwardedFields
 
     val stubParameters = new ReduceParameters(combineDeserializer, combineSerializer, combineForward, userCombineFunction, reduceDeserializer, reduceSerializer, reduceForward, userReduceFunction)

@@ -48,11 +48,11 @@ trait CoGroup4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContrac
 
   override def persistConfiguration() = {
 
-    val leftDeserializer = leftUDT.createSerializer(coGroupUDF.getReadFields._1)
+    val leftDeserializer = leftUDT.getSerializer(coGroupUDF.getReadFields._1)
     val leftForward = coGroupUDF.getForwardedFields._1
-    val rightDeserializer = rightUDT.createSerializer(coGroupUDF.getReadFields._2)
+    val rightDeserializer = rightUDT.getSerializer(coGroupUDF.getReadFields._2)
     val rightForward = coGroupUDF.getForwardedFields._2
-    val serializer = outputUDT.createSerializer(coGroupUDF.getWriteFields)
+    val serializer = outputUDT.getSerializer(coGroupUDF.getWriteFields)
 
     val stubParameters = CoGroupParameters(leftDeserializer, leftForward, rightDeserializer, leftForward, serializer, userFunction)
     stubParameters.persist(this)

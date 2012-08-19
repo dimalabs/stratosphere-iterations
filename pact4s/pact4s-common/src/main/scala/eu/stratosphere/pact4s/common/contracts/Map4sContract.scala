@@ -46,8 +46,8 @@ trait Map4sContract[In, Out] extends Pact4sOneInputContract { this: MapContract 
 
   override def persistConfiguration() = {
 
-    val deserializer = inputUDT.createSerializer(mapUDF.getReadFields)
-    val serializer = outputUDT.createSerializer(mapUDF.getWriteFields)
+    val deserializer = inputUDT.getSerializer(mapUDF.getReadFields)
+    val serializer = outputUDT.getSerializer(mapUDF.getWriteFields)
     val discard = mapUDF.getDiscardedFields
 
     val stubParameters = new MapParameters(deserializer, serializer, discard, userFunction)

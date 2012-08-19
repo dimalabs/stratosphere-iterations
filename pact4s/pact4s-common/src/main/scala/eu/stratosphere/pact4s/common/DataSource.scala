@@ -84,7 +84,7 @@ case class BinaryDataSourceFormat[Out: UDT](val readFunction: DataInput => Out, 
 
   override def persistConfiguration(config: Configuration) {
 
-    val serializer = outputUDT.createSerializer(fieldSelector.getFields)
+    val serializer = outputUDT.getSerializer(fieldSelector.getFields)
 
     val stubParameters = BinaryInputParameters(serializer, readFunction)
     stubParameters.persist(config)
@@ -114,7 +114,7 @@ case class DelimetedDataSourceFormat[Out: UDT](val readFunction: (Array[Byte], I
 
   override def persistConfiguration(config: Configuration) {
 
-    val serializer = outputUDT.createSerializer(fieldSelector.getFields)
+    val serializer = outputUDT.getSerializer(fieldSelector.getFields)
 
     val stubParameters = DelimetedInputParameters(serializer, readFunction)
     stubParameters.persist(config)
@@ -181,7 +181,7 @@ case class FixedLengthDataSourceFormat[Out: UDT](val readFunction: (Array[Byte],
   override val stub = classOf[FixedLengthInput4sStub[Out]]
 
   override def persistConfiguration(config: Configuration) {
-    val serializer = outputUDT.createSerializer(fieldSelector.getFields)
+    val serializer = outputUDT.getSerializer(fieldSelector.getFields)
 
     val stubParameters = FixedLengthInputParameters(serializer, readFunction)
     stubParameters.persist(config)
@@ -197,7 +197,7 @@ case class ExternalProcessFixedLengthDataSourceFormat[Out: UDT](val readFunction
   override val stub = classOf[ExternalProcessFixedLengthInput4sStub[Out]]
 
   override def persistConfiguration(config: Configuration) {
-    val serializer = outputUDT.createSerializer(fieldSelector.getFields)
+    val serializer = outputUDT.getSerializer(fieldSelector.getFields)
 
     val stubParameters = ExternalProcessFixedLengthInputParameters(serializer, externalProcessCommand, numSplits, readFunction)
     stubParameters.persist(config)

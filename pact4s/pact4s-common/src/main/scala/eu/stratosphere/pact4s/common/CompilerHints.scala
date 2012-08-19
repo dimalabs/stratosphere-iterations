@@ -101,7 +101,7 @@ abstract class InputDataDistribution[Key: UDT] extends DataDistribution {
     val record = new PactRecord
 
     val udt = implicitly[UDT[Key]]
-    val serializer = udt.createSerializer((0 until udt.fieldTypes.length).toArray)
+    val serializer = udt.getSerializer((0 until udt.fieldTypes.length).toArray)
     serializer.serialize(key, record)
 
     record
