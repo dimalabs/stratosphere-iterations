@@ -52,7 +52,7 @@ trait UDTAnalysis { this: Pact4sGlobal =>
         cache.getOrElseUpdate(normed) { id =>
           maybeVerbosely(seen(normed)) { d => "Analyzed UDT[" + tpe + " ~> " + normed + "] - " + d.getClass.getName } {
             normed match {
-              case OpaqueType(ref) => OpaqueDescriptor(id, normed, ref, false)
+              case OpaqueType(ref) => OpaqueDescriptor(id, normed, ref)
               case PrimitiveType(default, wrapper) => PrimitiveDescriptor(id, normed, default, wrapper)
               case BoxedPrimitiveType(default, wrapper, box, unbox) => BoxedPrimitiveDescriptor(id, normed, default, wrapper, box, unbox)
               case ListType(elemTpe, bf, iter) => analyzeList(id, normed, bf, iter)
@@ -66,12 +66,7 @@ trait UDTAnalysis { this: Pact4sGlobal =>
 
       private def analyzeList(id: Int, tpe: Type, bf: Tree, iter: Tree => Tree): UDTDescriptor = analyze(tpe.typeArgs.head) match {
         case UnsupportedDescriptor(_, _, errs) => UnsupportedDescriptor(id, tpe, errs)
-        case desc => ListDescriptor(id, tpe, tpe.typeConstructor, bf, iter, desc match {
-          case elem: PrimitiveDescriptor      => elem
-          case elem: BoxedPrimitiveDescriptor => elem
-          case elem: OpaqueDescriptor         => elem
-          case elem                           => OpaqueDescriptor(elem.id, elem.tpe, infer(elem.tpe), false)
-        })
+        case desc                              => ListDescriptor(id, tpe, tpe.typeConstructor, bf, iter, desc)
       }
 
       private def analyzeClassHierarchy(id: Int, tpe: Type): UDTDescriptor = {
@@ -121,7 +116,7 @@ trait UDTAnalysis { this: Pact4sGlobal =>
 
             val fields = getters map { case (fSym, fTpe) => FieldAccessor(fSym, fTpe, analyze(fTpe.resultType)) }
 
-            fields filter { _.descr.isInstanceOf[UnsupportedDescriptor] } match {
+            fields filter { _.desc.isInstanceOf[UnsupportedDescriptor] } match {
 
               case errs @ _ :: _ => {
 
@@ -194,7 +189,7 @@ trait UDTAnalysis { this: Pact4sGlobal =>
 
       private class UDTAnalyzerCache {
 
-        private val caches = new scala.util.DynamicVariable[Map[Type, OpaqueDescriptor]](Map())
+        private val caches = new scala.util.DynamicVariable[Map[Type, RecursiveDescriptor]](Map())
         private val idGen = new Util.Counter()
 
         def getOrElseUpdate(tpe: Type)(orElse: Int => UDTDescriptor): UDTDescriptor = {
@@ -203,7 +198,7 @@ trait UDTAnalysis { this: Pact4sGlobal =>
           val cache = caches.value
 
           cache.get(tpe) map { _.copy(id = id) } getOrElse {
-            val ref = OpaqueDescriptor(id, tpe, infer(tpe), true)
+            val ref = RecursiveDescriptor(id, tpe, id)
             caches.withValue(cache + (tpe -> ref)) {
               orElse(id)
             }

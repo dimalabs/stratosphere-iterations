@@ -226,27 +226,27 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
       private def mkFieldTypes(udtClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
 
-        val elemTpe = {
+        val pactValueTpe = {
           val exVar = udtClassSym.newAbstractType(newTypeName("_$1")) setInfo TypeBounds.upper(pactValueClass.tpe)
           ExistentialType(List(exVar), appliedType(definitions.ClassClass.tpe, List(TypeRef(NoPrefix, exVar, Nil))))
         }
 
-        val valTpe = definitions.arrayType(elemTpe)
+        mkValAndGetter(udtClassSym, "fieldTypes", OVERRIDE | FINAL, definitions.arrayType(pactValueTpe)) { _ =>
 
-        mkValAndGetter(udtClassSym, "fieldTypes", OVERRIDE | FINAL, valTpe) { _ =>
+          def getListElemType(elem: UDTDescriptor): Type = elem match {
+            case elem: PrimitiveDescriptor           => elem.wrapper.tpe
+            case elem: BoxedPrimitiveDescriptor      => elem.wrapper.tpe
+            case ListDescriptor(_, _, _, _, _, elem) => appliedType(pactListClass.tpe, List(getListElemType(elem)))
+            // Box non-primitive list elements
+            case _                                   => pactRecordClass.tpe
+          }
 
           def getFieldTypes(desc: UDTDescriptor): Seq[Tree] = desc match {
-            case OpaqueDescriptor(_, _, ref, false)                            => Seq(Select(ref, "fieldTypes"))
-            // Box inner instances of recursive types
-            case OpaqueDescriptor(_, _, ref, true)                             => Seq(gen.mkClassOf(pactRecordClass.tpe))
-            case PrimitiveDescriptor(_, _, _, wrapper)                         => Seq(gen.mkClassOf(wrapper.tpe))
-            case BoxedPrimitiveDescriptor(_, _, _, wrapper, _, _)              => Seq(gen.mkClassOf(wrapper.tpe))
-            case ListDescriptor(_, _, _, _, _, elem: PrimitiveDescriptor)      => Seq(gen.mkClassOf(appliedType(pactListClass.tpe, List(elem.wrapper.tpe))))
-            case ListDescriptor(_, _, _, _, _, elem: BoxedPrimitiveDescriptor) => Seq(gen.mkClassOf(appliedType(pactListClass.tpe, List(elem.wrapper.tpe))))
-            // Box non-primitive list elements
-            case ListDescriptor(_, _, _, _, _, _)                              => Seq(gen.mkClassOf(appliedType(pactListClass.tpe, List(pactRecordClass.tpe))))
+            case PrimitiveDescriptor(_, _, _, wrapper)            => Seq(gen.mkClassOf(wrapper.tpe))
+            case BoxedPrimitiveDescriptor(_, _, _, wrapper, _, _) => Seq(gen.mkClassOf(wrapper.tpe))
+            case ListDescriptor(_, _, _, _, _, elem)              => Seq(gen.mkClassOf(appliedType(pactListClass.tpe, List(getListElemType(elem)))))
             // Flatten product types
-            case CaseClassDescriptor(_, _, _, _, getters)                      => getters flatMap { getter => getFieldTypes(getter.descr) }
+            case CaseClassDescriptor(_, _, _, _, getters)         => getters flatMap { getter => getFieldTypes(getter.desc) }
             // Tag and flatten summation types
             // TODO (Joe): Rather than laying subclasses out sequentially, just 
             //             reserve enough fields for the largest subclass.
@@ -255,20 +255,23 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
             //             need until runtime.
             // TODO (Joe): Merge abstract base fields implemented by subclasses
             //             so that they are visible to key selector functions.
-            case BaseClassDescriptor(_, _, subTypes)                           => gen.mkClassOf(pactIntegerClass.tpe) +: (subTypes flatMap { subType => getFieldTypes(subType) })
+            case BaseClassDescriptor(_, _, subTypes)              => gen.mkClassOf(pactIntegerClass.tpe) +: (subTypes flatMap { subType => getFieldTypes(subType) })
+            case OpaqueDescriptor(_, _, ref)                      => Seq(Select(ref, "fieldTypes"))
+            // Box inner instances of recursive types
+            case RecursiveDescriptor(_, _, _)                     => Seq(gen.mkClassOf(pactRecordClass.tpe))
           }
 
           val fieldSets = getFieldTypes(desc).foldRight(Seq[Tree]()) { (f, z) =>
             (f, z) match {
               case (_: Select, _)                => f +: z
               case (_, ArrayValue(tpe, fs) :: r) => ArrayValue(tpe, f +: fs) +: r
-              case _                             => ArrayValue(TypeTree(elemTpe), List(f)) +: z
+              case _                             => ArrayValue(TypeTree(pactValueTpe), List(f)) +: z
             }
           }
 
           fieldSets match {
             case Seq(a) => a
-            case as     => Apply(TypeApply(Select(Select(Ident("scala"), "Array"), "concat"), List(TypeTree(elemTpe))), as.toList)
+            case as     => Apply(TypeApply(Select(Select(Ident("scala"), "Array"), "concat"), List(TypeTree(pactValueTpe))), as.toList)
           }
         }
       }
@@ -287,84 +290,123 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
       private def mkUdtSerializerClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 
         mkClass(owner, "UDTSerializerImpl", FINAL, List(appliedType(udtSerializerClass.tpe, List(desc.tpe)), definitions.SerializableClass.tpe)) { classSym =>
-          mkIndexes(classSym, desc) ++ mkInners(classSym, desc) ++ mkPactHolders(classSym, desc) ++ List(mkSerialize(classSym, desc), mkDeserialize(classSym, desc))
+          val indexMapIter = Select(Apply(Select(Select(Ident("scala"), "Predef"), "intArrayOps"), List(Ident("indexMap"))), "iterator")
+          val (fields1, inits1) = mkIndexes(classSym, desc.id, getIndexFields(desc).toList, false, indexMapIter)
+          val (fields2, inits2) = mkBoxedIndexes(classSym, desc)
+          val init = inits1 ++ inits2 match {
+            case Nil   => Nil
+            case inits => List(mkMethod(classSym, "init", OVERRIDE | FINAL, List(), definitions.UnitClass.tpe) { _ => Block(inits: _*) })
+          }
+          fields1 ++ fields2 ++ mkPactWrappers(classSym, desc) ++ init ++ mkSerialize(classSym, desc) ++ mkDeserialize(classSym, desc)
         }
       }
 
-      private def mkIndexes(udtSerClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
+      def getIndexFields(desc: UDTDescriptor): Seq[UDTDescriptor] = desc match {
+        case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { getter => getIndexFields(getter.desc) }
+        case BaseClassDescriptor(id, _, subTypes)     => desc +: (subTypes flatMap { subType => getIndexFields(subType) })
+        case _                                        => Seq(desc)
+      }
 
-        def getWidths(desc: UDTDescriptor): Seq[(Int, Tree)] = desc match {
-          case OpaqueDescriptor(id, _, ref, false)      => Seq((id, Select(ref, "numFields")))
-          case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { getter => getWidths(getter.descr) }
-          case BaseClassDescriptor(id, _, subTypes)     => (id, Literal(1)) +: (subTypes flatMap { subType => getWidths(subType) })
-          case _                                        => Seq((desc.id, Literal(1)))
-        }
+      private def mkIndexes(udtSerClassSym: Symbol, descId: Int, descFields: List[UDTDescriptor], boxed: Boolean, indexMapIter: Tree): (List[Tree], List[Tree]) = {
 
         val intTpe = definitions.IntClass.tpe
         val arrTpe = appliedType(definitions.ArrayClass.tpe, List(intTpe))
         val iterTpe = appliedType(definitions.IteratorClass.tpe, List(intTpe))
 
-        val iter = mkVal(udtSerClassSym, "idxIter", PRIVATE, true, iterTpe) { _ =>
-          Select(Apply(Select(Select(Ident("scala"), "Predef"), "intArrayOps"), List(Ident("indexMap"))), "iterator")
+        val prefix = (if (boxed) "boxed" else "flat") + descId
+        val iterName = prefix + "Iter"
+        val iter = mkVal(udtSerClassSym, iterName, PRIVATE, true, iterTpe) { _ => indexMapIter }
+
+        val fieldsAndInits = descFields map {
+
+          case OpaqueDescriptor(id, tpe, ref) => {
+            val take = Apply(Select(Select(This(udtSerClassSym), iterName), "take"), List(Select(ref, "numFields")))
+            val arr = Apply(TypeApply(Select(take, "toArray"), List(TypeTree(intTpe))), List(Select(Select(Ident("reflect"), "Manifest"), "Int")))
+            val idxField = mkVal(udtSerClassSym, prefix + "Idx" + id, PRIVATE, true, arrTpe) { _ => arr }
+
+            val udtSerTpe = appliedType(udtSerializerClass.tpe, List(tpe))
+            val serField = mkVar(udtSerClassSym, prefix + "Ser" + id, PRIVATE, false, udtSerTpe) { _ => Literal(Constant(null)) }
+
+            val serInst = Apply(Select(ref, "getSerializer"), List(Select(This(udtSerClassSym), prefix + "Idx" + id)))
+            val serInit = Assign(Select(This(udtSerClassSym), prefix + "Ser" + id), serInst)
+
+            (List(idxField, serField), List(serInit: Tree))
+          }
+
+          case d => {
+            val next = Apply(Select(Select(This(udtSerClassSym), iterName), "next"), Nil)
+            val idxField = mkVal(udtSerClassSym, prefix + "Idx" + d.id, PRIVATE, false, intTpe) { _ => next }
+
+            (List(idxField), Nil)
+          }
         }
 
-        val indexes = getWidths(desc) map {
-          case (id, _: Literal) => mkVal(udtSerClassSym, "idx" + id, PRIVATE, false, intTpe) { _ => Apply(Select(Select(This(udtSerClassSym), "idxIter"), "next"), Nil) }
-          case (id, w)          => mkVal(udtSerClassSym, "idx" + id, PRIVATE, true, arrTpe) { _ => Apply(TypeApply(Select(Apply(Select(Select(This(udtSerClassSym), "idxIter"), "take"), List(w)), "toArray"), List(TypeTree(intTpe))), List(Select(Select(Ident("reflect"), "Manifest"), "Int"))) }
-        }
-
-        (iter +: indexes) toList
+        val (fields, inits) = fieldsAndInits.unzip
+        (iter +: fields.flatten, inits.flatten)
       }
 
-      private def mkInners(udtSerClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
+      private def mkBoxedIndexes(udtSerClassSym: Symbol, desc: UDTDescriptor): (List[Tree], List[Tree]) = {
 
-        def getInnerTypes(desc: UDTDescriptor, box: Boolean): Seq[(Boolean, OpaqueDescriptor)] = desc match {
-          case d @ OpaqueDescriptor(_, _, _, dBox)      => Seq((box || dBox, d))
-          case ListDescriptor(_, _, _, _, _, elem)      => getInnerTypes(elem, true)
-          case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { getter => getInnerTypes(getter.descr, box) }
-          case BaseClassDescriptor(_, _, subTypes)      => subTypes flatMap { subType => getInnerTypes(subType, box) }
-          case _                                        => Seq()
+        def getBoxedDescriptors(d: UDTDescriptor): Seq[UDTDescriptor] = d match {
+          case ListDescriptor(_, _, _, _, _, elem: BaseClassDescriptor) => elem +: getBoxedDescriptors(elem)
+          case ListDescriptor(_, _, _, _, _, elem: CaseClassDescriptor) => elem +: getBoxedDescriptors(elem)
+          case ListDescriptor(_, _, _, _, _, elem: OpaqueDescriptor) => Seq(elem)
+          case ListDescriptor(_, _, _, _, _, elem) => getBoxedDescriptors(elem)
+          case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { getter => getBoxedDescriptors(getter.desc) }
+          case BaseClassDescriptor(id, _, subTypes) => subTypes flatMap { subType => getBoxedDescriptors(subType) }
+          case RecursiveDescriptor(_, _, refId) => desc.findById(refId).toSeq
+          case _ => Seq()
         }
 
-        getInnerTypes(desc, false) toList match {
-          case Nil => Nil
-          case types =>
-
-            val fields = types map {
-              case (_, OpaqueDescriptor(id, tpe, _, _)) => {
-                val udtSerTpe = appliedType(udtSerializerClass.tpe, List(tpe))
-                mkVar(udtSerClassSym, "ser" + id, PRIVATE, false, udtSerTpe) { _ => Literal(Constant(null)) }
+        val fieldsAndInits = getBoxedDescriptors(desc).distinct.toList flatMap { d =>
+          getIndexFields(d).toList match {
+            case Nil => None
+            case fields => {
+              val widths = fields map {
+                case OpaqueDescriptor(_, _, ref) => Select(ref, "numFields")
+                case _                           => Literal(1)
               }
+              val sum = widths.reduce { (s, i) => Apply(Select(s, "$plus"), List(i)) }
+              val range = Apply(Select(Ident("scala"), "Range"), List(Literal(0), sum))
+              Some(mkIndexes(udtSerClassSym, d.id, fields, true, Select(range, "iterator")))
             }
-
-            val init = mkMethod(udtSerClassSym, "init", OVERRIDE | FINAL, List(), definitions.UnitClass.tpe) { _ =>
-              val stats = types map {
-                case (boxed, OpaqueDescriptor(id, tpe, ref, _)) => {
-                  val rhs = boxed match {
-                    case true  => Select(ref, "getSerializerWithDefaultLayout")
-                    case false => Apply(Select(ref, "getSerializer"), List(Select(This(udtSerClassSym), "idx" + id)))
-                  }
-                  Assign(Select(This(udtSerClassSym), "ser" + id), rhs)
-                }
-              }
-              Block(stats: _*)
-            }
-
-            fields :+ init
+          }
         }
+
+        val (fields, inits) = fieldsAndInits.unzip
+        (fields.flatten, inits.flatten)
       }
 
-      private def mkPactHolders(udtSerClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
+      def getListElemPactWrapperType(elem: UDTDescriptor): Type = elem match {
+        case elem: PrimitiveDescriptor           => elem.wrapper.tpe
+        case elem: BoxedPrimitiveDescriptor      => elem.wrapper.tpe
+        case ListDescriptor(_, _, _, _, _, elem) => appliedType(pactListClass.tpe, List(getListElemPactWrapperType(elem)))
+        // Box non-primitive list elements
+        case _                                   => pactRecordClass.tpe
+      }
+
+      def getInnermostListElem(desc: ListDescriptor): UDTDescriptor = desc.elem match {
+        case elem: ListDescriptor => getInnermostListElem(elem)
+        case elem                 => elem
+      }
+
+      private def mkPactWrappers(udtSerClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
 
         def getFieldTypes(desc: UDTDescriptor): Seq[(Int, Type)] = desc match {
-          case OpaqueDescriptor(_, _, _, _)                                   => Seq()
-          case PrimitiveDescriptor(id, _, _, wrapper)                         => Seq((id, wrapper.tpe))
-          case BoxedPrimitiveDescriptor(id, _, _, wrapper, _, _)              => Seq((id, wrapper.tpe))
-          case ListDescriptor(id, _, _, _, _, elem: PrimitiveDescriptor)      => Seq((id, appliedType(pactListClass.tpe, List(elem.wrapper.tpe))))
-          case ListDescriptor(id, _, _, _, _, elem: BoxedPrimitiveDescriptor) => Seq((id, appliedType(pactListClass.tpe, List(elem.wrapper.tpe))))
-          case ListDescriptor(id, _, _, _, _, elem)                           => Seq((id, appliedType(pactListClass.tpe, List(pactRecordClass.tpe))))
-          case CaseClassDescriptor(_, _, _, _, getters)                       => getters flatMap { getter => getFieldTypes(getter.descr) }
-          case BaseClassDescriptor(id, _, subTypes)                           => (id, pactIntegerClass.tpe) +: (subTypes flatMap { subType => getFieldTypes(subType) })
+          case PrimitiveDescriptor(id, _, _, wrapper)            => Seq((id, wrapper.tpe))
+          case BoxedPrimitiveDescriptor(id, _, _, wrapper, _, _) => Seq((id, wrapper.tpe))
+          case d @ ListDescriptor(id, _, _, _, _, elem) => {
+            val listField = (id, appliedType(pactListClass.tpe, List(getListElemPactWrapperType(elem))))
+            val elemFields = getInnermostListElem(d) match {
+              case elem: CaseClassDescriptor => getFieldTypes(elem)
+              case elem: BaseClassDescriptor => getFieldTypes(elem)
+              case _                         => Seq()
+            }
+            listField +: elemFields
+          }
+          case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { getter => getFieldTypes(getter.desc) }
+          case BaseClassDescriptor(id, _, subTypes)     => (id, pactIntegerClass.tpe) +: (subTypes flatMap { subType => getFieldTypes(subType) })
+          case _                                        => Seq()
         }
 
         getFieldTypes(desc) toList match {
@@ -384,138 +426,191 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
         }
       }
 
-      // TODO (Joe): Generate more efficient (non-reentrant) code 
-      // when the top-level type is known to not be recursive
-      private def mkSerialize(udtSerClassSym: Symbol, desc: UDTDescriptor): Tree = {
+      private def mkSerialize(udtSerClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
 
-        def mkChkIdx(id: Int): Tree = Apply(Select(Select(This(udtSerClassSym), "idx" + id), "$greater$eq"), List(Literal(0)))
-        def mkChkNotNull(source: Tree, tpe: Type): Tree = if (tpe.isNotNull) EmptyTree else Apply(Select(source, "$bang$eq"), List(Literal(Constant(null))))
-        def mkSetField(id: Int, source: Tree, target: Tree): Tree = Apply(Select(target, "setField"), List(Select(This(udtSerClassSym), "idx" + id), source))
-        def mkSerOpaque(id: Int, source: Tree, target: Tree): Tree = Apply(Select(Select(This(udtSerClassSym), "ser" + id), "serialize"), List(source, target))
+        val root = mkMethod(udtSerClassSym, "serialize", OVERRIDE | FINAL, List(("item", desc.tpe), ("record", pactRecordClass.tpe)), definitions.UnitClass.tpe) { methodSym =>
+          Block(genSerialize(udtSerClassSym, methodSym, desc, "flat" + desc.id, false, Ident("item"), Ident("record"), true, true) toList, Literal(()))
+        }
 
-        mkMethod(udtSerClassSym, "serialize", OVERRIDE | FINAL, List(("item", desc.tpe), ("record", pactRecordClass.tpe)), definitions.UnitClass.tpe) { methodSym =>
+        val aux = (desc.findByType[RecursiveDescriptor].toList flatMap { rd => desc.findById(rd.refId) } distinct) map { desc =>
+          mkMethod(udtSerClassSym, "serialize" + desc.id, PRIVATE | FINAL, List(("item", desc.tpe), ("record", pactRecordClass.tpe)), definitions.UnitClass.tpe) { methodSym =>
+            Block(genSerialize(udtSerClassSym, methodSym, desc, "boxed" + desc.id, true, Ident("item"), Ident("record"), false, false) toList, Literal(()))
+          }
+        }
 
-          def gen(desc: UDTDescriptor, source: Tree, target: Tree): Seq[Tree] = desc match {
+        root +: aux
+      }
 
-            case OpaqueDescriptor(id, tpe, _, false) => mkIf(mkChkNotNull(source, tpe), mkSerOpaque(id, source, target))
+      def genSerialize(udtSerClassSym: Symbol, methodSym: Symbol, desc: UDTDescriptor, idxPrefix: String, reentrant: Boolean, source: Tree, target: Tree, chkIndex: Boolean, chkNull: Boolean): Seq[Tree] = {
 
-            case OpaqueDescriptor(id, tpe, _, true) => {
-              // Warning: recursive types introduce re-entrant calls to serialize()
+        def mkChkNotNull(source: Tree, tpe: Type, chkNull: Boolean): Tree = if (!tpe.isNotNull && chkNull) Apply(Select(source, "$bang$eq"), List(Literal(Constant(null)))) else EmptyTree
+        def mkChkIdx(id: Int, chkIndex: Boolean): Tree = if (chkIndex) Apply(Select(Select(This(udtSerClassSym), idxPrefix + "Idx" + id), "$greater$eq"), List(Literal(0))) else EmptyTree
+        def mkSetField(id: Int, source: Tree, target: Tree): Tree = Apply(Select(target, "setField"), List(Select(This(udtSerClassSym), idxPrefix + "Idx" + id), source))
 
-              // Persist the outer record prior to recursing, since the call
-              // is going to reuse all the PactPrimitive wrappers that were 
-              // needed *before* the recursion.
-              val updTgt = Apply(Select(target, "updateBinaryRepresenation"), List())
+        def genList(desc: ListDescriptor, source: Tree, target: Tree): Seq[Tree] = {
 
-              val rec = mkVal(methodSym, "inner", 0, false, pactRecordClass.tpe) { _ => New(TypeTree(pactRecordClass.tpe), List(List())) }
-              val ser = mkSerOpaque(id, source, Ident(rec.symbol))
+          val it = mkVal(methodSym, "it", 0, false, appliedType(definitions.IteratorClass.tpe, List(desc.elem.tpe))) { _ => desc.iter(source) }
 
-              // Persist the new inner record after recursing, since the
-              // current call is going to reuse all the PactPrimitive
-              // wrappers that are needed *after* the recursion.
-              val updRec = Apply(Select(Ident(rec.symbol), "updateBinaryRepresenation"), List())
-              val set = mkSetField(id, Ident(rec.symbol), target)
+          val loop = mkWhile(Select(Ident(it.symbol), "hasNext")) {
 
-              mkIf(mkChkNotNull(source, tpe), updTgt, rec, ser, updRec, set)
-            }
+            val item = mkVal(methodSym, "item", 0, false, desc.elem.tpe) { _ => Select(Ident(it.symbol), "next") }
 
-            case PrimitiveDescriptor(id, _, _, _) => {
-              val chkIdx = mkChkIdx(id)
-              val ser = Apply(Select(Select(This(udtSerClassSym), "w" + id), "setValue"), List(source))
-              val set = mkSetField(id, Select(This(udtSerClassSym), "w" + id), target)
-              val ret = Literal(())
+            val (stats, value) = desc.elem match {
 
-              mkIf(chkIdx, ser, set, ret)
-            }
+              case PrimitiveDescriptor(_, _, _, wrapper)                => (Seq(), New(TypeTree(wrapper.tpe), List(List(Ident(item.symbol)))))
 
-            case BoxedPrimitiveDescriptor(id, tpe, _, _, _, unbox) => {
-              val chk = mkAnd(mkChkIdx(id), mkChkNotNull(source, tpe))
-              val ser = Apply(Select(Select(This(udtSerClassSym), "w" + id), "setValue"), List(unbox(source)))
-              val set = mkSetField(id, Select(This(udtSerClassSym), "w" + id), target)
-              val ret = Literal(())
+              case BoxedPrimitiveDescriptor(_, _, _, wrapper, _, unbox) => (Seq(), New(TypeTree(wrapper.tpe), List(List(unbox(Ident(item.symbol))))))
 
-              mkIf(chk, ser, set, ret)
-            }
-
-            case ListDescriptor(id, tpe, _, _, iter, elem) => {
-              val chk = mkAnd(mkChkIdx(id), mkChkNotNull(source, tpe))
-              val updTgt = elem match {
-                case OpaqueDescriptor(_, _, _, true) => Apply(Select(target, "updateBinaryRepresenation"), List())
-                case _                               => EmptyTree
+              case elem @ ListDescriptor(id, _, _, _, _, innerElem) => {
+                val listTpe = appliedType(pactListClass.tpe, List(getListElemPactWrapperType(innerElem)))
+                val list = mkVal(methodSym, "list" + id, 0, false, listTpe) { _ => New(TypeTree(listTpe), List(List())) }
+                val body = genList(elem, Ident(item.symbol), Ident(list.symbol))
+                (list +: body, Ident(list.symbol))
               }
-              val clear = Apply(Select(Select(This(udtSerClassSym), "w" + id), "clear"), List())
-              val it = mkVal(methodSym, "it", 0, false, appliedType(definitions.IteratorClass.tpe, List(elem.tpe))) { _ => iter(source) }
-              val loop = mkWhile(Select(Ident(it.symbol), "hasNext")) {
-                elem match {
 
-                  case PrimitiveDescriptor(_, _, _, wrapper) => {
-                    val value = New(TypeTree(wrapper.tpe), List(List(Select(Ident(it.symbol), "next"))))
-                    Apply(Select(Select(This(udtSerClassSym), "w" + id), "add"), List(value))
-                  }
+              case RecursiveDescriptor(id, tpe, refId) => {
+                val rec = mkVal(methodSym, "record" + id, 0, false, pactRecordClass.tpe) { _ => New(TypeTree(pactRecordClass.tpe), List(List())) }
+                val ser = Apply(Select(This(udtSerClassSym), "serialize" + refId), List(Ident(item.symbol), Ident(rec.symbol)))
+                val updRec = Apply(Select(Ident(rec.symbol), "updateBinaryRepresenation"), List())
 
-                  case BoxedPrimitiveDescriptor(_, tpe, _, wrapper, _, unbox) => {
-                    val item = mkVal(methodSym, "item", 0, false, tpe) { _ => Select(Ident(it.symbol), "next") }
-                    val add = Apply(Select(Select(This(udtSerClassSym), "w" + id), "add"), List(New(TypeTree(wrapper.tpe), List(List(unbox(Ident(item.symbol)))))))
-                    val addNull = Apply(Select(Select(This(udtSerClassSym), "w" + id), "add"), List(Literal(Constant(null))))
-                    val stats = mkIf(mkChkNotNull(Ident(item.symbol), tpe), Seq(add), Seq(addNull))
-
-                    mkBlock((item +: stats): _*)
-                  }
-
-                  case OpaqueDescriptor(elemId, tpe, _, _) => {
-                    val item = mkVal(methodSym, "item", 0, false, tpe) { _ => Select(Ident(it.symbol), "next") }
-                    val rec = mkVal(methodSym, "record", 0, false, pactRecordClass.tpe) { _ => New(TypeTree(pactRecordClass.tpe), List(List())) }
-                    val ser = mkSerOpaque(elemId, Ident(item.symbol), Ident(rec.symbol))
-                    val upd = Apply(Select(Ident(rec.symbol), "updateBinaryRepresenation"), List())
-                    val add = Apply(Select(Select(This(udtSerClassSym), "w" + id), "add"), List(Ident(rec.symbol)))
-                    val addNull = Apply(Select(Select(This(udtSerClassSym), "w" + id), "add"), List(Literal(Constant(null))))
-                    val stats = mkIf(mkChkNotNull(Ident(item.symbol), tpe), Seq(rec, ser, upd, add), Seq(addNull))
-
-                    mkBlock((item +: stats): _*)
-                  }
-                }
+                (Seq(rec, ser, updRec), Ident(rec.symbol))
               }
-              val set = mkSetField(id, Select(This(udtSerClassSym), "w" + id), target)
-              val ret = Literal(())
 
-              mkIf(chk, updTgt, clear, it, loop, set, ret)
+              case elem => {
+                val rec = mkVal(methodSym, "record", 0, false, pactRecordClass.tpe) { _ => New(TypeTree(pactRecordClass.tpe), List(List())) }
+                val ser = genSerialize(udtSerClassSym, methodSym, elem, "boxed" + elem.id, reentrant, Ident(item.symbol), Ident(rec.symbol), false, false)
+                val upd = Apply(Select(Ident(rec.symbol), "updateBinaryRepresenation"), List())
+                ((rec +: ser) :+ upd, Ident(rec.symbol))
+              }
             }
 
-            case CaseClassDescriptor(_, tpe, _, _, getters) => mkIf(mkChkNotNull(source, tpe), (getters flatMap { case FieldAccessor(sym, _, desc) => gen(desc, Select(source, sym), target) }): _*)
+            val chk = mkChkNotNull(Ident(item.symbol), desc.elem.tpe, true)
+            val add = Apply(Select(target, "add"), List(value))
+            val addNull = Apply(Select(target, "add"), List(Literal(Constant(null))))
+            val body = item +: mkIf(chk, stats :+ add, Seq(addNull))
 
-            case BaseClassDescriptor(id, tpe, subTypes) => {
-              val chk = mkAnd(mkChkIdx(id), mkChkNotNull(source, tpe))
-              val cases = subTypes.zipWithIndex.toList map {
-                case (ccd, i) => {
-                  val pat = Bind("inst", Typed(Ident("_"), TypeTree(ccd.tpe)))
-                  val ser = Apply(Select(Select(This(udtSerClassSym), "w" + id), "setValue"), List(Literal(i)))
-                  val set = mkSetField(id, Select(This(udtSerClassSym), "w" + id), target)
-                  val code = gen(ccd, Ident("inst"), target) match {
-                    case Seq(If(_, code, _)) => deBlock(code)
-                    case code                => code
-                  }
-                  val body = (ser +: set +: code) :+ Literal(())
-
-                  CaseDef(pat, EmptyTree, mkBlock(body: _*))
-                }
-              }
-              mkIf(chk, Match(source, cases))
-            }
+            mkBlock(body: _*)
           }
 
-          Block(gen(desc, Ident("item"), Ident("record")) toList, Literal(()))
+          Seq(it, loop)
+        }
+
+        desc match {
+
+          case PrimitiveDescriptor(id, _, _, _) => {
+            val chk = mkChkIdx(id, chkIndex)
+            val ser = Apply(Select(Select(This(udtSerClassSym), "w" + id), "setValue"), List(source))
+            val set = mkSetField(id, Select(This(udtSerClassSym), "w" + id), target)
+
+            mkIf(chk, ser, set)
+          }
+
+          case BoxedPrimitiveDescriptor(id, tpe, _, _, _, unbox) => {
+            val chk = mkAnd(mkChkIdx(id, chkIndex), mkChkNotNull(source, tpe, chkNull))
+            val ser = Apply(Select(Select(This(udtSerClassSym), "w" + id), "setValue"), List(unbox(source)))
+            val set = mkSetField(id, Select(This(udtSerClassSym), "w" + id), target)
+
+            mkIf(chk, ser, set)
+          }
+
+          case d @ ListDescriptor(id, _, _, _, _, elem) => {
+            val chk = mkAnd(mkChkIdx(d.id, chkIndex), mkChkNotNull(source, d.tpe, chkNull))
+
+            val upd = getInnermostListElem(d) match {
+              case _: RecursiveDescriptor => Some(Apply(Select(target, "updateBinaryRepresenation"), List()))
+              case _                      => None
+            }
+
+            val stats = reentrant match {
+
+              // TODO (Joe): Optimize this to reuse list wrappers when it's safe to do so
+              case true => {
+                val listTpe = appliedType(pactListClass.tpe, List(getListElemPactWrapperType(elem)))
+                val list = mkVal(methodSym, "list" + id, 0, false, listTpe) { _ => New(TypeTree(listTpe), List(List())) }
+                val body = genList(d, source, Ident(list.symbol))
+                val set = mkSetField(id, Ident(list.symbol), target)
+                (list +: body) :+ set
+              }
+
+              case false => {
+                val clear = Apply(Select(Select(This(udtSerClassSym), "w" + id), "clear"), List())
+                val body = genList(d, source, Select(This(udtSerClassSym), "w" + id))
+                val set = mkSetField(id, Select(This(udtSerClassSym), "w" + id), target)
+                (clear +: body) :+ set
+              }
+            }
+
+            mkIf(chk, (upd.toSeq ++ stats): _*)
+          }
+
+          case CaseClassDescriptor(_, tpe, _, _, getters) => {
+            val chk = mkChkNotNull(source, tpe, chkNull)
+            val stats = getters flatMap { case FieldAccessor(sym, _, desc) => genSerialize(udtSerClassSym, methodSym, desc, idxPrefix, reentrant, Select(source, sym), target, chkIndex, true) }
+
+            mkIf(chk, stats: _*)
+          }
+
+          case BaseClassDescriptor(id, tpe, subTypes) => {
+            val chk = mkAnd(mkChkIdx(id, chkIndex), mkChkNotNull(source, tpe, chkNull))
+            val cases = subTypes.zipWithIndex.toList map {
+              case (ccd, i) => {
+                val pat = Bind("inst", Typed(Ident("_"), TypeTree(ccd.tpe)))
+                val ser = Apply(Select(Select(This(udtSerClassSym), "w" + id), "setValue"), List(Literal(i)))
+                val set = mkSetField(id, Select(This(udtSerClassSym), "w" + id), target)
+                val code = genSerialize(udtSerClassSym, methodSym, ccd, idxPrefix, reentrant, Ident("inst"), target, chkIndex, false) match {
+                  case Seq(If(_, code, _)) => deBlock(code)
+                  case code                => code
+                }
+                val body = (ser +: set +: code) :+ Literal(())
+
+                CaseDef(pat, EmptyTree, mkBlock(body: _*))
+              }
+            }
+
+            mkIf(chk, Match(source, cases))
+          }
+
+          case OpaqueDescriptor(id, tpe, _) => {
+            val ser = Apply(Select(Select(This(udtSerClassSym), idxPrefix + "Ser" + id), "serialize"), List(source, target))
+            mkIf(mkChkNotNull(source, tpe, chkNull), ser)
+          }
+
+          case RecursiveDescriptor(id, tpe, refId) => {
+            // Important: recursive types introduce re-entrant calls to serialize()
+
+            val chk = mkAnd(mkChkIdx(id, chkIndex), mkChkNotNull(source, tpe, chkNull))
+
+            // Persist the outer record prior to recursing, since the call
+            // is going to reuse all the PactPrimitive wrappers that were 
+            // needed *before* the recursion.
+            val updTgt = Apply(Select(target, "updateBinaryRepresenation"), List())
+
+            val rec = mkVal(methodSym, "record" + id, 0, false, pactRecordClass.tpe) { _ => New(TypeTree(pactRecordClass.tpe), List(List())) }
+            val ser = Apply(Select(This(udtSerClassSym), "serialize" + refId), List(source, Ident(rec.symbol)))
+
+            // Persist the new inner record after recursing, since the
+            // current call is going to reuse all the PactPrimitive
+            // wrappers that are needed *after* the recursion.
+            val updRec = Apply(Select(Ident(rec.symbol), "updateBinaryRepresenation"), List())
+
+            val set = mkSetField(id, Ident(rec.symbol), target)
+
+            mkIf(chk, updTgt, rec, ser, updRec, set)
+          }
         }
       }
 
-      private def mkDeserialize(udtSerClassSym: Symbol, desc: UDTDescriptor): Tree = {
+      private def mkDeserialize(udtSerClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
 
-        mkMethod(udtSerClassSym, "deserialize", OVERRIDE | FINAL, List(("record", pactRecordClass.tpe)), desc.tpe) { _ =>
+        val root = mkMethod(udtSerClassSym, "deserialize", OVERRIDE | FINAL, List(("record", pactRecordClass.tpe)), desc.tpe) { _ =>
           desc match {
             case PrimitiveDescriptor(_, _, default, _) => default
             case BoxedPrimitiveDescriptor(_, _, _, _, _, _) => Literal(Constant(null))
             case _ => Literal(Constant(null))
           }
         }
+
+        List(root)
       }
 
       private def mkIdent(target: Symbol): Tree = Ident(target) setType target.tpe
@@ -631,6 +726,8 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
         ClassDef(classSym, Modifiers(flags | SYNTHETIC), List(Nil), List(Nil), classMembers, owner.pos)
       }
+
+      private def mkThrow(msg: String) = Throw(New(TypeTree(definitions.getClass("java.lang.RuntimeException").tpe), List(List(Literal(msg)))))
 
       private def applyTransformation(tree: Tree)(trans: Tree => Tree): Tree = {
         val transformer = new Transformer {

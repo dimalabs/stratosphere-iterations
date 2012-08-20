@@ -57,6 +57,12 @@ abstract class Test extends PactProgram with TestGeneratedImplicits {
   case class B(b: Long, ba: A) extends Simple
   case class A(a: Long, ab: B) extends Simple
 
+  case class Test1(x1: Long, y1: Test1, z1: Test2)
+  case class Test2(x2: Long, y2: Test1, z2: Test2)
+
+  val testUdt1 = implicitly[UDT[Test1]]
+  val testUdt2 = implicitly[UDT[Test1]]
+
   val boxedLongUdt1 = implicitly[UDT[java.lang.Long]]
   val boxedLongUdt2 = implicitly[UDT[java.lang.Long]]
   val boxedLongArrayUdt1 = implicitly[UDT[Array[java.lang.Long]]]
