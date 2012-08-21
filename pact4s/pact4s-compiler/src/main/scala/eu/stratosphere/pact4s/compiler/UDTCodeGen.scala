@@ -50,7 +50,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
             // HACK: Blocks are naked (no symbol), so there's no scope in which to insert new implicits. 
             //       Wrap the block in an anonymous class, process the tree, then unpack the result.
-            case block: Block if genSites(tree).nonEmpty => {
+            case block @ Block(stats, ret) if genSites(tree).nonEmpty => {
 
               val (wrappedBlock, wrapper) = mkBlockWrapper(currentOwner, block)
               val result = super.transform(localTyper.typed { wrappedBlock })
@@ -58,6 +58,12 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
               detectWrapperArtifacts(wrapper) {
                 localTyper.typed { unwrapBlock(currentOwner, wrapper, result) }
               }
+
+              /*
+              val classSym = localTyper.context.enclClass.owner
+              val udtInstances = genSites(tree).toList flatMap { mkUdtInst(classSym, _) }
+              localTyper.typed { treeCopy.Block(tree, udtInstances ++ stats, ret) }
+              */
             }
 
             // Generate UDT classes and inject them into the AST
@@ -246,16 +252,14 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
             case BoxedPrimitiveDescriptor(_, _, _, wrapper, _, _) => Seq(gen.mkClassOf(wrapper.tpe))
             case ListDescriptor(_, _, _, _, _, elem)              => Seq(gen.mkClassOf(appliedType(pactListClass.tpe, List(getListElemType(elem)))))
             // Flatten product types
-            case CaseClassDescriptor(_, _, _, _, getters)         => getters flatMap { getter => getFieldTypes(getter.desc) }
+            case CaseClassDescriptor(_, _, _, _, getters)         => getters filterNot { _.isBaseField } flatMap { f => getFieldTypes(f.desc) }
             // Tag and flatten summation types
             // TODO (Joe): Rather than laying subclasses out sequentially, just 
             //             reserve enough fields for the largest subclass.
             //             This is tricky because subclasses can contain opaque
             //             descriptors, so we don't know how many fields we
             //             need until runtime.
-            // TODO (Joe): Merge abstract base fields implemented by subclasses
-            //             so that they are visible to key selector functions.
-            case BaseClassDescriptor(_, _, subTypes)              => gen.mkClassOf(pactIntegerClass.tpe) +: (subTypes flatMap { subType => getFieldTypes(subType) })
+            case BaseClassDescriptor(_, _, getters, subTypes)     => (getters flatMap { f => getFieldTypes(f.desc) }) ++ (subTypes flatMap getFieldTypes)
             case OpaqueDescriptor(_, _, ref)                      => Seq(Select(ref, "fieldTypes"))
             // Box inner instances of recursive types
             case RecursiveDescriptor(_, _, _)                     => Seq(gen.mkClassOf(pactRecordClass.tpe))
@@ -302,9 +306,9 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
       }
 
       def getIndexFields(desc: UDTDescriptor): Seq[UDTDescriptor] = desc match {
-        case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { getter => getIndexFields(getter.desc) }
-        case BaseClassDescriptor(id, _, subTypes)     => desc +: (subTypes flatMap { subType => getIndexFields(subType) })
-        case _                                        => Seq(desc)
+        case CaseClassDescriptor(_, _, _, _, getters) => getters filterNot { _.isBaseField } flatMap { f => getIndexFields(f.desc) }
+        case BaseClassDescriptor(id, _, getters, subTypes) => (getters flatMap { f => getIndexFields(f.desc) }) ++ (subTypes flatMap getIndexFields)
+        case _ => Seq(desc)
       }
 
       private def mkIndexes(udtSerClassSym: Symbol, descId: Int, descFields: List[UDTDescriptor], boxed: Boolean, indexMapIter: Tree): (List[Tree], List[Tree]) = {
@@ -352,8 +356,8 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
           case ListDescriptor(_, _, _, _, _, elem: CaseClassDescriptor) => elem +: getBoxedDescriptors(elem)
           case ListDescriptor(_, _, _, _, _, elem: OpaqueDescriptor) => Seq(elem)
           case ListDescriptor(_, _, _, _, _, elem) => getBoxedDescriptors(elem)
-          case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { getter => getBoxedDescriptors(getter.desc) }
-          case BaseClassDescriptor(id, _, subTypes) => subTypes flatMap { subType => getBoxedDescriptors(subType) }
+          case CaseClassDescriptor(_, _, _, _, getters) => getters filterNot { _.isBaseField } flatMap { f => getBoxedDescriptors(f.desc) }
+          case BaseClassDescriptor(id, _, getters, subTypes) => (getters flatMap { f => getBoxedDescriptors(f.desc) }) ++ (subTypes flatMap getBoxedDescriptors)
           case RecursiveDescriptor(_, _, refId) => desc.findById(refId).toSeq
           case _ => Seq()
         }
@@ -404,9 +408,9 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
             }
             listField +: elemFields
           }
-          case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { getter => getFieldTypes(getter.desc) }
-          case BaseClassDescriptor(id, _, subTypes)     => (id, pactIntegerClass.tpe) +: (subTypes flatMap { subType => getFieldTypes(subType) })
-          case _                                        => Seq()
+          case CaseClassDescriptor(_, _, _, _, getters) => getters filterNot { _.isBaseField } flatMap { f => getFieldTypes(f.desc) }
+          case BaseClassDescriptor(_, _, getters, subTypes) => (getters flatMap { f => getFieldTypes(f.desc) }) ++ (subTypes flatMap getFieldTypes)
+          case _ => Seq()
         }
 
         getFieldTypes(desc) toList match {
@@ -545,29 +549,26 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
           case CaseClassDescriptor(_, tpe, _, _, getters) => {
             val chk = mkChkNotNull(source, tpe, chkNull)
-            val stats = getters flatMap { case FieldAccessor(sym, _, desc) => genSerialize(udtSerClassSym, methodSym, desc, idxPrefix, reentrant, Select(source, sym), target, chkIndex, true) }
+            val stats = getters filterNot { _.isBaseField } flatMap { case FieldAccessor(sym, _, _, desc) => genSerialize(udtSerClassSym, methodSym, desc, idxPrefix, reentrant, Select(source, sym), target, chkIndex, true) }
 
             mkIf(chk, stats: _*)
           }
 
-          case BaseClassDescriptor(id, tpe, subTypes) => {
-            val chk = mkAnd(mkChkIdx(id, chkIndex), mkChkNotNull(source, tpe, chkNull))
+          case BaseClassDescriptor(id, tpe, Seq(tagField, baseFields @ _*), subTypes) => {
+            val chk = mkChkNotNull(source, tpe, chkNull)
+            val fields = baseFields flatMap { f => genSerialize(udtSerClassSym, methodSym, f.desc, idxPrefix, reentrant, Select(source, f.sym), target, chkIndex, true) }
             val cases = subTypes.zipWithIndex.toList map {
-              case (ccd, i) => {
-                val pat = Bind("inst", Typed(Ident("_"), TypeTree(ccd.tpe)))
-                val ser = Apply(Select(Select(This(udtSerClassSym), "w" + id), "setValue"), List(Literal(i)))
-                val set = mkSetField(id, Select(This(udtSerClassSym), "w" + id), target)
-                val code = genSerialize(udtSerClassSym, methodSym, ccd, idxPrefix, reentrant, Ident("inst"), target, chkIndex, false) match {
-                  case Seq(If(_, code, _)) => deBlock(code)
-                  case code                => code
-                }
-                val body = (ser +: set +: code) :+ Literal(())
+              case (dSubType, i) => {
+                val tag = genSerialize(udtSerClassSym, methodSym, tagField.desc, idxPrefix, reentrant, Literal(i), target, chkIndex, false)
+                val code = genSerialize(udtSerClassSym, methodSym, dSubType, idxPrefix, reentrant, Ident("inst"), target, chkIndex, false)
+                val body = (tag ++ code) :+ Literal(())
 
+                val pat = Bind("inst", Typed(Ident("_"), TypeTree(dSubType.tpe)))
                 CaseDef(pat, EmptyTree, mkBlock(body: _*))
               }
             }
 
-            mkIf(chk, Match(source, cases))
+            mkIf(chk, (fields :+ Match(source, cases)): _*)
           }
 
           case OpaqueDescriptor(id, tpe, _) => {

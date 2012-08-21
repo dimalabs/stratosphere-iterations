@@ -49,6 +49,8 @@ trait UDTAnalysis { this: Pact4sGlobal =>
         // For example - Cons, Nil  <: List[T] <: GenTraversableOnce[T]
         // Or this one - Leaf, Node <: Tree[T] <: GenTraversableOnce[Tree[T]]
 
+        // TODO (Joe): Fix issues with Nothing type
+
         cache.getOrElseUpdate(normed) { id =>
           maybeVerbosely(seen(normed)) { d => "Analyzed UDT[" + tpe + " ~> " + normed + "] - " + d.getClass.getName } {
             normed match {
@@ -58,7 +60,7 @@ trait UDTAnalysis { this: Pact4sGlobal =>
               case ListType(elemTpe, bf, iter) => analyzeList(id, normed, bf, iter)
               case CaseClassType() => analyzeCaseClass(id, normed)
               case BaseClassType() => analyzeClassHierarchy(id, normed)
-              case _ => UnsupportedDescriptor(id, normed, Seq("Unsupported type"))
+              case _ => UnsupportedDescriptor(id, normed, Seq("Unsupported type " + normed))
             }
           }
         }
@@ -71,36 +73,76 @@ trait UDTAnalysis { this: Pact4sGlobal =>
 
       private def analyzeClassHierarchy(id: Int, tpe: Type): UDTDescriptor = {
 
-        (tpe.typeSymbol.isSealed, tpe.typeSymbol.children) match {
+        val tagField = {
+          val (intTpe, intDefault, intWrapper) = PrimitiveType.intPrimitive
+          FieldAccessor(NoSymbol, NullaryMethodType(intTpe), true, PrimitiveDescriptor(cache.newId, intTpe, intDefault, intWrapper))
+        }
 
-          case (false, _)  => UnsupportedDescriptor(id, tpe, Seq("Cannot statically determine subtypes for non-sealed base class."))
-          case (true, Nil) => UnsupportedDescriptor(id, tpe, Seq("No subtypes defined for sealed base class."))
+        val descendents = tpe.typeSymbol.children flatMap { d =>
 
-          case (true, children) => {
+          val dTpe = verbosely[Type] { dTpe => d.tpe + " <: " + tpe + " instantiated as " + dTpe + " (" + (if (dTpe <:< tpe) "Valid" else "Invalid") + " subtype)" } {
+            val tArgs = (tpe.typeConstructor.typeParams, tpe.typeArgs).zipped.toMap
+            val dArgs = d.typeParams map { dp =>
+              val tArg = tArgs.keySet.find { tp => dp == tp.tpe.asSeenFrom(d.tpe, tpe.typeSymbol).typeSymbol }
+              tArg map { tArgs(_) } getOrElse dp.tpe
+            }
 
-            val descendents = children map { d =>
+            normTpe(appliedType(d.tpe, dArgs))
+          }
 
-              val dTpe = verbosely[Type] { dTpe => d.tpe + " <: " + tpe + " instantiated as " + dTpe } {
-                val tArgs = (tpe.typeConstructor.typeParams, tpe.typeArgs).zipped.toMap
-                val dArgs = d.typeParams map { dp =>
-                  val tArg = tArgs.keySet.find { tp => dp == tp.tpe.asSeenFrom(d.tpe, tpe.typeSymbol).typeSymbol }
-                  tArg map { tArgs(_) } getOrElse dp.tpe
+          if (dTpe <:< tpe)
+            Some(analyze(dTpe))
+          else
+            None
+        }
+
+        val (subTypes, errors) = Util.partitionByType[UDTDescriptor, UnsupportedDescriptor](descendents)
+
+        errors match {
+          case _ :: _                  => UnsupportedDescriptor(id, tpe, errors flatMap { case UnsupportedDescriptor(_, subType, errs) => errs map { err => "Subtype " + subType + " - " + err } })
+          case Nil if subTypes.isEmpty => UnsupportedDescriptor(id, tpe, Seq("No instantiable subtypes found for base class"))
+          case Nil => {
+
+            val (tParams, tArgs) = tpe.typeConstructor.typeParams.zip(tpe.typeArgs).unzip
+            val baseMembers = tpe.members.reverse filter { f => f.isGetter } map { f => (f, normTpe(f.tpe.instantiateTypeParams(tParams, tArgs).asSeenFrom(tpe.prefix, f.owner.owner))) }
+
+            val subMembers = subTypes map {
+              case BaseClassDescriptor(_, _, getters, _)    => getters
+              case CaseClassDescriptor(_, _, _, _, getters) => getters
+              case _                                        => Seq()
+            }
+
+            val baseFields = baseMembers flatMap {
+              case (bSym, bTpe) => {
+                val accessors = subMembers map { _ find { sf => sf.sym.name == bSym.name && sf.tpe.resultType <:< bTpe.resultType } }
+                accessors.forall { _.isDefined } match {
+                  case true  => Some(FieldAccessor(bSym, bTpe, true, analyze(bTpe.resultType)))
+                  case false => None
                 }
+              }
+            }
 
-                appliedType(d.tpe, dArgs)
+            def wireBaseFields(desc: UDTDescriptor): UDTDescriptor = {
+
+              def updateField(field: FieldAccessor) = {
+                baseFields find { bf => bf.sym.name == field.sym.name } match {
+                  case Some(FieldAccessor(_, _, _, desc)) => field.copy(isBaseField = true, desc = desc)
+                  case None                               => field
+                }
               }
 
-              analyze(dTpe)
+              desc match {
+                case desc @ BaseClassDescriptor(_, _, getters, subTypes) => desc.copy(getters = getters map updateField, subTypes = subTypes map wireBaseFields)
+                case desc @ CaseClassDescriptor(_, _, _, _, getters) => desc.copy(getters = getters map updateField)
+                case _ => desc
+              }
             }
 
-            val (subTypes, errors) = Util.partitionByType[UDTDescriptor, UnsupportedDescriptor](descendents)
-
-            errors match {
-              case _ :: _ => UnsupportedDescriptor(id, tpe, errors flatMap { case UnsupportedDescriptor(_, subType, errs) => errs map { err => "Subtype " + subType + " - " + err } })
-              case Nil    => BaseClassDescriptor(id, tpe, subTypes)
-            }
+            Debug.report("BaseClass " + tpe + " has shared fields: " + (baseFields.map { m => m.sym.name + ": " + m.tpe }))
+            BaseClassDescriptor(id, tpe, tagField +: baseFields, subTypes map wireBaseFields)
           }
         }
+
       }
 
       private def analyzeCaseClass(id: Int, tpe: Type): UDTDescriptor = {
@@ -112,15 +154,15 @@ trait UDTAnalysis { this: Pact4sGlobal =>
           case false => {
 
             val (tParams, tArgs) = tpe.typeConstructor.typeParams.zip(tpe.typeArgs).unzip
-            val getters = tpe.typeSymbol.caseFieldAccessors.map(f => (f, f.tpe.instantiateTypeParams(tParams, tArgs).asSeenFrom(tpe.prefix, f.owner.owner)))
+            val getters = tpe.typeSymbol.caseFieldAccessors map { f => (f, f.tpe.instantiateTypeParams(tParams, tArgs).asSeenFrom(tpe.prefix, f.owner.owner)) }
 
-            val fields = getters map { case (fSym, fTpe) => FieldAccessor(fSym, fTpe, analyze(fTpe.resultType)) }
+            val fields = getters map { case (fSym, fTpe) => FieldAccessor(fSym, fTpe, false, analyze(fTpe.resultType)) }
 
             fields filter { _.desc.isInstanceOf[UnsupportedDescriptor] } match {
 
               case errs @ _ :: _ => {
 
-                val msgs = errs flatMap { f => (f: @unchecked) match { case FieldAccessor(fSym, _, UnsupportedDescriptor(_, fTpe, errors)) => errors map { err => "Field " + fSym.name + ": " + fTpe + " - " + err } } }
+                val msgs = errs flatMap { f => (f: @unchecked) match { case FieldAccessor(fSym, _, _, UnsupportedDescriptor(_, fTpe, errors)) => errors map { err => "Field " + fSym.name + ": " + fTpe + " - " + err } } }
                 UnsupportedDescriptor(id, tpe, msgs)
               }
 
@@ -160,6 +202,11 @@ trait UDTAnalysis { this: Pact4sGlobal =>
 
       private object PrimitiveType {
 
+        def intPrimitive: (Type, Literal, Symbol) = {
+          val (d, w) = primitives(definitions.IntClass)
+          (definitions.IntClass.tpe, d, w)
+        }
+
         def unapply(tpe: Type): Option[(Literal, Symbol)] = primitives.get(tpe.typeSymbol)
       }
 
@@ -184,13 +231,15 @@ trait UDTAnalysis { this: Pact4sGlobal =>
 
       private object BaseClassType {
 
-        def unapply(tpe: Type): Boolean = tpe.typeSymbol.isClass
+        def unapply(tpe: Type): Boolean = tpe.typeSymbol.isAbstractClass && tpe.typeSymbol.isSealed
       }
 
       private class UDTAnalyzerCache {
 
         private val caches = new scala.util.DynamicVariable[Map[Type, RecursiveDescriptor]](Map())
         private val idGen = new Util.Counter()
+
+        def newId = idGen.next
 
         def getOrElseUpdate(tpe: Type)(orElse: Int => UDTDescriptor): UDTDescriptor = {
 

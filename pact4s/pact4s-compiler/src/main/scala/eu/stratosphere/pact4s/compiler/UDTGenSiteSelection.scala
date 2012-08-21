@@ -68,7 +68,7 @@ trait UDTGenSiteSelection { this: Pact4sGlobal =>
       private def collectInferences(desc: UDTDescriptor): Seq[Tree] = desc match {
         case OpaqueDescriptor(_, _, ref)              => Seq(ref)
         case ListDescriptor(_, _, _, _, _, elem)      => collectInferences(elem)
-        case BaseClassDescriptor(_, _, subTypes)      => subTypes flatMap { collectInferences(_) }
+        case BaseClassDescriptor(_, _, _, subTypes)   => subTypes flatMap { collectInferences(_) }
         case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { f => collectInferences(f.desc) }
         case _                                        => Seq()
       }

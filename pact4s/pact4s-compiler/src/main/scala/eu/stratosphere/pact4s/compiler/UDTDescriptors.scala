@@ -48,7 +48,7 @@ trait UDTDescriptors { this: Pact4sGlobal =>
     }
   }
 
-  case class BaseClassDescriptor(id: Int, tpe: Type, subTypes: Seq[UDTDescriptor]) extends UDTDescriptor {
+  case class BaseClassDescriptor(id: Int, tpe: Type, getters: Seq[FieldAccessor], subTypes: Seq[UDTDescriptor]) extends UDTDescriptor {
 
     override def flatten = this +: (subTypes flatMap { _.flatten })
   }
@@ -67,7 +67,7 @@ trait UDTDescriptors { this: Pact4sGlobal =>
     }
   }
 
-  case class FieldAccessor(sym: Symbol, tpe: Type, desc: UDTDescriptor)
+  case class FieldAccessor(sym: Symbol, tpe: Type, isBaseField: Boolean, desc: UDTDescriptor)
 
   case class OpaqueDescriptor(id: Int, tpe: Type, ref: Tree) extends UDTDescriptor {
 
@@ -86,3 +86,4 @@ trait UDTDescriptors { this: Pact4sGlobal =>
     override def flatten = Seq(this)
   }
 }
+

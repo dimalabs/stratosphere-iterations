@@ -41,9 +41,8 @@ abstract class Test extends PactProgram with TestGeneratedImplicits {
   val udtTestInst2 = new DataSource("", DelimetedDataSourceFormat({ s: String => (s, s, (s.toInt, s)) }))
   val udtTestInst3 = implicitly[analyzer.UDT[(Int, Int, (Int, String))]]
   val udtTestInst4 = implicitly[analyzer.UDT[(Int, Int, (Int, Option[Int]))]]
+  val udtTestInst5 = implicitly[analyzer.UDT[(String, (Int, Int, String))]]
   */
-
-  //val udtTestInst = implicitly[analyzer.UDT[(String, (Int, Int, String))]]
 
   abstract sealed class Foo
   case class Bar(x: Int, y: Long, z: Seq[Baz], zz: Baz) extends Foo
@@ -59,6 +58,16 @@ abstract class Test extends PactProgram with TestGeneratedImplicits {
 
   case class Test1(x1: Long, y1: Test1, z1: Test2)
   case class Test2(x2: Long, y2: Test1, z2: Test2)
+
+  abstract sealed class Base[+T] {
+    val v: T; val w: Base[T]; val x: Long = 0; val y: Option[Long]
+  }
+  case class Sub1[T](v: T, w: Base[T], override val x: Long, y: Option[Long]) extends Base[T]
+  case class Sub2[T](v: T, w: Sub1[T], y: Some[Long], z: Long) extends Base[T]
+  case class Sub3[T](v: T, w: Base[T], override val x: Long, y: Option[Long], z1: Base[T], z2: Seq[Base[T]], z3: List[Seq[Base[T]]]) extends Base[T]
+
+  val baseUdt1 = implicitly[UDT[Base[String]]]
+  val baseUdt2 = implicitly[UDT[Base[String]]]
 
   val testUdt1 = implicitly[UDT[Test1]]
   val testUdt2 = implicitly[UDT[Test1]]
@@ -86,6 +95,9 @@ abstract class Test extends PactProgram with TestGeneratedImplicits {
 }
 
 trait TestGeneratedImplicits { this: Test =>
+
+  val baseUdt3 = implicitly[UDT[Base[Long]]]
+  val baseUdt4 = implicitly[UDT[Base[Long]]]
 
   val testUdt = implicitly[UDT[Simple]]
   val fooUdt3 = implicitly[UDT[Foo]]

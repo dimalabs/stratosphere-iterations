@@ -65,7 +65,7 @@ abstract class UDTSerializer[T] extends Serializable {
 
 trait UDTLowPriorityImplicits {
 
-  class UDTAnalysisFailedException extends RuntimeException("UDT analysis failed. This should never happen.")
+  class UDTAnalysisFailedException extends RuntimeException("UDT analysis failed. This should have been caught at compile time.")
 
   implicit def unanalyzedUDT[T]: UDT[T] = throw new UDTAnalysisFailedException
 }
@@ -81,8 +81,8 @@ object UDT extends UDTLowPriorityImplicits {
   implicit val shortUdt = new ShortUDT
   //implicit val stringUdt = new StringUDT
 
-  //implicit def arrayUdt[T](implicit m: Manifest[T], udt: UDT[T]) = new ArrayUDT[T]
-  implicit def listUdt[T, L[T] <: GenTraversableOnce[T]](implicit udt: UDT[T], bf: CanBuildFrom[GenTraversableOnce[T], T, L[T]]) = new ListUDT[T, L]
+  //implicit def arrayUdt[T](implicit m: Manifest[T], udt: UDT[T]): UDT[Array[T]] = new ArrayUDT[T]
+  //implicit def listUdt[T, L[T] <: GenTraversableOnce[T]](implicit udt: UDT[T], bf: CanBuildFrom[GenTraversableOnce[T], T, L[T]]): UDT[L[T]] = new ListUDT[T, L]
 
   class PactListImpl[T <: PactValue] extends PactList[T]
 
