@@ -84,8 +84,6 @@ object UDT extends UDTLowPriorityImplicits {
   //implicit def arrayUdt[T](implicit m: Manifest[T], udt: UDT[T]): UDT[Array[T]] = new ArrayUDT[T]
   //implicit def listUdt[T, L[T] <: GenTraversableOnce[T]](implicit udt: UDT[T], bf: CanBuildFrom[GenTraversableOnce[T], T, L[T]]): UDT[L[T]] = new ListUDT[T, L]
 
-  class PactListImpl[T <: PactValue] extends PactList[T]
-
   import ProductFactories._
 
   /* REPL script to generate the implicits for Products: 

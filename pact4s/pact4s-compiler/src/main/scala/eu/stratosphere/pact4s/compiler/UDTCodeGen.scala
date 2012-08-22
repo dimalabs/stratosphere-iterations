@@ -225,7 +225,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
       private def mkUdtClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 
-        mkClass(owner, "UDTImpl", FINAL, List(definitions.ObjectClass.tpe, appliedType(udtClass.tpe, List(desc.tpe)), definitions.SerializableClass.tpe)) { classSym =>
+        mkClass(owner, unit.freshTypeName("UDTImpl"), FINAL, List(definitions.ObjectClass.tpe, appliedType(udtClass.tpe, List(desc.tpe)), definitions.SerializableClass.tpe)) { classSym =>
           mkFieldTypes(classSym, desc) :+ mkCreateSerializer(classSym, desc)
         }
       }
@@ -237,20 +237,17 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
           ExistentialType(List(exVar), appliedType(definitions.ClassClass.tpe, List(TypeRef(NoPrefix, exVar, Nil))))
         }
 
-        mkValAndGetter(udtClassSym, "fieldTypes", OVERRIDE | FINAL, definitions.arrayType(pactValueTpe)) { _ =>
+        val pactListTpe = {
+          val exVar = udtClassSym.newAbstractType(newTypeName("_$1")) setInfo TypeBounds.upper(pactValueClass.tpe)
+          ExistentialType(List(exVar), appliedType(pactListBaseClass.tpe, List(TypeRef(NoPrefix, exVar, Nil))))
+        }
 
-          def getListElemType(elem: UDTDescriptor): Type = elem match {
-            case elem: PrimitiveDescriptor           => elem.wrapper.tpe
-            case elem: BoxedPrimitiveDescriptor      => elem.wrapper.tpe
-            case ListDescriptor(_, _, _, _, _, elem) => appliedType(pactListClass.tpe, List(getListElemType(elem)))
-            // Box non-primitive list elements
-            case _                                   => pactRecordClass.tpe
-          }
+        mkValAndGetter(udtClassSym, "fieldTypes", OVERRIDE | FINAL, definitions.arrayType(pactValueTpe)) { _ =>
 
           def getFieldTypes(desc: UDTDescriptor): Seq[Tree] = desc match {
             case PrimitiveDescriptor(_, _, _, wrapper)            => Seq(gen.mkClassOf(wrapper.tpe))
             case BoxedPrimitiveDescriptor(_, _, _, wrapper, _, _) => Seq(gen.mkClassOf(wrapper.tpe))
-            case ListDescriptor(_, _, _, _, _, elem)              => Seq(gen.mkClassOf(appliedType(pactListClass.tpe, List(getListElemType(elem)))))
+            case ListDescriptor(_, _, _, _, _, elem)              => Seq(gen.mkClassOf(pactListTpe))
             // Flatten product types
             case CaseClassDescriptor(_, _, _, _, getters)         => getters filterNot { _.isBaseField } flatMap { f => getFieldTypes(f.desc) }
             // Tag and flatten summation types
@@ -293,16 +290,43 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
       private def mkUdtSerializerClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 
-        mkClass(owner, "UDTSerializerImpl", FINAL, List(appliedType(udtSerializerClass.tpe, List(desc.tpe)), definitions.SerializableClass.tpe)) { classSym =>
+        mkClass(owner, unit.freshTypeName("UDTSerializerImpl"), FINAL, List(appliedType(udtSerializerClass.tpe, List(desc.tpe)), definitions.SerializableClass.tpe)) { classSym =>
+
+          val listImpls = mkListImplClasses(classSym, desc)
+          val listImplTypes = listImpls map { case (id, classDef) => (id, classDef.symbol.tpe) }
+
           val indexMapIter = Select(Apply(Select(Select(Ident("scala"), "Predef"), "intArrayOps"), List(Ident("indexMap"))), "iterator")
           val (fields1, inits1) = mkIndexes(classSym, desc.id, getIndexFields(desc).toList, false, indexMapIter)
           val (fields2, inits2) = mkBoxedIndexes(classSym, desc)
+
+          val fields = fields1 ++ fields2
           val init = inits1 ++ inits2 match {
             case Nil   => Nil
             case inits => List(mkMethod(classSym, "init", OVERRIDE | FINAL, List(), definitions.UnitClass.tpe) { _ => Block(inits: _*) })
           }
-          fields1 ++ fields2 ++ mkPactWrappers(classSym, desc) ++ init ++ mkSerialize(classSym, desc) ++ mkDeserialize(classSym, desc)
+
+          listImpls.values.toList ++ fields ++ mkPactWrappers(classSym, desc, listImplTypes) ++ init ++ mkSerialize(classSym, desc, listImplTypes) ++ mkDeserialize(classSym, desc)
         }
+      }
+
+      private def mkListImplClasses(udtSerClassSym: Symbol, desc: UDTDescriptor): Map[Int, Tree] = {
+
+        def mkImplClass(id: Int, elemTpe: Type): (Int, Tree) = (id, mkClass(udtSerClassSym, mkTypeName("PactListImpl" + id), FINAL, List(appliedType(pactListBaseClass.tpe, List(elemTpe)))) { _ => Nil })
+
+        def mkImplClasses(desc: UDTDescriptor): Seq[(Int, Tree)] = desc match {
+          case ListDescriptor(id, _, _, _, _, elem: ListDescriptor) => {
+            val impls @ Seq((_, elemImpl), _*) = mkImplClasses(elem)
+            mkImplClass(id, elemImpl.symbol.tpe) +: impls
+          }
+          case ListDescriptor(id, _, _, _, _, elem: PrimitiveDescriptor) => Seq(mkImplClass(id, elem.wrapper.tpe))
+          case ListDescriptor(id, _, _, _, _, elem: BoxedPrimitiveDescriptor) => Seq(mkImplClass(id, elem.wrapper.tpe))
+          case ListDescriptor(id, _, _, _, _, elem) => mkImplClass(id, pactRecordClass.tpe) +: mkImplClasses(elem)
+          case BaseClassDescriptor(_, _, getters, subTypes) => (getters flatMap { f => mkImplClasses(f.desc) }) ++ (subTypes flatMap mkImplClasses)
+          case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { f => mkImplClasses(f.desc) }
+          case _ => Seq()
+        }
+
+        mkImplClasses(desc).toMap
       }
 
       def getIndexFields(desc: UDTDescriptor): Seq[UDTDescriptor] = desc match {
@@ -381,26 +405,18 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
         (fields.flatten, inits.flatten)
       }
 
-      def getListElemPactWrapperType(elem: UDTDescriptor): Type = elem match {
-        case elem: PrimitiveDescriptor           => elem.wrapper.tpe
-        case elem: BoxedPrimitiveDescriptor      => elem.wrapper.tpe
-        case ListDescriptor(_, _, _, _, _, elem) => appliedType(pactListClass.tpe, List(getListElemPactWrapperType(elem)))
-        // Box non-primitive list elements
-        case _                                   => pactRecordClass.tpe
-      }
-
       def getInnermostListElem(desc: ListDescriptor): UDTDescriptor = desc.elem match {
         case elem: ListDescriptor => getInnermostListElem(elem)
         case elem                 => elem
       }
 
-      private def mkPactWrappers(udtSerClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
+      private def mkPactWrappers(udtSerClassSym: Symbol, desc: UDTDescriptor, listImpls: Map[Int, Type]): List[Tree] = {
 
         def getFieldTypes(desc: UDTDescriptor): Seq[(Int, Type)] = desc match {
           case PrimitiveDescriptor(id, _, _, wrapper)            => Seq((id, wrapper.tpe))
           case BoxedPrimitiveDescriptor(id, _, _, wrapper, _, _) => Seq((id, wrapper.tpe))
           case d @ ListDescriptor(id, _, _, _, _, elem) => {
-            val listField = (id, appliedType(pactListClass.tpe, List(getListElemPactWrapperType(elem))))
+            val listField = (id, listImpls(id))
             val elemFields = getInnermostListElem(d) match {
               case elem: CaseClassDescriptor => getFieldTypes(elem)
               case elem: BaseClassDescriptor => getFieldTypes(elem)
@@ -430,22 +446,22 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
         }
       }
 
-      private def mkSerialize(udtSerClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
+      private def mkSerialize(udtSerClassSym: Symbol, desc: UDTDescriptor, listImpls: Map[Int, Type]): List[Tree] = {
 
         val root = mkMethod(udtSerClassSym, "serialize", OVERRIDE | FINAL, List(("item", desc.tpe), ("record", pactRecordClass.tpe)), definitions.UnitClass.tpe) { methodSym =>
-          Block(genSerialize(udtSerClassSym, methodSym, desc, "flat" + desc.id, false, Ident("item"), Ident("record"), true, true) toList, Literal(()))
+          Block(genSerialize(udtSerClassSym, methodSym, desc, listImpls, "flat" + desc.id, false, Ident("item"), Ident("record"), true, true) toList, Literal(()))
         }
 
         val aux = (desc.findByType[RecursiveDescriptor].toList flatMap { rd => desc.findById(rd.refId) } distinct) map { desc =>
           mkMethod(udtSerClassSym, "serialize" + desc.id, PRIVATE | FINAL, List(("item", desc.tpe), ("record", pactRecordClass.tpe)), definitions.UnitClass.tpe) { methodSym =>
-            Block(genSerialize(udtSerClassSym, methodSym, desc, "boxed" + desc.id, true, Ident("item"), Ident("record"), false, false) toList, Literal(()))
+            Block(genSerialize(udtSerClassSym, methodSym, desc, listImpls, "boxed" + desc.id, true, Ident("item"), Ident("record"), false, false) toList, Literal(()))
           }
         }
 
         root +: aux
       }
 
-      def genSerialize(udtSerClassSym: Symbol, methodSym: Symbol, desc: UDTDescriptor, idxPrefix: String, reentrant: Boolean, source: Tree, target: Tree, chkIndex: Boolean, chkNull: Boolean): Seq[Tree] = {
+      def genSerialize(udtSerClassSym: Symbol, methodSym: Symbol, desc: UDTDescriptor, listImpls: Map[Int, Type], idxPrefix: String, reentrant: Boolean, source: Tree, target: Tree, chkIndex: Boolean, chkNull: Boolean): Seq[Tree] = {
 
         def mkChkNotNull(source: Tree, tpe: Type, chkNull: Boolean): Tree = if (!tpe.isNotNull && chkNull) Apply(Select(source, "$bang$eq"), List(Literal(Constant(null)))) else EmptyTree
         def mkChkIdx(id: Int, chkIndex: Boolean): Tree = if (chkIndex) Apply(Select(Select(This(udtSerClassSym), idxPrefix + "Idx" + id), "$greater$eq"), List(Literal(0))) else EmptyTree
@@ -466,7 +482,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
               case BoxedPrimitiveDescriptor(_, _, _, wrapper, _, unbox) => (Seq(), New(TypeTree(wrapper.tpe), List(List(unbox(Ident(item.symbol))))))
 
               case elem @ ListDescriptor(id, _, _, _, _, innerElem) => {
-                val listTpe = appliedType(pactListClass.tpe, List(getListElemPactWrapperType(innerElem)))
+                val listTpe = listImpls(id)
                 val list = mkVal(methodSym, "list" + id, 0, false, listTpe) { _ => New(TypeTree(listTpe), List(List())) }
                 val body = genList(elem, Ident(item.symbol), Ident(list.symbol))
                 (list +: body, Ident(list.symbol))
@@ -482,7 +498,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
               case elem => {
                 val rec = mkVal(methodSym, "record", 0, false, pactRecordClass.tpe) { _ => New(TypeTree(pactRecordClass.tpe), List(List())) }
-                val ser = genSerialize(udtSerClassSym, methodSym, elem, "boxed" + elem.id, reentrant, Ident(item.symbol), Ident(rec.symbol), false, false)
+                val ser = genSerialize(udtSerClassSym, methodSym, elem, listImpls, "boxed" + elem.id, reentrant, Ident(item.symbol), Ident(rec.symbol), false, false)
                 val upd = Apply(Select(Ident(rec.symbol), "updateBinaryRepresenation"), List())
                 ((rec +: ser) :+ upd, Ident(rec.symbol))
               }
@@ -529,7 +545,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
               // TODO (Joe): Optimize this to reuse list wrappers when it's safe to do so
               case true => {
-                val listTpe = appliedType(pactListClass.tpe, List(getListElemPactWrapperType(elem)))
+                val listTpe = listImpls(id)
                 val list = mkVal(methodSym, "list" + id, 0, false, listTpe) { _ => New(TypeTree(listTpe), List(List())) }
                 val body = genList(d, source, Ident(list.symbol))
                 val set = mkSetField(id, Ident(list.symbol), target)
@@ -549,18 +565,18 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
           case CaseClassDescriptor(_, tpe, _, _, getters) => {
             val chk = mkChkNotNull(source, tpe, chkNull)
-            val stats = getters filterNot { _.isBaseField } flatMap { case FieldAccessor(sym, _, _, desc) => genSerialize(udtSerClassSym, methodSym, desc, idxPrefix, reentrant, Select(source, sym), target, chkIndex, true) }
+            val stats = getters filterNot { _.isBaseField } flatMap { case FieldAccessor(sym, _, _, desc) => genSerialize(udtSerClassSym, methodSym, desc, listImpls, idxPrefix, reentrant, Select(source, sym), target, chkIndex, true) }
 
             mkIf(chk, stats: _*)
           }
 
           case BaseClassDescriptor(id, tpe, Seq(tagField, baseFields @ _*), subTypes) => {
             val chk = mkChkNotNull(source, tpe, chkNull)
-            val fields = baseFields flatMap { f => genSerialize(udtSerClassSym, methodSym, f.desc, idxPrefix, reentrant, Select(source, f.sym), target, chkIndex, true) }
+            val fields = baseFields flatMap { f => genSerialize(udtSerClassSym, methodSym, f.desc, listImpls, idxPrefix, reentrant, Select(source, f.sym), target, chkIndex, true) }
             val cases = subTypes.zipWithIndex.toList map {
               case (dSubType, i) => {
-                val tag = genSerialize(udtSerClassSym, methodSym, tagField.desc, idxPrefix, reentrant, Literal(i), target, chkIndex, false)
-                val code = genSerialize(udtSerClassSym, methodSym, dSubType, idxPrefix, reentrant, Ident("inst"), target, chkIndex, false)
+                val tag = genSerialize(udtSerClassSym, methodSym, tagField.desc, listImpls, idxPrefix, reentrant, Literal(i), target, chkIndex, false)
+                val code = genSerialize(udtSerClassSym, methodSym, dSubType, listImpls, idxPrefix, reentrant, Ident("inst"), target, chkIndex, false)
                 val body = (tag ++ code) :+ Literal(())
 
                 val pat = Bind("inst", Typed(Ident("_"), TypeTree(dSubType.tpe)))
@@ -710,13 +726,13 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
         DefDef(methodSym, Modifiers(flags | SYNTHETIC), List(valParams), impl(methodSym))
       }
 
-      private def mkClass(owner: Symbol, name: String, flags: Long, parents: List[Type])(members: Symbol => List[Tree]): Tree = {
+      private def mkClass(owner: Symbol, name: TypeName, flags: Long, parents: List[Type])(members: Symbol => List[Tree]): Tree = {
 
         val classSym = {
           if (name == null)
             owner newAnonymousClass owner.pos
           else
-            owner newClass (owner.pos, unit.freshTypeName(name))
+            owner newClass (owner.pos, name)
         }
 
         classSym setFlag (flags | SYNTHETIC)

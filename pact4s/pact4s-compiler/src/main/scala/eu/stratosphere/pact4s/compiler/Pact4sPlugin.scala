@@ -72,7 +72,7 @@ trait Pact4sGlobal extends TypingTransformers with Traversers with UDTDescriptor
   lazy val udtSerializerClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDTSerializer")
   lazy val pactRecordClass = definitions.getClass("eu.stratosphere.pact.common.type.PactRecord")
   lazy val pactValueClass = definitions.getClass("eu.stratosphere.pact.common.type.Value")
-  lazy val pactListClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDT.PactListImpl")
+  lazy val pactListBaseClass = definitions.getClass("eu.stratosphere.pact.common.type.base.PactList")
   lazy val pactIntegerClass = definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")
 }
 

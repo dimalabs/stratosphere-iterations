@@ -50,7 +50,7 @@ trait UDTDescriptors { this: Pact4sGlobal =>
 
   case class BaseClassDescriptor(id: Int, tpe: Type, getters: Seq[FieldAccessor], subTypes: Seq[UDTDescriptor]) extends UDTDescriptor {
 
-    override def flatten = this +: (subTypes flatMap { _.flatten })
+    override def flatten = this +: ((getters flatMap { _.desc.flatten }) ++ (subTypes flatMap { _.flatten }))
   }
 
   case class CaseClassDescriptor(id: Int, tpe: Type, ctor: Symbol, ctorTpe: Type, getters: Seq[FieldAccessor]) extends UDTDescriptor {
