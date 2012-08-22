@@ -292,8 +292,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
         mkClass(owner, unit.freshTypeName("UDTSerializerImpl"), FINAL, List(appliedType(udtSerializerClass.tpe, List(desc.tpe)), definitions.SerializableClass.tpe)) { classSym =>
 
-          val listImpls = mkListImplClasses(classSym, desc)
-          val listImplTypes = listImpls map { case (id, classDef) => (id, classDef.symbol.tpe) }
+          val (listImpls, listImplTypes) = mkListImplClasses(classSym, desc)
 
           val indexMapIter = Select(Apply(Select(Select(Ident("scala"), "Predef"), "intArrayOps"), List(Ident("indexMap"))), "iterator")
           val (fields1, inits1) = mkIndexes(classSym, desc.id, getIndexFields(desc).toList, false, indexMapIter)
@@ -305,28 +304,47 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
             case inits => List(mkMethod(classSym, "init", OVERRIDE | FINAL, List(), definitions.UnitClass.tpe) { _ => Block(inits: _*) })
           }
 
-          listImpls.values.toList ++ fields ++ mkPactWrappers(classSym, desc, listImplTypes) ++ init ++ mkSerialize(classSym, desc, listImplTypes) ++ mkDeserialize(classSym, desc)
+          listImpls ++ fields ++ mkPactWrappers(classSym, desc, listImplTypes) ++ init ++ mkSerialize(classSym, desc, listImplTypes) ++ mkDeserialize(classSym, desc)
         }
       }
 
-      private def mkListImplClasses(udtSerClassSym: Symbol, desc: UDTDescriptor): Map[Int, Tree] = {
+      private def mkListImplClasses(udtSerClassSym: Symbol, desc: UDTDescriptor): (List[Tree], Map[Int, Type]) = {
 
-        def mkImplClass(id: Int, elemTpe: Type): (Int, Tree) = (id, mkClass(udtSerClassSym, mkTypeName("PactListImpl" + id), FINAL, List(appliedType(pactListBaseClass.tpe, List(elemTpe)))) { _ => Nil })
+        def mkListImplClass(elemTpe: Type): Tree = mkClass(udtSerClassSym, unit.freshTypeName("PactListImpl"), FINAL, List(appliedType(pactListBaseClass.tpe, List(elemTpe)))) { _ => Nil }
 
-        def mkImplClasses(desc: UDTDescriptor): Seq[(Int, Tree)] = desc match {
+        def getListTypes(desc: UDTDescriptor): Seq[(Int, Int, Type)] = desc match {
           case ListDescriptor(id, _, _, _, _, elem: ListDescriptor) => {
-            val impls @ Seq((_, elemImpl), _*) = mkImplClasses(elem)
-            mkImplClass(id, elemImpl.symbol.tpe) +: impls
+            val impls @ Seq((_, depth, primTpe), _*) = getListTypes(elem)
+            (id, depth + 1, primTpe) +: impls
           }
-          case ListDescriptor(id, _, _, _, _, elem: PrimitiveDescriptor) => Seq(mkImplClass(id, elem.wrapper.tpe))
-          case ListDescriptor(id, _, _, _, _, elem: BoxedPrimitiveDescriptor) => Seq(mkImplClass(id, elem.wrapper.tpe))
-          case ListDescriptor(id, _, _, _, _, elem) => mkImplClass(id, pactRecordClass.tpe) +: mkImplClasses(elem)
-          case BaseClassDescriptor(_, _, getters, subTypes) => (getters flatMap { f => mkImplClasses(f.desc) }) ++ (subTypes flatMap mkImplClasses)
-          case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { f => mkImplClasses(f.desc) }
+          case ListDescriptor(id, _, _, _, _, elem: PrimitiveDescriptor) => Seq((id, 1, elem.wrapper.tpe))
+          case ListDescriptor(id, _, _, _, _, elem: BoxedPrimitiveDescriptor) => Seq((id, 1, elem.wrapper.tpe))
+          case ListDescriptor(id, _, _, _, _, elem) => (id, 1, pactRecordClass.tpe) +: getListTypes(elem)
+          case BaseClassDescriptor(_, _, getters, subTypes) => (getters flatMap { f => getListTypes(f.desc) }) ++ (subTypes flatMap getListTypes)
+          case CaseClassDescriptor(_, _, _, _, getters) => getters flatMap { f => getListTypes(f.desc) }
           case _ => Seq()
         }
 
-        mkImplClasses(desc).toMap
+        val lists = (getListTypes(desc) groupBy { case (_, _, elemTpe) => elemTpe } toList) map {
+          case (elemTpe, listTypes) => {
+
+            val byDepth = listTypes groupBy { case (_, depth, _) => depth } mapValues { _.map { _._1 } }
+            val (_, flatListIds :: nestedListIds) = byDepth.toList sortBy { case (depth, _) => depth } unzip
+
+            val initImpl = mkListImplClass(elemTpe)
+            val initMap = flatListIds map { _ -> initImpl.symbol.tpe }
+
+            nestedListIds.foldLeft((List(initImpl), initMap)) { (result, listIds) =>
+              val (impls, m) = result
+              val listTpe = impls.head.symbol.tpe
+              val impl = mkListImplClass(listTpe)
+              (impl :: impls, m ++ (listIds map { _ -> impl.symbol.tpe }))
+            }
+          }
+        }
+
+        val (listImpls, listTypes) = lists.unzip
+        (listImpls.flatten, listTypes.flatten.toMap)
       }
 
       def getIndexFields(desc: UDTDescriptor): Seq[UDTDescriptor] = desc match {

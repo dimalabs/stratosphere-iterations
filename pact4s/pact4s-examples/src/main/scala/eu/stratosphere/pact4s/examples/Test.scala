@@ -64,7 +64,7 @@ abstract class Test extends PactProgram with TestGeneratedImplicits {
   }
   case class Sub1[T](v: T, w: Base[T], override val x: Long, y: Option[Long]) extends Base[T]
   case class Sub2[T](v: T, w: Sub1[T], y: Some[Long], z: Long) extends Base[T]
-  case class Sub3[T](v: T, w: Base[T], override val x: Long, y: Option[Long], z1: Base[T], z2: Seq[Base[T]], z3: List[Seq[Base[T]]]) extends Base[T]
+  case class Sub3[T](v: T, w: Base[T], override val x: Long, y: Option[Long], z1: Base[T], z2: Seq[Base[T]], z3: List[Seq[Base[T]]], z4: Array[List[Seq[Base[T]]]]) extends Base[T]
 
   val baseUdt1 = implicitly[UDT[Base[String]]]
   val baseUdt2 = implicitly[UDT[Base[String]]]
