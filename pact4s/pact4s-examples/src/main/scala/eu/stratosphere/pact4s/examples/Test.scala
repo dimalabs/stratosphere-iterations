@@ -26,9 +26,23 @@ import eu.stratosphere.pact.common.`type`.base._
 
 import scala.collection.JavaConversions._
 
-abstract class Test extends PactProgram with TestGeneratedImplicits {
+class BlockTest {
 
-  /*
+  val udt = {
+    val x: Int = 0
+    implicitly[UDT[Short]]
+  }
+
+  def testDef(x: Int) = {
+    val y = x
+    implicitly[UDT[Option[Long]]]
+  }
+
+  println {
+    val x: Int = 0
+    implicitly[UDT[Long]]
+  }
+
   val udtTestInst1 = {
     val x = implicitly[analyzer.UDT[(Int, Int, (String, Array[Int]))]]
     val y = new DataSource("", DelimetedDataSourceFormat({ s: String => (s, s, (s.toInt, s)) }))
@@ -39,10 +53,14 @@ abstract class Test extends PactProgram with TestGeneratedImplicits {
   }
 
   val udtTestInst2 = new DataSource("", DelimetedDataSourceFormat({ s: String => (s, s, (s.toInt, s)) }))
+  /*
   val udtTestInst3 = implicitly[analyzer.UDT[(Int, Int, (Int, String))]]
   val udtTestInst4 = implicitly[analyzer.UDT[(Int, Int, (Int, Option[Int]))]]
   val udtTestInst5 = implicitly[analyzer.UDT[(String, (Int, Int, String))]]
   */
+}
+
+abstract class Test extends PactProgram with TestGeneratedImplicits {
 
   abstract sealed class Foo
   case class Bar(x: Int, y: Long, z: Seq[Baz], zz: Baz) extends Foo

@@ -48,22 +48,26 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
           tree match {
 
-            // HACK: Blocks are naked (no symbol), so there's no scope in which to insert new implicits. 
-            //       Wrap the block in an anonymous class, process the tree, then unpack the result.
-            case block @ Block(stats, ret) if genSites(tree).nonEmpty => {
+            // Generate UDT classes and inject them into the AST
+            case Block(stats, ret) if genSites(tree).nonEmpty => {
 
-              val (wrappedBlock, wrapper) = mkBlockWrapper(currentOwner, block)
-              val result = super.transform(localTyper.typed { wrappedBlock })
+              atOwner(tree, currentOwner) {
+                super.transform {
 
-              detectWrapperArtifacts(wrapper) {
-                localTyper.typed { unwrapBlock(currentOwner, wrapper, result) }
+                  verbosely[Tree] { tree => "GenSite Block[" + tree.pos.line + ":" + tree.pos.column + "] defines: " + localTyper.context.implicitss.flatten.filter(_.sym.owner == currentOwner).map(m => m.name.toString + ": " + m.tpe.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ") } {
+
+                    val udtInstances = genSites(tree).toList flatMap { mkUdtInst(currentOwner, _) }
+                    val newBlock @ Block(newStats, _) = localTyper.typed { treeCopy.Block(tree, udtInstances ++ stats, ret) }
+
+                    // Blocks are naked (no symbol), so they don't maintain a scope.
+                    // Enter the new implicits directly into the typer's scope instead.
+                    localTyper.context.scope = localTyper.context.scope.cloneScope
+                    newStats filter { stat => stat.hasSymbol && stat.symbol.isImplicit && stat.symbol.owner == currentOwner } map { _.symbol } foreach { localTyper.context.scope.enter }
+
+                    newBlock
+                  }
+                }
               }
-
-              /*
-              val classSym = localTyper.context.enclClass.owner
-              val udtInstances = genSites(tree).toList flatMap { mkUdtInst(classSym, _) }
-              localTyper.typed { treeCopy.Block(tree, udtInstances ++ stats, ret) }
-              */
             }
 
             // Generate UDT classes and inject them into the AST
@@ -71,10 +75,8 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
               super.transform {
 
-                val udtInstances = genSites(tree).toList flatMap { mkUdtInst(tree.symbol, _) }
-                //log(Debug) { "GenSite " + tree.symbol + " defines:   " + tree.symbol.tpe.members.filter(_.isImplicit).map(m => m.name.toString + ": " + m.tpe.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ") }
-
                 verbosely[Tree] { tree => "GenSite " + tree.symbol + " defines: " + tree.symbol.tpe.members.filter(_.isImplicit).map(m => m.name.toString + ": " + m.tpe.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ") } {
+                  val udtInstances = genSites(tree).toList flatMap { mkUdtInst(tree.symbol, _) }
                   localTyper.typed { treeCopy.ClassDef(tree, mods, name, tparams, treeCopy.Template(template, parents, self, udtInstances ::: body)) }
                 }
               }
@@ -92,7 +94,9 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
                   udtInst.tree match {
                     case t if t.isEmpty || t.symbol == unanalyzedUdt => {
-                      log(Error) { "Failed to apply " + udtTpe + ". Available UDTs: " + localTyper.context.implicitss.flatten.map(m => m.name.toString + ": " + m.tpe.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ") }
+                      val availUdts = localTyper.context.implicitss.flatten.map(m => m.name.toString + ": " + m.tpe.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ")
+                      val implicitCount = localTyper.context.implicitss.flatten.length
+                      log(Error) { "Failed to apply " + udtTpe + ". Total Implicits: " + implicitCount + ". Available UDTs: " + availUdts }
                       tree
                     }
                     case udtInst => {
@@ -109,99 +113,15 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
         }
       }
 
-      private def mkBlockWrapper(owner: Symbol, site: Block): (Tree, Symbol) = {
-
-        safely[(Tree, Symbol)](site: Tree, NoSymbol) { e => "Error generating BlockWrapper in " + owner + ": " + e.getMessage() + " @ " + getRelevantStackLine(e) } {
-
-          val wrapper = this.mkClass(owner, null, FINAL, List(definitions.ObjectClass.tpe)) { classSym =>
-
-            List(mkMethod(classSym, "result", FINAL, Nil, site.expr.tpe) { _ =>
-
-              applyTransformation(site) { tree =>
-                if (tree.hasSymbol && tree.symbol.owner == owner)
-                  tree.symbol.owner = classSym
-                tree
-              }
-            })
-          }
-
-          val wrappedBlock = Select(Block(wrapper, New(TypeTree(wrapper.symbol.tpe), List(List()))), "result")
-          genSites(wrapper) ++= genSites(site)
-          genSites.remove(site)
-
-          (wrappedBlock, wrapper.symbol)
-        }
-      }
-
-      private def unwrapBlock(owner: Symbol, wrapper: Symbol, tree: Tree): Tree = {
-
-        safely(tree) { e => "Error unwrapping BlockWrapper in " + owner + ": " + e.getMessage() + " @ " + getRelevantStackLine(e) } {
-
-          val Select(Block(List(cd: ClassDef), _), _) = tree
-          val ClassDef(_, _, _, Template(_, _, body)) = cd
-          val Some(DefDef(_, _, _, _, _, rhs: Block)) = body find { item => item.hasSymbol && item.symbol.name.toString == "result" }
-
-          val newImplicits = body filter { m => m.hasSymbol && m.symbol.isImplicit }
-          val newSyms = newImplicits map { _.symbol } toSet
-
-          val rewiredRhs = applyTransformation(rhs) {
-            _ match {
-              case sel: Select if sel.hasSymbol && newSyms.contains(sel.symbol) => mkIdent(sel.symbol)
-              case tree => {
-                if (tree.hasSymbol && tree.symbol.owner == wrapper)
-                  tree.symbol.owner = owner
-                tree
-              }
-            }
-          }
-
-          val rewiredImplicits = newImplicits map { imp =>
-            val sym = imp.symbol
-            val ValDef(_, _, _, rhs) = imp
-
-            sym.owner = owner
-            sym.resetFlag(PRIVATE)
-
-            ValDef(sym, rhs) setType sym.tpe
-          }
-
-          val Block(stats, expr) = rewiredRhs
-          treeCopy.Block(rewiredRhs, rewiredImplicits ::: stats, expr)
-        }
-      }
-
-      // Sanity check - make sure we've properly cleaned up after ourselves
-      private def detectWrapperArtifacts(wrapper: Symbol)(tree: Tree): Tree = {
-
-        val detected = new ManualSwitch[Tree]
-
-        visually(detected) {
-          applyTransformation(tree) { tree =>
-
-            detected |= (tree.hasSymbol && tree.symbol.hasTransOwner(wrapper))
-
-            if (tree.tpe == null) {
-              log(Error) { "Unwrapped tree has no type [" + tree.shortClass + "]: " + tree }
-            } else {
-              detected |= (tree.tpe filter { tpe => tpe.typeSymbol.hasTransOwner(wrapper) || tpe.termSymbol.hasTransOwner(wrapper) }).nonEmpty
-            }
-
-            if (detected.state)
-              log(Error) { "Wrapper artifact detected [" + tree.shortClass + "]: " + tree }
-
-            tree
-          }
-        }
-      }
-
       private def mkUdtInst(owner: Symbol, desc: UDTDescriptor): List[Tree] = {
 
         safely(Nil: List[Tree]) { e => "Error generating UDT[" + desc.tpe + "]: " + e.getMessage() + " @ " + getRelevantStackLine(e) } {
           verbosely[List[Tree]] { case l => { val List(_, t) = l; "Generated " + t.symbol.fullName + "[" + desc.tpe + "] @ " + owner + " : " + t } } {
 
             val udtTpe = appliedType(udtClass.tpe, List(desc.tpe))
+            val privateFlag = if (owner.isClass) PRIVATE else 0
 
-            val List(valDef, defDef) = mkVarAndLazyGetter(owner, unit.freshTermName("udtInst(") + ")", PRIVATE | IMPLICIT, udtTpe) { defSym =>
+            val List(valDef, defDef) = mkVarAndLazyGetter(owner, unit.freshTermName("udtInst(") + ")", privateFlag | IMPLICIT, udtTpe) { defSym =>
 
               val udtClassDef = mkUdtClass(defSym, desc)
               val udtInst = New(TypeTree(udtClassDef.symbol.tpe), List(List()))
@@ -209,8 +129,10 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
               Block(udtClassDef, udtInst)
             }
 
-            owner.info.decls enter valDef.symbol
-            owner.info.decls enter defDef.symbol
+            if (owner.isClass) {
+              owner.info.decls enter valDef.symbol
+              owner.info.decls enter defDef.symbol
+            }
 
             // Why is the UnCurry phase unhappy if we don't run the typer here?
             // We're already running it for the enclosing ClassDef...
@@ -667,7 +589,10 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
         val valDef = mkVal(owner, name + " ", PRIVATE, false, valTpe) { value }
 
         val defDef = mkMethod(owner, name, flags | ACCESSOR, Nil, valTpe) { _ =>
-          Select(This(owner), name + " ")
+          if (owner.isClass)
+            Select(This(owner), name + " ")
+          else
+            Ident(valDef.symbol)
         }
 
         List(valDef, defDef)
@@ -675,14 +600,21 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
       private def mkVarAndLazyGetter(owner: Symbol, name: String, flags: Long, valTpe: Type)(value: Symbol => Tree): List[Tree] = {
 
-        val varDef = mkVar(owner, name + " ", PRIVATE, false, valTpe) { _ => Literal(Constant(null)) }
+        val privateFlag = if (owner.isClass) PRIVATE else 0
+        val varDef = mkVar(owner, name + " ", privateFlag, false, valTpe) { _ => Literal(Constant(null)) }
 
-        val defDef = mkMethod(owner, name, flags | ACCESSOR, Nil, valTpe) { defSym =>
+        val defDef = mkMethod(owner, name, privateFlag | flags | ACCESSOR, Nil, valTpe) { defSym =>
 
-          val chk = Apply(Select(Select(This(owner), name + " "), "$eq$eq"), List(Literal(Constant(null))))
-          val init = Assign(Select(This(owner), name + " "), value(defSym))
-          val ret = Select(This(owner), name + " ")
-          Block(If(chk, init, EmptyTree), ret)
+          def selVar = {
+            if (owner.isClass)
+              Select(This(owner), name + " ")
+            else
+              Ident(varDef.symbol)
+          }
+
+          val chk = Apply(Select(selVar, "$eq$eq"), List(Literal(Constant(null))))
+          val init = Assign(selVar, value(defSym))
+          Block(If(chk, init, EmptyTree), selVar)
         }
 
         List(varDef, defDef)
@@ -763,14 +695,6 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
       }
 
       private def mkThrow(msg: String) = Throw(New(TypeTree(definitions.getClass("java.lang.RuntimeException").tpe), List(List(Literal(msg)))))
-
-      private def applyTransformation(tree: Tree)(trans: Tree => Tree): Tree = {
-        val transformer = new Transformer {
-          override def transform(tree: Tree): Tree = super.transform(trans(tree))
-        }
-
-        transformer.transform(tree)
-      }
 
       private def getRelevantStackLine(e: Throwable): String = {
         val lines = e.getStackTrace.map(_.toString)
