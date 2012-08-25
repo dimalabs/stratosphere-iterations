@@ -26,11 +26,15 @@ trait Logger {
   val global: Global
   import global._
 
-  private var counter = 0;
+  val logger = new {
+    var messageTag: String = ""
+    var currentLevel: Severity = Debug
+    var currentPosition: Position = NoPosition
+  }
 
-  var messageTag: String = ""
-  var currentLevel: Severity = Debug
-  var currentPosition: Position = NoPosition
+  import logger._
+
+  private val counter = new Counter
 
   abstract sealed class Severity {
     protected val toInt: Int
@@ -39,10 +43,8 @@ trait Logger {
     def isEnabled = currentLevel.toInt >= this.toInt
 
     def report(msg: String, pos: Position = currentPosition) = {
-      if (isEnabled) {
-        reportInner(pos, "%03d".format(counter) + "#" + messageTag + " - " + msg)
-        counter += 1
-      }
+      if (isEnabled)
+        reportInner(pos, "%04d".format(counter.next) + "#" + messageTag + " - " + msg)
     }
 
     def browse(tree: Tree): Tree = {
@@ -68,6 +70,13 @@ trait Logger {
   }
 
   def log(severity: Severity, pos: Position = currentPosition)(msg: String) = severity.report(msg, pos)
+
+  def getMsgAndStackLine(e: Throwable) = {
+    val lines = e.getStackTrace.map(_.toString)
+    val relevant = lines filter { _.contains("eu.stratosphere") }
+    val stackLine = relevant.headOption getOrElse e.getStackTrace.toString
+    e.getMessage() + " @ " + stackLine
+  }
 
   def safely[T](default: => T)(onError: Throwable => String)(block: => T): T = {
     try {

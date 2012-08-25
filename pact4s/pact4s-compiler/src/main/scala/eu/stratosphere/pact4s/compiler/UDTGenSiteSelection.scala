@@ -35,7 +35,8 @@ trait UDTGenSiteSelection { this: Pact4sGlobal =>
 
     override def newTransformer(unit: CompilationUnit) = new TypingTraverser(unit) with UDTAnalyzer {
 
-      UDTGenSiteSelection.this.messageTag = "UDTSite"
+      logger.messageTag = "UDTSite"
+
       private val genSites = UDTGenSiteSelector.this.genSites(unit)
       private val genSitePaths = new MutableMultiMap[UDTDescriptor, Seq[Tree]]()
 
@@ -47,11 +48,11 @@ trait UDTGenSiteSelection { this: Pact4sGlobal =>
 
       override def traverse(tree: Tree) = {
 
-        currentPosition = tree.pos
+        logger.currentPosition = tree.pos
 
         tree match {
 
-          case TypeApply(s: Select, List(t)) if s.symbol == unanalyzedUdt => {
+          case TypeApply(s: Select, List(t)) if s.symbol == defs.unanalyzedUdt => {
 
             getUDTDescriptor(t.tpe, tree) match {
               case UnsupportedDescriptor(_, _, errs) => errs foreach { err => log(Error) { "Could not generate UDT[" + t.tpe + "]: " + err } }

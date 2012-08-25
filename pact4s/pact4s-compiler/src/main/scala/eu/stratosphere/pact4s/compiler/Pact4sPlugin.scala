@@ -60,19 +60,17 @@ class Pact4sPlugin(val global: Global) extends Plugin with Pact4sGlobal {
   override val components = List[PluginComponent](udtGenSiteSelector, udtCodeGen)
 }
 
-trait Pact4sGlobal extends TypingTransformers with Traversers with UDTDescriptors with UDTAnalysis with UDTGenSiteSelection with UDTCodeGeneration with Logger {
+trait Pact4sGlobal extends Object
+  with TypingTransformers
+  with Traversers
+  with UDTDescriptors
+  with UDTAnalysis
+  with UDTGenSiteSelection
+  with UDTCodeGeneration
+  with TreeGen
+  with Logger {
 
   val global: Global
   type ThisGlobal = Pact4sGlobal.this.global.type
-
-  import global._
-
-  lazy val unanalyzedUdt = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.UDT"), "unanalyzedUDT")
-  lazy val udtClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDT")
-  lazy val udtSerializerClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDTSerializer")
-  lazy val pactRecordClass = definitions.getClass("eu.stratosphere.pact.common.type.PactRecord")
-  lazy val pactValueClass = definitions.getClass("eu.stratosphere.pact.common.type.Value")
-  lazy val pactListBaseClass = definitions.getClass("eu.stratosphere.pact.common.type.base.PactList")
-  lazy val pactIntegerClass = definitions.getClass("eu.stratosphere.pact.common.type.base.PactInteger")
 }
 

@@ -26,6 +26,7 @@ import eu.stratosphere.pact4s.compiler.util._
 trait UDTCodeGeneration { this: Pact4sGlobal =>
 
   import global._
+  import defs._
 
   trait UDTCodeGenerator extends PluginComponent with Transform {
 
@@ -36,13 +37,17 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
     override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) {
 
-      UDTCodeGeneration.this.messageTag = "UDTCode"
+      logger.messageTag = "UDTCode"
+
       private val genSites = UDTCodeGenerator.this.genSites(unit)
       private val unitRoot = new EagerAutoSwitch[Tree] { override def guard = unit.toString.contains("Test.scala") }
 
+      private val genHelper = new TreeGenHelper(unit)
+      import genHelper._
+
       override def transform(tree: Tree): Tree = {
 
-        currentPosition = tree.pos
+        logger.currentPosition = tree.pos
 
         visually(unitRoot) {
 
@@ -87,16 +92,15 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
               super.transform {
 
-                safely(tree) { e => "Error applying UDT[" + t.tpe + "]: " + e.getMessage() + " @ " + getRelevantStackLine(e) } {
+                safely(tree) { e => "Error applying UDT[" + t.tpe + "]: " + getMsgAndStackLine(e) } {
 
-                  val udtTpe = appliedType(udtClass.tpe, List(t.tpe))
-                  val udtInst = analyzer.inferImplicit(tree, udtTpe, true, false, localTyper.context)
+                  val udtInst = analyzer.inferImplicit(tree, mkUdtOf(t.tpe), true, false, localTyper.context)
 
                   udtInst.tree match {
                     case t if t.isEmpty || t.symbol == unanalyzedUdt => {
                       val availUdts = localTyper.context.implicitss.flatten.map(m => m.name.toString + ": " + m.tpe.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ")
                       val implicitCount = localTyper.context.implicitss.flatten.length
-                      log(Error) { "Failed to apply " + udtTpe + ". Total Implicits: " + implicitCount + ". Available UDTs: " + availUdts }
+                      log(Error) { "Failed to apply " + mkUdtOf(t.tpe) + ". Total Implicits: " + implicitCount + ". Available UDTs: " + availUdts }
                       tree
                     }
                     case udtInst => {
@@ -115,13 +119,12 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
       private def mkUdtInst(owner: Symbol, desc: UDTDescriptor): List[Tree] = {
 
-        safely(Nil: List[Tree]) { e => "Error generating UDT[" + desc.tpe + "]: " + e.getMessage() + " @ " + getRelevantStackLine(e) } {
+        safely(Nil: List[Tree]) { e => "Error generating UDT[" + desc.tpe + "]: " + getMsgAndStackLine(e) } {
           verbosely[List[Tree]] { case l => { val List(_, t) = l; "Generated " + t.symbol.fullName + "[" + desc.tpe + "] @ " + owner + " : " + t } } {
 
-            val udtTpe = appliedType(udtClass.tpe, List(desc.tpe))
             val privateFlag = if (owner.isClass) PRIVATE else 0
 
-            val List(valDef, defDef) = mkVarAndLazyGetter(owner, unit.freshTermName("udtInst(") + ")", privateFlag | IMPLICIT, udtTpe) { defSym =>
+            val List(valDef, defDef) = mkVarAndLazyGetter(owner, unit.freshTermName("udtInst(") + ")", privateFlag | IMPLICIT, mkUdtOf(desc.tpe)) { defSym =>
 
               val udtClassDef = mkUdtClass(defSym, desc)
               val udtInst = New(TypeTree(udtClassDef.symbol.tpe), List(List()))
@@ -147,29 +150,22 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
       private def mkUdtClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 
-        mkClass(owner, unit.freshTypeName("UDTImpl"), FINAL, List(definitions.ObjectClass.tpe, appliedType(udtClass.tpe, List(desc.tpe)), definitions.SerializableClass.tpe)) { classSym =>
+        mkClass(owner, unit.freshTypeName("UDTImpl"), FINAL, List(definitions.ObjectClass.tpe, mkUdtOf(desc.tpe), definitions.SerializableClass.tpe)) { classSym =>
           mkFieldTypes(classSym, desc) :+ mkCreateSerializer(classSym, desc)
         }
       }
 
       private def mkFieldTypes(udtClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
 
-        val pactValueTpe = {
-          val exVar = udtClassSym.newAbstractType(newTypeName("_$1")) setInfo TypeBounds.upper(pactValueClass.tpe)
-          ExistentialType(List(exVar), appliedType(definitions.ClassClass.tpe, List(TypeRef(NoPrefix, exVar, Nil))))
-        }
-
-        val pactListTpe = {
-          val exVar = udtClassSym.newAbstractType(newTypeName("_$1")) setInfo TypeBounds.upper(pactValueClass.tpe)
-          ExistentialType(List(exVar), appliedType(pactListBaseClass.tpe, List(TypeRef(NoPrefix, exVar, Nil))))
-        }
+        val pactValueTpe = mkExistentialType(udtClassSym, definitions.ClassClass.tpe, pactValueClass.tpe)
+        val pactListTpe = mkExistentialType(udtClassSym, pactListBaseClass.tpe, pactValueClass.tpe)
 
         mkValAndGetter(udtClassSym, "fieldTypes", OVERRIDE | FINAL, definitions.arrayType(pactValueTpe)) { _ =>
 
           def getFieldTypes(desc: UDTDescriptor): Seq[Tree] = desc match {
-            case PrimitiveDescriptor(_, _, _, wrapper)            => Seq(gen.mkClassOf(wrapper.tpe))
-            case BoxedPrimitiveDescriptor(_, _, _, wrapper, _, _) => Seq(gen.mkClassOf(wrapper.tpe))
-            case ListDescriptor(_, _, _, _, _, elem)              => Seq(gen.mkClassOf(pactListTpe))
+            case PrimitiveDescriptor(_, _, _, wrapper)            => Seq(mkClassOf(wrapper.tpe))
+            case BoxedPrimitiveDescriptor(_, _, _, wrapper, _, _) => Seq(mkClassOf(wrapper.tpe))
+            case ListDescriptor(_, _, _, _, _, elem)              => Seq(mkClassOf(pactListTpe))
             // Flatten product types
             case CaseClassDescriptor(_, _, _, _, getters)         => getters filterNot { _.isBaseField } flatMap { f => getFieldTypes(f.desc) }
             // Tag and flatten summation types
@@ -181,7 +177,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
             case BaseClassDescriptor(_, _, getters, subTypes)     => (getters flatMap { f => getFieldTypes(f.desc) }) ++ (subTypes flatMap getFieldTypes)
             case OpaqueDescriptor(_, _, ref)                      => Seq(Select(ref, "fieldTypes"))
             // Box inner instances of recursive types
-            case RecursiveDescriptor(_, _, _)                     => Seq(gen.mkClassOf(pactRecordClass.tpe))
+            case RecursiveDescriptor(_, _, _)                     => Seq(mkClassOf(pactRecordClass.tpe))
           }
 
           val fieldSets = getFieldTypes(desc).foldRight(Seq[Tree]()) { (f, z) =>
@@ -201,10 +197,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
       private def mkCreateSerializer(udtClassSym: Symbol, desc: UDTDescriptor): Tree = {
 
-        val indexMapTpe = appliedType(definitions.ArrayClass.tpe, List(definitions.IntClass.tpe))
-        val udtSerTpe = appliedType(udtSerializerClass.tpe, List(desc.tpe))
-
-        mkMethod(udtClassSym, "createSerializer", OVERRIDE | FINAL, List(("indexMap", indexMapTpe)), udtSerTpe) { methodSym =>
+        mkMethod(udtClassSym, "createSerializer", OVERRIDE | FINAL, List(("indexMap", intArrayTpe)), mkUdtSerializerOf(desc.tpe)) { methodSym =>
           val udtSer = mkUdtSerializerClass(methodSym, desc)
           Block(udtSer, New(TypeTree(udtSer.symbol.tpe), List(List())))
         }
@@ -212,7 +205,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
       private def mkUdtSerializerClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 
-        mkClass(owner, unit.freshTypeName("UDTSerializerImpl"), FINAL, List(appliedType(udtSerializerClass.tpe, List(desc.tpe)), definitions.SerializableClass.tpe)) { classSym =>
+        mkClass(owner, unit.freshTypeName("UDTSerializerImpl"), FINAL, List(mkUdtSerializerOf(desc.tpe), definitions.SerializableClass.tpe)) { classSym =>
 
           val (listImpls, listImplTypes) = mkListImplClasses(classSym, desc)
 
@@ -232,7 +225,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
       private def mkListImplClasses(udtSerClassSym: Symbol, desc: UDTDescriptor): (List[Tree], Map[Int, Type]) = {
 
-        def mkListImplClass(elemTpe: Type): Tree = mkClass(udtSerClassSym, unit.freshTypeName("PactListImpl"), FINAL, List(appliedType(pactListBaseClass.tpe, List(elemTpe)))) { _ => Nil }
+        def mkListImplClass(elemTpe: Type): Tree = mkClass(udtSerClassSym, unit.freshTypeName("PactListImpl"), FINAL, List(mkPactListOf(elemTpe))) { _ => Nil }
 
         def getListTypes(desc: UDTDescriptor): Seq[(Int, Int, Type)] = desc match {
           case ListDescriptor(id, _, _, _, _, elem: ListDescriptor) => {
@@ -277,23 +270,18 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
       private def mkIndexes(udtSerClassSym: Symbol, descId: Int, descFields: List[UDTDescriptor], boxed: Boolean, indexMapIter: Tree): (List[Tree], List[Tree]) = {
 
-        val intTpe = definitions.IntClass.tpe
-        val arrTpe = appliedType(definitions.ArrayClass.tpe, List(intTpe))
-        val iterTpe = appliedType(definitions.IteratorClass.tpe, List(intTpe))
-
         val prefix = (if (boxed) "boxed" else "flat") + descId
         val iterName = prefix + "Iter"
-        val iter = mkVal(udtSerClassSym, iterName, PRIVATE, true, iterTpe) { _ => indexMapIter }
+        val iter = mkVal(udtSerClassSym, iterName, PRIVATE, true, mkIteratorOf(definitions.IntClass.tpe)) { _ => indexMapIter }
 
         val fieldsAndInits = descFields map {
 
           case OpaqueDescriptor(id, tpe, ref) => {
             val take = Apply(Select(Select(This(udtSerClassSym), iterName), "take"), List(Select(ref, "numFields")))
-            val arr = Apply(TypeApply(Select(take, "toArray"), List(TypeTree(intTpe))), List(Select(Select(Ident("reflect"), "Manifest"), "Int")))
-            val idxField = mkVal(udtSerClassSym, prefix + "Idx" + id, PRIVATE, true, arrTpe) { _ => arr }
+            val arr = Apply(TypeApply(Select(take, "toArray"), List(TypeTree(definitions.IntClass.tpe))), List(Select(Select(Ident("reflect"), "Manifest"), "Int")))
+            val idxField = mkVal(udtSerClassSym, prefix + "Idx" + id, PRIVATE, true, intArrayTpe) { _ => arr }
 
-            val udtSerTpe = appliedType(udtSerializerClass.tpe, List(tpe))
-            val serField = mkVar(udtSerClassSym, prefix + "Ser" + id, PRIVATE, false, udtSerTpe) { _ => Literal(Constant(null)) }
+            val serField = mkVar(udtSerClassSym, prefix + "Ser" + id, PRIVATE, false, mkUdtSerializerOf(tpe)) { _ => Literal(Constant(null)) }
 
             val serInst = Apply(Select(ref, "getSerializer"), List(Select(This(udtSerClassSym), prefix + "Idx" + id)))
             val serInit = Assign(Select(This(udtSerClassSym), prefix + "Ser" + id), serInst)
@@ -303,7 +291,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
           case d => {
             val next = Apply(Select(Select(This(udtSerClassSym), iterName), "next"), Nil)
-            val idxField = mkVal(udtSerClassSym, prefix + "Idx" + d.id, PRIVATE, false, intTpe) { _ => next }
+            val idxField = mkVal(udtSerClassSym, prefix + "Idx" + d.id, PRIVATE, false, definitions.IntClass.tpe) { _ => next }
 
             (List(idxField), Nil)
           }
@@ -375,7 +363,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
             val fields = types map { case (id, tpe) => mkVar(udtSerClassSym, "w" + id, PRIVATE, true, tpe) { _ => New(TypeTree(tpe), List(List())) } }
 
-            val readObject = mkMethod(udtSerClassSym, "readObject", PRIVATE, List(("in", definitions.getClass("java.io.ObjectInputStream").tpe)), definitions.UnitClass.tpe) { _ =>
+            val readObject = mkMethod(udtSerClassSym, "readObject", PRIVATE, List(("in", objectInputStreamClass.tpe)), definitions.UnitClass.tpe) { _ =>
               val first = Apply(Select(Ident("in"), "defaultReadObject"), Nil)
               val rest = types map { case (id, tpe) => Assign(Ident("w" + id), New(TypeTree(tpe), List(List()))) }
               val ret = Literal(())
@@ -409,7 +397,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
 
         def genList(desc: ListDescriptor, source: Tree, target: Tree): Seq[Tree] = {
 
-          val it = mkVal(methodSym, "it", 0, false, appliedType(definitions.IteratorClass.tpe, List(desc.elem.tpe))) { _ => desc.iter(source) }
+          val it = mkVal(methodSym, "it", 0, false, mkIteratorOf(desc.elem.tpe)) { _ => desc.iter(source) }
 
           val loop = mkWhile(Select(Ident(it.symbol), "hasNext")) {
 
@@ -449,7 +437,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
             val addNull = Apply(Select(target, "add"), List(Literal(Constant(null))))
             val body = item +: mkIf(chk, stats :+ add, Seq(addNull))
 
-            mkBlock(body: _*)
+            Block(body: _*)
           }
 
           Seq(it, loop)
@@ -520,7 +508,7 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
                 val body = (tag ++ code) :+ Literal(())
 
                 val pat = Bind("inst", Typed(Ident("_"), TypeTree(dSubType.tpe)))
-                CaseDef(pat, EmptyTree, mkBlock(body: _*))
+                CaseDef(pat, EmptyTree, Block(body: _*))
               }
             }
 
@@ -568,138 +556,6 @@ trait UDTCodeGeneration { this: Pact4sGlobal =>
         }
 
         List(root)
-      }
-
-      private def mkIdent(target: Symbol): Tree = Ident(target) setType target.tpe
-
-      private def mkVar(owner: Symbol, name: String, flags: Long, transient: Boolean, valTpe: Type)(value: Symbol => Tree): Tree = {
-        val valSym = owner.newValue(name) setFlag (flags | SYNTHETIC | MUTABLE) setInfo valTpe
-        if (transient) valSym.addAnnotation(AnnotationInfo(definitions.TransientAttr.tpe, Nil, Nil))
-        ValDef(valSym, value(valSym))
-      }
-
-      private def mkVal(owner: Symbol, name: String, flags: Long, transient: Boolean, valTpe: Type)(value: Symbol => Tree): Tree = {
-        val valSym = owner.newValue(name) setFlag (flags | SYNTHETIC) setInfo valTpe
-        if (transient) valSym.addAnnotation(AnnotationInfo(definitions.TransientAttr.tpe, Nil, Nil))
-        ValDef(valSym, value(valSym))
-      }
-
-      private def mkValAndGetter(owner: Symbol, name: String, flags: Long, valTpe: Type)(value: Symbol => Tree): List[Tree] = {
-
-        val valDef = mkVal(owner, name + " ", PRIVATE, false, valTpe) { value }
-
-        val defDef = mkMethod(owner, name, flags | ACCESSOR, Nil, valTpe) { _ =>
-          if (owner.isClass)
-            Select(This(owner), name + " ")
-          else
-            Ident(valDef.symbol)
-        }
-
-        List(valDef, defDef)
-      }
-
-      private def mkVarAndLazyGetter(owner: Symbol, name: String, flags: Long, valTpe: Type)(value: Symbol => Tree): List[Tree] = {
-
-        val privateFlag = if (owner.isClass) PRIVATE else 0
-        val varDef = mkVar(owner, name + " ", privateFlag, false, valTpe) { _ => Literal(Constant(null)) }
-
-        val defDef = mkMethod(owner, name, privateFlag | flags | ACCESSOR, Nil, valTpe) { defSym =>
-
-          def selVar = {
-            if (owner.isClass)
-              Select(This(owner), name + " ")
-            else
-              Ident(varDef.symbol)
-          }
-
-          val chk = Apply(Select(selVar, "$eq$eq"), List(Literal(Constant(null))))
-          val init = Assign(selVar, value(defSym))
-          Block(If(chk, init, EmptyTree), selVar)
-        }
-
-        List(varDef, defDef)
-      }
-
-      private def mkWhile(cond: Tree)(body: Tree): Tree = {
-        val lblName = unit.freshTermName("while")
-        val jump = Apply(Ident(lblName), Nil)
-        val block = body match {
-          case Block(stats, expr) => new Block(stats :+ expr, jump)
-          case _                  => new Block(List(body), jump)
-        }
-        LabelDef(lblName, Nil, If(cond, block, EmptyTree))
-      }
-
-      private def mkIf(cond: Tree, bodyT: Tree*): Seq[Tree] = mkIf(cond, bodyT, Seq(EmptyTree))
-
-      private def mkIf(cond: Tree, bodyT: Seq[Tree], bodyF: Seq[Tree]): Seq[Tree] = cond match {
-        case EmptyTree => filterNonEmpty(bodyT: _*)
-        case _         => Seq(If(cond, mkBlock(bodyT: _*), mkBlock(bodyF: _*)))
-      }
-
-      private def mkBlock(items: Tree*): Tree = items match {
-        case Seq(item) => item
-        case _         => Block(filterNonEmpty(items: _*): _*)
-      }
-
-      private def deBlock(item: Tree): Seq[Tree] = item match {
-        case Block(Nil, ret)         => Seq(ret)
-        case Block(item :: Nil, ret) => Seq(item, ret)
-        case Block(items, ret)       => (items :+ ret).toSeq
-        case _                       => Seq(item)
-      }
-
-      private def filterNonEmpty(items: Tree*): Seq[Tree] = items filter {
-        case EmptyTree => false
-        case _         => true
-      }
-
-      private def mkAnd(cond1: Tree, cond2: Tree): Tree = cond1 match {
-        case EmptyTree => cond2
-        case _ => cond2 match {
-          case EmptyTree => cond1
-          case _         => gen.mkAnd(cond1, cond2)
-        }
-      }
-
-      private def mkMethod(owner: Symbol, name: String, flags: Long, args: List[(String, Type)], ret: Type)(impl: Symbol => Tree): Tree = {
-
-        val methodSym = owner.newMethod(name) setFlag (flags | SYNTHETIC)
-
-        if (args.isEmpty)
-          methodSym setInfo NullaryMethodType(ret)
-        else
-          methodSym setInfo MethodType(methodSym newSyntheticValueParams args.unzip._2, ret)
-
-        val valParams = args map { case (name, tpe) => ValDef(methodSym.newValueParameter(NoPosition, name) setInfo tpe) }
-
-        DefDef(methodSym, Modifiers(flags | SYNTHETIC), List(valParams), impl(methodSym))
-      }
-
-      private def mkClass(owner: Symbol, name: TypeName, flags: Long, parents: List[Type])(members: Symbol => List[Tree]): Tree = {
-
-        val classSym = {
-          if (name == null)
-            owner newAnonymousClass owner.pos
-          else
-            owner newClass (owner.pos, name)
-        }
-
-        classSym setFlag (flags | SYNTHETIC)
-        classSym setInfo ClassInfoType(parents, newScope, classSym)
-
-        val classMembers = members(classSym)
-        classMembers foreach { m => classSym.info.decls enter m.symbol }
-
-        ClassDef(classSym, Modifiers(flags | SYNTHETIC), List(Nil), List(Nil), classMembers, owner.pos)
-      }
-
-      private def mkThrow(msg: String) = Throw(New(TypeTree(definitions.getClass("java.lang.RuntimeException").tpe), List(List(Literal(msg)))))
-
-      private def getRelevantStackLine(e: Throwable): String = {
-        val lines = e.getStackTrace.map(_.toString)
-        val relevant = lines filter { _.contains("eu.stratosphere") }
-        relevant.headOption getOrElse e.getStackTrace.toString
       }
     }
   }
