@@ -66,7 +66,7 @@ trait Pact4sGlobal extends Object
   with UDTDescriptors
   with UDTAnalysis
   with UDTGenSiteSelection
-  with UDTCodeGeneration
+  with udtCodeGen.UDTCodeGeneration
   with TreeGeneration
   with Definitions
   with Logger {

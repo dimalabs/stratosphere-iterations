@@ -15,12 +15,13 @@
  * ********************************************************************************************************************
  */
 
-package eu.stratosphere.pact4s.compiler
+package eu.stratosphere.pact4s.compiler.udtCodeGen
 
 import scala.tools.nsc.plugins.PluginComponent
 import scala.tools.nsc.symtab.Flags._
 import scala.tools.nsc.transform.Transform
 
+import eu.stratosphere.pact4s.compiler.Pact4sGlobal
 import eu.stratosphere.pact4s.compiler.util._
 
 trait UDTCodeGeneration { this: Pact4sGlobal =>
