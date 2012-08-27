@@ -67,7 +67,8 @@ trait Pact4sGlobal extends Object
   with UDTAnalysis
   with UDTGenSiteSelection
   with UDTCodeGeneration
-  with TreeGen
+  with TreeGeneration
+  with Definitions
   with Logger {
 
   val global: Global

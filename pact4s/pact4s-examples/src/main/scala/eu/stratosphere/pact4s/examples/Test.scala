@@ -53,12 +53,7 @@ class BlockTest {
   }
 
   val udtTestInst2 = new DataSource("", DelimetedDataSourceFormat({ s: String => (s, s, (s.toInt, s)) }))
-  /*
-  val udtTestInst3 = implicitly[analyzer.UDT[(Int, Int, (Int, String))]]
-  val udtTestInst4 = implicitly[analyzer.UDT[(Int, Int, (Int, Option[Int]))]]
-  val udtTestInst5 = implicitly[analyzer.UDT[(String, (Int, Int, String))]]
-  */
-}
+} //
 
 abstract class Test extends PactProgram with TestGeneratedImplicits {
 
