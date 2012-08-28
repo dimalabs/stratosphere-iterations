@@ -17,27 +17,17 @@
 
 package eu.stratosphere.pact4s.compiler
 
-import scala.tools.nsc.plugins.PluginComponent
-import scala.tools.nsc.transform.Transform
+import eu.stratosphere.pact4s.compiler.util.MutableMultiMap
 
-import eu.stratosphere.pact4s.compiler.util._
-
-trait UDTGenSiteSelection { this: Pact4sGlobal =>
+trait UDTGenSiteSelectors { this: Pact4sPlugin =>
 
   import global._
 
-  trait UDTGenSiteSelector extends PluginComponent with Transform {
+  trait UDTGenSiteSelector extends Pact4sTransform with UDTGenSiteParticipant {
 
-    override val global: ThisGlobal = UDTGenSiteSelection.this.global
-    override val phaseName = "Pact4s.UDTGenSiteSelection"
+    override def newTransformer(unit: CompilationUnit) = new TypingTraverser(unit) with LoggingTransformer with UDTAnalyzer {
 
-    val genSites: collection.Map[CompilationUnit, MutableMultiMap[Tree, UDTDescriptor]]
-
-    override def newTransformer(unit: CompilationUnit) = new TypingTraverser(unit) with UDTAnalyzer {
-
-      logger.messageTag = "UDTSite"
-
-      private val genSites = UDTGenSiteSelector.this.genSites(unit)
+      private val genSites = getSites(unit)
       private val genSitePaths = new MutableMultiMap[UDTDescriptor, Seq[Tree]]()
 
       override def isPathComponent(tree: Tree) = tree match {
@@ -48,14 +38,12 @@ trait UDTGenSiteSelection { this: Pact4sGlobal =>
 
       override def traverse(tree: Tree) = {
 
-        logger.currentPosition = tree.pos
-
         tree match {
 
           case TypeApply(s: Select, List(t)) if s.symbol == defs.unanalyzedUdt => {
 
             getUDTDescriptor(t.tpe, tree) match {
-              case UnsupportedDescriptor(_, _, errs) => errs foreach { err => log(Error) { "Could not generate UDT[" + t.tpe + "]: " + err } }
+              case UnsupportedDescriptor(_, _, errs) => errs foreach { err => Error.report("Could not generate UDT[" + t.tpe + "]: " + err) }
               case desc                              => if (updateGenSite(desc)) collectInferences(desc) foreach { traverse(_) }
             }
           }

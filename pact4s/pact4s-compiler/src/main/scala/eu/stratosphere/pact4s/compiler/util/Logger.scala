@@ -20,144 +20,151 @@ package eu.stratosphere.pact4s.compiler.util
 import scala.collection.mutable
 
 import scala.tools.nsc.Global
+import scala.tools.nsc.plugins.PluginComponent
+import scala.tools.nsc.transform.TypingTransformers
 
-trait Logger {
+trait Loggers { this: TypingTransformers =>
 
   val global: Global
   import global._
 
-  val logger = new {
-    var messageTag: String = ""
-    var currentLevel: Severity = Debug
-    var currentPosition: Position = NoPosition
+  abstract sealed class LogLevel { protected[Loggers] val toInt: Int }
+  object LogLevel {
+    case object Error extends LogLevel { override val toInt = 1 }
+    case object Warn extends LogLevel { override val toInt = 2 }
+    case object Debug extends LogLevel { override val toInt = 3 }
   }
 
-  import logger._
-
+  var logLevel: LogLevel = LogLevel.Debug
   private val counter = new Counter
 
-  abstract sealed class Severity {
-    protected val toInt: Int
-    protected def reportInner(pos: Position, msg: String)
+  type LoggingTransformer = Logger#LoggingTransformer
 
-    def isEnabled = currentLevel.toInt >= this.toInt
+  trait Logger { this: PluginComponent =>
 
-    def report(msg: String, pos: Position = currentPosition) = {
-      if (isEnabled)
-        reportInner(pos, "%04d".format(counter.next) + "#" + messageTag + " - " + msg)
-    }
+    trait LoggingTransformer { this: TypingTransformer =>
 
-    def browse(tree: Tree): Tree = {
-      if (isEnabled)
-        treeBrowsers.create().browse(tree)
-      tree
-    }
-  }
+      abstract sealed class Severity {
+        protected val toInt: Int
+        protected def reportInner(msg: String, pos: Position)
 
-  case object Error extends Severity {
-    override val toInt = 1
-    override def reportInner(pos: Position, msg: String) = reporter.error(pos, msg)
-  }
+        def isEnabled = logLevel.toInt >= this.toInt
 
-  case object Warn extends Severity {
-    override val toInt = 2
-    override def reportInner(pos: Position, msg: String) = reporter.warning(pos, msg)
-  }
+        def report(msg: String, pos: Position = curTree.pos) = {
+          if (isEnabled)
+            reportInner("%04d".format(counter.next) + "#" + phaseName + " - " + msg, pos)
+        }
 
-  case object Debug extends Severity {
-    override val toInt = 3
-    override def reportInner(pos: Position, msg: String) = reporter.info(pos, msg, true)
-  }
+        def browse(tree: Tree): Tree = {
+          if (isEnabled)
+            treeBrowsers.create().browse(tree)
+          tree
+        }
+      }
 
-  def log(severity: Severity, pos: Position = currentPosition)(msg: String) = severity.report(msg, pos)
+      case object Error extends Severity {
+        override val toInt = LogLevel.Error.toInt
+        override def reportInner(msg: String, pos: Position) = reporter.error(pos, msg)
+      }
 
-  def getMsgAndStackLine(e: Throwable) = {
-    val lines = e.getStackTrace.map(_.toString)
-    val relevant = lines filter { _.contains("eu.stratosphere") }
-    val stackLine = relevant.headOption getOrElse e.getStackTrace.toString
-    e.getMessage() + " @ " + stackLine
-  }
+      case object Warn extends Severity {
+        override val toInt = LogLevel.Warn.toInt
+        override def reportInner(msg: String, pos: Position) = reporter.warning(pos, msg)
+      }
 
-  def safely[T](default: => T)(onError: Throwable => String)(block: => T): T = {
-    try {
-      block
-    } catch {
-      case e => { Error.report(onError(e)); default }
-    }
-  }
+      case object Debug extends Severity {
+        override val toInt = LogLevel.Debug.toInt
+        override def reportInner(msg: String, pos: Position) = reporter.info(pos, msg, true)
+      }
 
-  def verbosely[T](obs: T => String)(block: => T): T = {
-    val ret = block
-    Debug.report(obs(ret))
-    ret
-  }
+      def getMsgAndStackLine(e: Throwable) = {
+        val lines = e.getStackTrace.map(_.toString)
+        val relevant = lines filter { _.contains("eu.stratosphere") }
+        val stackLine = relevant.headOption getOrElse e.getStackTrace.toString
+        e.getMessage() + " @ " + stackLine
+      }
 
-  def maybeVerbosely[T](gate: Gate[T])(obs: T => String)(block: => T): T = {
-    val ret = block
-    if (gate.getState(ret)) Debug.report(obs(ret))
-    ret
-  }
+      def safely[T](default: => T)(onError: Throwable => String)(block: => T): T = {
+        try {
+          block
+        } catch {
+          case e => { Error.report(onError(e)); default }
+        }
+      }
 
-  def visually(gate: Gate[Tree])(block: => Tree): Tree = {
-    val ret = block
-    if (gate.getState(ret)) Debug.browse(ret)
-    ret
-  }
+      def verbosely[T](obs: T => String)(block: => T): T = {
+        val ret = block
+        Debug.report(obs(ret))
+        ret
+      }
 
-  trait Gate[T] {
-    def getState(value: T): Boolean
-  }
+      def maybeVerbosely[T](gate: Gate[T])(obs: T => String)(block: => T): T = {
+        val ret = block
+        if (gate.getState(ret)) Debug.report(obs(ret))
+        ret
+      }
 
-  class ManualSwitch[T] extends Gate[T] {
-    var state = false;
-    def getState(value: T) = state
+      def visually(gate: Gate[Tree])(block: => Tree): Tree = {
+        val ret = block
+        if (gate.getState(ret)) Debug.browse(ret)
+        ret
+      }
 
-    def |=(value: Boolean): Unit = state |= value
-    def &=(value: Boolean): Unit = state &= value
-  }
+      trait Gate[T] {
+        def getState(value: T): Boolean
+      }
 
-  class AutoSwitch[T] extends Gate[T] {
+      class ManualSwitch[T] extends Gate[T] {
+        var state = false;
+        def getState(value: T) = state
 
-    protected var state = true
+        def |=(value: Boolean): Unit = state |= value
+        def &=(value: Boolean): Unit = state &= value
+      }
 
-    def guard: Boolean = true
+      class AutoSwitch[T] extends Gate[T] {
 
-    def getState(value: T) = {
-      val current = state && guard
-      if (current) state = false
-      current
-    }
-  }
+        protected var state = true
 
-  class EagerAutoSwitch[T] {
+        def guard: Boolean = true
 
-    protected var state = true
-    def guard: Boolean = true
+        def getState(value: T) = {
+          val current = state && guard
+          if (current) state = false
+          current
+        }
+      }
 
-    def toGate: Gate[T] = {
-      if (state && guard) {
-        state = false
-        new AutoSwitch[T]
-      } else {
-        new Gate[T] { def getState(value: T) = false }
+      class EagerAutoSwitch[T] {
+
+        protected var state = true
+        def guard: Boolean = true
+
+        def toGate: Gate[T] = {
+          if (state && guard) {
+            state = false
+            new AutoSwitch[T]
+          } else {
+            new Gate[T] { def getState(value: T) = false }
+          }
+        }
+      }
+
+      object EagerAutoSwitch {
+        implicit def toGate[T](eas: EagerAutoSwitch[T]): Gate[T] = eas.toGate
+      }
+
+      class SetGate[T] extends Gate[T] {
+        private val seen = mutable.Set[T]()
+        def getState(value: T) = seen.add(value)
+      }
+
+      class MapGate[K, V] {
+        private val seen = mutable.Set[(K, V)]()
+        def apply(key: K) = new Gate[V] {
+          def getState(value: V) = seen.add(key, value)
+        }
       }
     }
   }
-
-  object EagerAutoSwitch {
-    implicit def toGate[T](eas: EagerAutoSwitch[T]): Gate[T] = eas.toGate
-  }
-
-  class SetGate[T] extends Gate[T] {
-    private val seen = mutable.Set[T]()
-    def getState(value: T) = seen.add(value)
-  }
-
-  class MapGate[K, V] {
-    private val seen = mutable.Set[(K, V)]()
-    def apply(key: K) = new Gate[V] {
-      def getState(value: V) = seen.add(key, value)
-    }
-  }
 }
-

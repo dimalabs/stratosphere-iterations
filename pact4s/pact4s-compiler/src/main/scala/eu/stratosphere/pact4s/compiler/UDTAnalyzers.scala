@@ -17,15 +17,16 @@
 
 package eu.stratosphere.pact4s.compiler
 
-import scala.collection.mutable
+import scala.util.DynamicVariable
+
 import eu.stratosphere.pact4s.compiler.util.Counter
 
-trait UDTAnalysis { this: Pact4sGlobal =>
+trait UDTAnalyzers { this: Pact4sPlugin =>
 
   import global._
   import defs._
 
-  trait UDTAnalyzer { this: TypingTransformer =>
+  trait UDTAnalyzer { this: TypingTransformer with LoggingTransformer =>
 
     private val seen = new MapGate[Type, UDTDescriptor]
 
@@ -233,7 +234,7 @@ trait UDTAnalysis { this: Pact4sGlobal =>
 
       private class UDTAnalyzerCache {
 
-        private val caches = new scala.util.DynamicVariable[Map[Type, RecursiveDescriptor]](Map())
+        private val caches = new DynamicVariable[Map[Type, RecursiveDescriptor]](Map())
         private val idGen = new Counter()
 
         def newId = idGen.next

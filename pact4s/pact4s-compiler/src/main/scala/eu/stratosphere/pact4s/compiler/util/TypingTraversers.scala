@@ -21,7 +21,7 @@ import scala.tools.nsc.Global
 import scala.tools.nsc.transform.Transform
 import scala.tools.nsc.transform.TypingTransformers
 
-trait Traversers { this: TypingTransformers =>
+trait TypingTraversers { this: TypingTransformers =>
 
   val global: Global
   import global._

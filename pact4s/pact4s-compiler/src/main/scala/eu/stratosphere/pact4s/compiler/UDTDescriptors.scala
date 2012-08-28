@@ -17,7 +17,7 @@
 
 package eu.stratosphere.pact4s.compiler
 
-trait UDTDescriptors { this: Pact4sGlobal =>
+trait UDTDescriptors { this: Pact4sPlugin =>
 
   import global._
 
@@ -57,6 +57,11 @@ trait UDTDescriptors { this: Pact4sGlobal =>
   case class ListDescriptor(id: Int, tpe: Type, listType: Type, bf: Tree, iter: Tree => Tree, elem: UDTDescriptor) extends UDTDescriptor {
 
     override def flatten = this +: elem.flatten
+
+    def getInnermostElem: UDTDescriptor = elem match {
+      case list: ListDescriptor => list.getInnermostElem
+      case _                    => elem
+    }
 
     override def hashCode() = (id, tpe, listType, elem).hashCode()
     override def equals(that: Any) = that match {

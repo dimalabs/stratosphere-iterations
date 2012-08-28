@@ -17,7 +17,7 @@
 
 package eu.stratosphere.pact4s.compiler
 
-trait Definitions { this: Pact4sGlobal =>
+trait Definitions { this: Pact4sPlugin =>
 
   import global._
 

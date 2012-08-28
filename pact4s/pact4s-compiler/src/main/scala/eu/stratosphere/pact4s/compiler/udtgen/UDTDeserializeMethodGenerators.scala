@@ -15,14 +15,28 @@
  * ********************************************************************************************************************
  */
 
-package eu.stratosphere.pact4s.compiler.util
+package eu.stratosphere.pact4s.compiler.udtgen
 
-class Counter {
-  private var value: Int = 0
+import eu.stratosphere.pact4s.compiler.Pact4sPlugin
 
-  def next: Int = {
-    val current = value
-    value += 1
-    current
+trait UDTDeserializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassGenerators =>
+
+  import global._
+  import defs._
+
+  trait UDTDeserializeMethodGenerator { this: TreeGenerator with UDTSerializerClassGenerator =>
+
+    protected def mkDeserialize(udtSerClassSym: Symbol, desc: UDTDescriptor, listImpls: Map[Int, Type]): List[Tree] = {
+
+      val root = mkMethod(udtSerClassSym, "deserialize", Flags.OVERRIDE | Flags.FINAL, List(("record", pactRecordClass.tpe)), desc.tpe) { _ =>
+        desc match {
+          case PrimitiveDescriptor(_, _, default, _) => default
+          case BoxedPrimitiveDescriptor(_, _, _, _, _, _) => Literal(Constant(null))
+          case _ => Literal(Constant(null))
+        }
+      }
+
+      List(root)
+    }
   }
 }

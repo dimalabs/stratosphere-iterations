@@ -53,7 +53,7 @@ class BlockTest {
   }
 
   val udtTestInst2 = new DataSource("", DelimetedDataSourceFormat({ s: String => (s, s, (s.toInt, s)) }))
-} //
+}
 
 abstract class Test extends PactProgram with TestGeneratedImplicits {
 

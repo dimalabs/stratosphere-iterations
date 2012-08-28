@@ -15,35 +15,45 @@
  * ********************************************************************************************************************
  */
 
-package eu.stratosphere.pact4s.compiler
+package eu.stratosphere.pact4s.compiler.util
 
-import scala.tools.nsc.symtab.Flags._
+import scala.tools.nsc.transform.TypingTransformers
 
-trait TreeGeneration { this: Pact4sGlobal =>
+trait TreeGenerators { this: TypingTransformers =>
 
   import global._
 
   trait TreeGenerator { this: TypingTransformer =>
 
+    val Flags = scala.tools.nsc.symtab.Flags
+
+    def freshTypeName(name: String) = localTyper.context.unit.freshTypeName(name)
+    def freshTermName(name: String) = localTyper.context.unit.freshTermName(name)
+
+    def mkUnit = Literal(Constant(()))
+    def mkNull = Literal(Constant(null))
+    def mkZero = Literal(Constant(0))
+    def mkOne = Literal(Constant(1))
+
     def mkIdent(target: Symbol): Tree = Ident(target) setType target.tpe
 
     def mkVar(owner: Symbol, name: String, flags: Long, transient: Boolean, valTpe: Type)(value: Symbol => Tree): Tree = {
-      val valSym = owner.newValue(name) setFlag (flags | SYNTHETIC | MUTABLE) setInfo valTpe
+      val valSym = owner.newValue(name) setFlag (flags | Flags.SYNTHETIC | Flags.MUTABLE) setInfo valTpe
       if (transient) valSym.addAnnotation(AnnotationInfo(definitions.TransientAttr.tpe, Nil, Nil))
       ValDef(valSym, value(valSym))
     }
 
     def mkVal(owner: Symbol, name: String, flags: Long, transient: Boolean, valTpe: Type)(value: Symbol => Tree): Tree = {
-      val valSym = owner.newValue(name) setFlag (flags | SYNTHETIC) setInfo valTpe
+      val valSym = owner.newValue(name) setFlag (flags | Flags.SYNTHETIC) setInfo valTpe
       if (transient) valSym.addAnnotation(AnnotationInfo(definitions.TransientAttr.tpe, Nil, Nil))
       ValDef(valSym, value(valSym))
     }
 
     def mkValAndGetter(owner: Symbol, name: String, flags: Long, valTpe: Type)(value: Symbol => Tree): List[Tree] = {
 
-      val valDef = mkVal(owner, name + " ", PRIVATE, false, valTpe) { value }
+      val valDef = mkVal(owner, name + " ", Flags.PRIVATE, false, valTpe) { value }
 
-      val defDef = mkMethod(owner, name, flags | ACCESSOR, Nil, valTpe) { _ =>
+      val defDef = mkMethod(owner, name, flags | Flags.ACCESSOR, Nil, valTpe) { _ =>
         if (owner.isClass)
           Select(This(owner), name + " ")
         else
@@ -55,10 +65,10 @@ trait TreeGeneration { this: Pact4sGlobal =>
 
     def mkVarAndLazyGetter(owner: Symbol, name: String, flags: Long, valTpe: Type)(value: Symbol => Tree): List[Tree] = {
 
-      val privateFlag = if (owner.isClass) PRIVATE else 0
+      val privateFlag = if (owner.isClass) Flags.PRIVATE else 0
       val varDef = mkVar(owner, name + " ", privateFlag, false, valTpe) { _ => Literal(Constant(null)) }
 
-      val defDef = mkMethod(owner, name, privateFlag | flags | ACCESSOR, Nil, valTpe) { defSym =>
+      val defDef = mkMethod(owner, name, privateFlag | flags | Flags.ACCESSOR, Nil, valTpe) { defSym =>
 
         def selVar = {
           if (owner.isClass)
@@ -76,7 +86,7 @@ trait TreeGeneration { this: Pact4sGlobal =>
     }
 
     def mkWhile(cond: Tree)(body: Tree): Tree = {
-      val lblName = localTyper.context.unit.freshTermName("while")
+      val lblName = freshTermName("while")
       val jump = Apply(Ident(lblName), Nil)
       val block = body match {
         case Block(stats, expr) => new Block(stats :+ expr, jump)
@@ -89,7 +99,11 @@ trait TreeGeneration { this: Pact4sGlobal =>
 
     def mkIf(cond: Tree, bodyT: Seq[Tree], bodyF: Seq[Tree]): Seq[Tree] = cond match {
       case EmptyTree => bodyT
-      case _         => Seq(If(cond, Block(bodyT: _*), Block(bodyF: _*)))
+      case _ => bodyF match {
+        case Seq()          => Seq(If(cond, Block(bodyT: _*), EmptyTree))
+        case Seq(EmptyTree) => Seq(If(cond, Block(bodyT: _*), EmptyTree))
+        case _              => Seq(If(cond, Block(bodyT: _*), Block(bodyF: _*)))
+      }
     }
 
     def mkAnd(cond1: Tree, cond2: Tree): Tree = cond1 match {
@@ -102,7 +116,7 @@ trait TreeGeneration { this: Pact4sGlobal =>
 
     def mkMethod(owner: Symbol, name: String, flags: Long, args: List[(String, Type)], ret: Type)(impl: Symbol => Tree): Tree = {
 
-      val methodSym = owner.newMethod(name) setFlag (flags | SYNTHETIC)
+      val methodSym = owner.newMethod(name) setFlag (flags | Flags.SYNTHETIC)
 
       if (args.isEmpty)
         methodSym setInfo NullaryMethodType(ret)
@@ -111,7 +125,7 @@ trait TreeGeneration { this: Pact4sGlobal =>
 
       val valParams = args map { case (name, tpe) => ValDef(methodSym.newValueParameter(NoPosition, name) setInfo tpe) }
 
-      DefDef(methodSym, Modifiers(flags | SYNTHETIC), List(valParams), impl(methodSym))
+      DefDef(methodSym, Modifiers(flags | Flags.SYNTHETIC), List(valParams), impl(methodSym))
     }
 
     def mkClass(owner: Symbol, name: TypeName, flags: Long, parents: List[Type])(members: Symbol => List[Tree]): Tree = {
@@ -123,13 +137,13 @@ trait TreeGeneration { this: Pact4sGlobal =>
           owner newClass (owner.pos, name)
       }
 
-      classSym setFlag (flags | SYNTHETIC)
+      classSym setFlag (flags | Flags.SYNTHETIC)
       classSym setInfo ClassInfoType(parents, newScope, classSym)
 
       val classMembers = members(classSym)
       classMembers foreach { m => classSym.info.decls enter m.symbol }
 
-      ClassDef(classSym, Modifiers(flags | SYNTHETIC), List(Nil), List(Nil), classMembers, owner.pos)
+      ClassDef(classSym, Modifiers(flags | Flags.SYNTHETIC), List(Nil), List(Nil), classMembers, owner.pos)
     }
 
     def mkThrow(msg: String) = Throw(New(TypeTree(definitions.getClass("java.lang.RuntimeException").tpe), List(List(Literal(msg)))))

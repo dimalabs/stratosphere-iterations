@@ -15,14 +15,26 @@
  * ********************************************************************************************************************
  */
 
-package eu.stratosphere.pact4s.compiler.util
+package eu.stratosphere.pact4s.compiler
 
-class Counter {
-  private var value: Int = 0
+import scala.collection.mutable
 
-  def next: Int = {
-    val current = value
-    value += 1
-    current
+import eu.stratosphere.pact4s.compiler.util.MutableMultiMap
+
+trait UDTGenSiteParticipants { this: Pact4sPlugin =>
+
+  import global._
+
+  private val genSites = {
+    val initial = mutable.Map[CompilationUnit, MutableMultiMap[Tree, UDTDescriptor]]()
+    initial withDefault { unit =>
+      val unitGenSites = new MutableMultiMap[Tree, UDTDescriptor]()
+      initial(unit) = unitGenSites
+      unitGenSites
+    }
+  }
+
+  trait UDTGenSiteParticipant {
+    def getSites(unit: CompilationUnit) = genSites(unit)
   }
 }
