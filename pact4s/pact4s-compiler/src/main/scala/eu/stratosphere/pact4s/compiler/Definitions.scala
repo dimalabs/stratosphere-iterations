@@ -24,6 +24,8 @@ trait Definitions { this: Pact4sPlugin =>
   object defs {
 
     lazy val intArrayTpe = definitions.arrayType(definitions.IntClass.tpe)
+    lazy val genTraversableOnceClass = definitions.getClass("scala.collection.GenTraversableOnce")
+    lazy val colGenericCompanionClass = definitions.getClass("scala.collection.generic.GenericCompanion")
     lazy val objectInputStreamClass = definitions.getClass("java.io.ObjectInputStream")
 
     lazy val unanalyzedUdt = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.UDT"), "unanalyzedUDT")

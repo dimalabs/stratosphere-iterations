@@ -36,7 +36,7 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
 
       val aux = (desc.findByType[RecursiveDescriptor].toList flatMap { rd => desc.findById(rd.refId) } distinct) map { desc =>
         mkMethod(udtSerClassSym, "serialize" + desc.id, Flags.PRIVATE | Flags.FINAL, List(("item", desc.tpe), ("record", pactRecordClass.tpe)), definitions.UnitClass.tpe) { methodSym =>
-          val env = GenEnvironment(udtSerClassSym, methodSym, listImpls, "boxed" + desc.id, true, true, true)
+          val env = GenEnvironment(udtSerClassSym, methodSym, listImpls, "boxed" + desc.id, true, false, true)
           val stats = genSerialize(desc, Ident("item"), Ident("record"), env)
           Block(stats.toList, mkUnit)
         }
@@ -52,7 +52,7 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
         val ser = env.mkSetValue(id, source)
         val set = env.mkSetField(id, target)
 
-        mkIf(chk, ser, set)
+        Seq(mkIf(chk, Block(ser, set)))
       }
 
       case BoxedPrimitiveDescriptor(id, tpe, _, _, _, unbox) => {
@@ -60,7 +60,7 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
         val ser = env.mkSetValue(id, unbox(source))
         val set = env.mkSetField(id, target)
 
-        mkIf(chk, ser, set)
+        Seq(mkIf(chk, Block(ser, set)))
       }
 
       case list @ ListDescriptor(id, tpe, _, _, iter, elem) => {
@@ -92,14 +92,17 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
           }
         }
 
-        mkIf(chk, (upd.toSeq ++ stats): _*)
+        Seq(mkIf(chk, Block((upd.toSeq ++ stats): _*)))
       }
 
       case CaseClassDescriptor(_, tpe, _, _, getters) => {
         val chk = env.mkChkNotNull(source, tpe)
         val stats = getters filterNot { _.isBaseField } flatMap { case FieldAccessor(sym, _, _, desc) => genSerialize(desc, Select(source, sym), target, env.copy(chkNull = true)) }
 
-        mkIf(chk, stats: _*)
+        stats match {
+          case Nil => Seq()
+          case _   => Seq(mkIf(chk, Block(stats: _*)))
+        }
       }
 
       case BaseClassDescriptor(id, tpe, Seq(tagField, baseFields @ _*), subTypes) => {
@@ -116,12 +119,12 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
           }
         }
 
-        mkIf(chk, (fields :+ Match(source, cases)): _*)
+        Seq(mkIf(chk, Block((fields :+ Match(source, cases)): _*)))
       }
 
       case OpaqueDescriptor(id, tpe, _) => {
         val ser = Apply(Select(env.mkSelectSerializer(id), "serialize"), List(source, target))
-        mkIf(env.mkChkNotNull(source, tpe), ser)
+        Seq(mkIf(env.mkChkNotNull(source, tpe), ser))
       }
 
       case RecursiveDescriptor(id, tpe, refId) => {
@@ -144,7 +147,7 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
 
         val set = env.mkSetField(id, target, Ident(rec.symbol))
 
-        mkIf(chk, updTgt, rec, ser, updRec, set)
+        Seq(mkIf(chk, Block(updTgt, rec, ser, updRec, set)))
       }
     }
 
@@ -188,9 +191,8 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
         val chk = env.mkChkNotNull(Ident(item.symbol), elem.tpe)
         val add = Apply(Select(target, "add"), List(value))
         val addNull = Apply(Select(target, "add"), List(mkNull))
-        val body = item +: mkIf(chk, stats :+ add, Seq(addNull))
 
-        Block(body: _*)
+        Block(item, mkIf(chk, Block((stats :+ add): _*), addNull))
       }
 
       Seq(it, loop)

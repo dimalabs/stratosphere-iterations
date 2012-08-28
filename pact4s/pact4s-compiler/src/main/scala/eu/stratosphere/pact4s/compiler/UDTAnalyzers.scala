@@ -216,9 +216,53 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
       private object ListType {
 
         def unapply(tpe: Type): Option[(Type, Tree, Tree => Tree)] = tpe match {
-          case _ if tpe.typeSymbol == definitions.ArrayClass => Some((tpe.typeArgs.head, EmptyTree, arr => Select(Apply(TypeApply(Select(Select(Ident("scala"), "Predef"), "genericArrayOps"), List(TypeTree(tpe.typeArgs.head))), List(arr)), "iterator")))
-          case _ if tpe.baseClasses.contains(definitions.getClass("scala.collection.GenTraversableOnce")) => Some((tpe.typeArgs.head, EmptyTree, arr => Select(arr, "toIterator")))
+
+          case ArrayType(elemTpe) => {
+            val manifest = localTyper.findManifest(elemTpe, false).tree
+            val builder = Apply(Select(localTyper.findManifest(elemTpe, false).tree, "newArrayBuilder"), List())
+            val iter = { source: Tree => Select(Apply(TypeApply(Select(Select(Ident("scala"), "Predef"), "genericArrayOps"), List(TypeTree(elemTpe))), List(source)), "iterator") }
+            Some((elemTpe, builder, iter))
+          }
+
+          case TraversableType(elemTpe, compSym) => {
+            val builder = TypeApply(Select(Ident(compSym), "newBuilder"), List(TypeTree(elemTpe)))
+            val iter = { source: Tree => Select(source, "toIterator") }
+            Some((elemTpe, builder, iter))
+          }
+
           case _ => None
+        }
+
+        private object ArrayType {
+          def unapply(tpe: Type): Option[Type] = tpe match {
+            case _ if tpe.typeSymbol == definitions.ArrayClass => Some(tpe.typeArgs.head)
+            case _ => None
+          }
+        }
+
+        private def applySizeHint(size: Tree, builder: Tree): Tree = EmptyTree
+
+        private object TraversableType {
+
+          def unapply(tpe: Type): Option[(Type, Symbol)] = tpe match {
+            case _ if tpe.baseClasses.contains(genTraversableOnceClass) => tpe match {
+              case GenericCompanionType(compSym) => {
+
+                val abstrElemTpe = genTraversableOnceClass.typeConstructor.typeParams.head.tpe
+                val elemTpe = abstrElemTpe.asSeenFrom(tpe, genTraversableOnceClass)
+                Some((elemTpe, compSym))
+              }
+            }
+            case _ => None
+          }
+
+          private object GenericCompanionType {
+            def unapply(tpe: Type): Option[Symbol] = analyzer.companionModuleOf(tpe.typeSymbol, localTyper.context) match {
+              case NoSymbol => None
+              case compSym if compSym.tpe.baseClasses.contains(colGenericCompanionClass) => Some(compSym)
+              case _ => None
+            }
+          }
         }
       }
 

@@ -28,13 +28,13 @@ import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
 import eu.stratosphere.pact.common.`type`.base.PactList
 
-final class ListUDT[T, L[T] <: GenTraversableOnce[T]](implicit udtInst: UDT[T], bf: CanBuildFrom[GenTraversableOnce[T], T, L[T]]) extends UDT[L[T]] {
+final class ListUDT[T, L[T] <: GenTraversableOnce[T]](implicit udtInst: UDT[T], bf: CanBuildFrom[_, T, L[T]]) extends UDT[L[T]] {
 
   override val fieldTypes = Array[Class[_ <: PactValue]](classOf[PactList[PactRecord]])
 
   override def createSerializer(indexMap: Array[Int]) = createSerializer(indexMap, udtInst)
 
-  private def createSerializer(indexMap: Array[Int], udtInst: UDT[T])(implicit bf: CanBuildFrom[GenTraversableOnce[T], T, L[T]]) = new UDTSerializer[L[T]] {
+  private def createSerializer(indexMap: Array[Int], udtInst: UDT[T])(implicit bf: CanBuildFrom[_, T, L[T]]) = new UDTSerializer[L[T]] {
 
     private val index = indexMap(0)
 
@@ -51,7 +51,7 @@ final class ListUDT[T, L[T] <: GenTraversableOnce[T]](implicit udtInst: UDT[T], 
       if (index >= 0) {
         record.updateBinaryRepresenation()
 
-        val pactField = new PactList[PactRecord]() {}
+        val pactField = new PactListImpl
         val it = items.toIterator
 
         while (it.hasNext) {
@@ -74,16 +74,17 @@ final class ListUDT[T, L[T] <: GenTraversableOnce[T]](implicit udtInst: UDT[T], 
       // This method will be reentrant if T contains a List[T]
 
       if (index >= 0) {
-        val pactField = new PactList[PactRecord]() {}
+        val pactField = new PactListImpl
         record.getFieldInto(index, pactField)
-        val items = pactField map { inner.deserialize(_) }
-        val b = bf(items)
+        val b = bf()
         b.sizeHint(pactField.size())
-        for (item <- items) b += item
+        for (item <- pactField) b += inner.deserialize(item)
         b.result
       } else {
         bf().result
       }
     }
+
+    private class PactListImpl extends PactList[PactRecord]
   }
 }

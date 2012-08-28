@@ -206,9 +206,15 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
 
       def mkSetField(fieldId: Int, record: Tree): Tree = mkSetField(fieldId, record, mkSelectWrapper(fieldId))
       def mkSetField(fieldId: Int, record: Tree, wrapper: Tree): Tree = Apply(Select(record, "setField"), List(mkSelectIdx(fieldId), wrapper))
+      def mkGetFieldInto(fieldId: Int, record: Tree): Tree = mkGetFieldInto(fieldId, record, mkSelectWrapper(fieldId))
+      def mkGetFieldInto(fieldId: Int, record: Tree, wrapper: Tree): Tree = Apply(Select(record, "getFieldInto"), List(mkSelectIdx(fieldId), wrapper))
 
       def mkSetValue(fieldId: Int, value: Tree): Tree = mkSetValue(mkSelectWrapper(fieldId), value)
       def mkSetValue(wrapper: Tree, value: Tree): Tree = Apply(Select(wrapper, "setValue"), List(value))
+      def mkGetValue(fieldId: Int): Tree = mkGetValue(mkSelectWrapper(fieldId))
+      def mkGetValue(wrapper: Tree): Tree = Apply(Select(wrapper, "getValue"), List())
+
+      def mkNotIsNull(fieldId: Int, record: Tree): Tree = Select(Apply(Select(record, "isNull"), List(mkSelectIdx(fieldId))), "unary_$bang")
     }
   }
 }

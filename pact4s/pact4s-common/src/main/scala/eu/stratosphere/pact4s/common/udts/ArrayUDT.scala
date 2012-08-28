@@ -51,7 +51,7 @@ final class ArrayUDT[T](implicit udtInst: UDT[T], m: Manifest[T]) extends UDT[Ar
       if (index >= 0) {
         record.updateBinaryRepresenation()
 
-        val pactField = new PactList[PactRecord]() {}
+        val pactField = new PactListImpl
         val it = items.iterator
 
         while (it.hasNext) {
@@ -74,12 +74,14 @@ final class ArrayUDT[T](implicit udtInst: UDT[T], m: Manifest[T]) extends UDT[Ar
       // This method will be reentrant if T contains an Array[T]
 
       if (index >= 0) {
-        val pactField = new PactList[PactRecord]() {}
+        val pactField = new PactListImpl
         record.getFieldInto(index, pactField)
         pactField map { inner.deserialize(_) } toArray
       } else {
         new Array[T](0)
       }
     }
+
+    private class PactListImpl extends PactList[PactRecord]
   }
 }

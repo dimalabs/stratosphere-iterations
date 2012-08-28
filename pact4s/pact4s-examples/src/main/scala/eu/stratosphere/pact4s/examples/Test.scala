@@ -26,6 +26,18 @@ import eu.stratosphere.pact.common.`type`.base._
 
 import scala.collection.JavaConversions._
 
+class SimpleTest {
+  val primUdt = implicitly[UDT[Long]]
+  val boxdUdt = implicitly[UDT[Integer]]
+
+  abstract sealed class Simple { val x: Long }
+  case class A(x: Long, y: Long, z: B) extends Simple
+  case class B(x: Long, y: Long, z: Simple) extends Simple
+
+  val simpUdt = implicitly[UDT[Simple]]
+}
+
+/*
 class BlockTest {
 
   val udt = {
@@ -53,7 +65,7 @@ class BlockTest {
   }
 
   val udtTestInst2 = new DataSource("", DelimetedDataSourceFormat({ s: String => (s, s, (s.toInt, s)) }))
-}
+} //
 
 abstract class Test extends PactProgram with TestGeneratedImplicits {
 
@@ -160,4 +172,4 @@ class Outer {
     private val outerUdt = implicitly[UDT[Outer.this.Test[Y, Z]]]
   }
 }
-
+*/

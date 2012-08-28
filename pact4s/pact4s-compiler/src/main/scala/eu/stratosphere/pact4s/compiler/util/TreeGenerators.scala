@@ -95,15 +95,17 @@ trait TreeGenerators { this: TypingTransformers =>
       LabelDef(lblName, Nil, If(cond, block, EmptyTree))
     }
 
-    def mkIf(cond: Tree, bodyT: Tree*): Seq[Tree] = mkIf(cond, bodyT, Seq(EmptyTree))
+    def mkIf(cond: Tree, bodyT: Tree): Tree = mkIf(cond, bodyT, EmptyTree)
 
-    def mkIf(cond: Tree, bodyT: Seq[Tree], bodyF: Seq[Tree]): Seq[Tree] = cond match {
+    def mkIf(cond: Tree, bodyT: Tree, bodyF: Tree): Tree = cond match {
       case EmptyTree => bodyT
-      case _ => bodyF match {
-        case Seq()          => Seq(If(cond, Block(bodyT: _*), EmptyTree))
-        case Seq(EmptyTree) => Seq(If(cond, Block(bodyT: _*), EmptyTree))
-        case _              => Seq(If(cond, Block(bodyT: _*), Block(bodyF: _*)))
-      }
+      case _         => If(cond, bodyT, bodyF)
+    }
+
+    def mkSingle(stats: Seq[Tree]): Tree = stats match {
+      case Seq()     => EmptyTree
+      case Seq(stat) => stat
+      case _         => Block(stats: _*)
     }
 
     def mkAnd(cond1: Tree, cond2: Tree): Tree = cond1 match {

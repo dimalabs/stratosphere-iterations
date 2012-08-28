@@ -54,7 +54,7 @@ trait UDTDescriptors { this: Pact4sPlugin =>
     }
   }
 
-  case class ListDescriptor(id: Int, tpe: Type, listType: Type, bf: Tree, iter: Tree => Tree, elem: UDTDescriptor) extends UDTDescriptor {
+  case class ListDescriptor(id: Int, tpe: Type, listType: Type, builder: Tree, iter: Tree => Tree, elem: UDTDescriptor) extends UDTDescriptor {
 
     override def flatten = this +: elem.flatten
 
