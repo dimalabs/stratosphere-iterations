@@ -24,7 +24,7 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
   import global._
   import defs._
 
-  trait UDTSerializeMethodGenerator { this: TreeGenerator with UDTSerializerClassGenerator =>
+  trait UDTSerializeMethodGenerator { this: UDTSerializerClassGenerator with TreeGenerator with LoggingTransformer =>
 
     protected def mkSerialize(udtSerClassSym: Symbol, desc: UDTDescriptor, listImpls: Map[Int, Type]): List[Tree] = {
 
@@ -34,7 +34,7 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
         Block(stats.toList, mkUnit)
       }
 
-      val aux = (desc.findByType[RecursiveDescriptor].toList flatMap { rd => desc.findById(rd.refId) } distinct) map { desc =>
+      val aux = desc.getRecursiveRefs map { desc =>
         mkMethod(udtSerClassSym, "serialize" + desc.id, Flags.PRIVATE | Flags.FINAL, List(("item", desc.tpe), ("record", pactRecordClass.tpe)), definitions.UnitClass.tpe) { methodSym =>
           val env = GenEnvironment(udtSerClassSym, methodSym, listImpls, "boxed" + desc.id, true, false, true)
           val stats = genSerialize(desc, Ident("item"), Ident("record"), env)
@@ -42,7 +42,7 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
         }
       }
 
-      root +: aux
+      root +: aux.toList
     }
 
     private def genSerialize(desc: UDTDescriptor, source: Tree, target: Tree, env: GenEnvironment): Seq[Tree] = desc match {
@@ -63,15 +63,15 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
         Seq(mkIf(chk, Block(ser, set)))
       }
 
-      case list @ ListDescriptor(id, tpe, _, _, iter, elem) => {
+      case desc @ ListDescriptor(id, tpe, _, _, iter, elem) => {
         val chk = mkAnd(env.mkChkIdx(id), env.mkChkNotNull(source, tpe))
 
-        val upd = list.getInnermostElem match {
+        val upd = desc.getInnermostElem match {
           case _: RecursiveDescriptor => Some(Apply(Select(target, "updateBinaryRepresenation"), List()))
           case _                      => None
         }
 
-        val stats = env.reentrant match {
+        val (init, list) = env.reentrant match {
 
           // This is a bit conservative, but avoids runtime checks
           // and/or even more specialized serialize() methods to
@@ -79,18 +79,18 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
           case true => {
             val listTpe = env.listImpls(id)
             val list = mkVal(env.methodSym, "list" + id, 0, false, listTpe) { _ => New(TypeTree(listTpe), List(List())) }
-            val body = genSerializeListElem(elem, iter(source), Ident(list.symbol), env.copy(chkNull = true))
-            val set = env.mkSetField(id, target, Ident(list.symbol))
-            (list +: body) :+ set
+            (list, Ident(list.symbol))
           }
 
           case false => {
             val clear = Apply(Select(env.mkSelectWrapper(id), "clear"), List())
-            val body = genSerializeListElem(elem, iter(source), env.mkSelectWrapper(id), env.copy(chkNull = true))
-            val set = env.mkSetField(id, target)
-            (clear +: body) :+ set
+            (clear, env.mkSelectWrapper(id))
           }
         }
+
+        val body = genSerializeList(elem, iter(source), list, env.copy(chkNull = true))
+        val set = env.mkSetField(id, target, list)
+        val stats = (init +: body) :+ set
 
         Seq(mkIf(chk, Block((upd.toSeq ++ stats): _*)))
       }
@@ -101,7 +101,7 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
 
         stats match {
           case Nil => Seq()
-          case _   => Seq(mkIf(chk, Block(stats: _*)))
+          case _   => Seq(mkIf(chk, mkSingle(stats)))
         }
       }
 
@@ -110,11 +110,29 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
         val fields = baseFields flatMap { (f => genSerialize(f.desc, Select(source, f.sym), target, env.copy(chkNull = true))) }
         val cases = subTypes.zipWithIndex.toList map {
           case (dSubType, i) => {
-            val tag = genSerialize(tagField.desc, Literal(i), target, env.copy(chkNull = false))
-            val code = genSerialize(dSubType, Ident("inst"), target, env.copy(chkNull = false))
-            val body = (tag ++ code) :+ mkUnit
 
-            val pat = Bind("inst", Typed(Ident("_"), TypeTree(dSubType.tpe)))
+            val (pat, cast, inst) = {
+              val erasedTpe = mkErasedType(env.methodSym, dSubType.tpe)
+
+              if (erasedTpe =:= dSubType.tpe) {
+
+                val pat = Bind("inst", Typed(Ident("_"), TypeTree(dSubType.tpe)))
+                (pat, None, Ident("inst"))
+
+              } else {
+
+                // This avoids type erasure warnings in the generated pattern match
+                val pat = Bind("erasedInst", Typed(Ident("_"), TypeTree(erasedTpe)))
+                val cast = mkVal(env.methodSym, "inst", 0, false, dSubType.tpe) { _ => mkAsInstanceOf(Ident("erasedInst"), dSubType.tpe) }
+                val inst = Ident(cast.symbol)
+                (pat, Some(cast), inst)
+              }
+            }
+
+            val tag = genSerialize(tagField.desc, Literal(i), target, env.copy(chkNull = false))
+            val code = genSerialize(dSubType, inst, target, env.copy(chkNull = false))
+            val body = (cast.toSeq ++ tag ++ code) :+ mkUnit
+
             CaseDef(pat, EmptyTree, Block(body: _*))
           }
         }
@@ -151,7 +169,7 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
       }
     }
 
-    private def genSerializeListElem(elem: UDTDescriptor, iter: Tree, target: Tree, env: GenEnvironment): Seq[Tree] = {
+    private def genSerializeList(elem: UDTDescriptor, iter: Tree, target: Tree, env: GenEnvironment): Seq[Tree] = {
 
       val it = mkVal(env.methodSym, "it", 0, false, mkIteratorOf(elem.tpe)) { _ => iter }
 
@@ -168,7 +186,7 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
           case ListDescriptor(id, _, _, _, iter, innerElem) => {
             val listTpe = env.listImpls(id)
             val list = mkVal(env.methodSym, "list" + id, 0, false, listTpe) { _ => New(TypeTree(listTpe), List(List())) }
-            val body = genSerializeListElem(innerElem, iter(Ident(item.symbol)), Ident(list.symbol), env)
+            val body = genSerializeList(innerElem, iter(Ident(item.symbol)), Ident(list.symbol), env)
             (list +: body, Ident(list.symbol))
           }
 
@@ -192,7 +210,7 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
         val add = Apply(Select(target, "add"), List(value))
         val addNull = Apply(Select(target, "add"), List(mkNull))
 
-        Block(item, mkIf(chk, Block((stats :+ add): _*), addNull))
+        Block(item, mkIf(chk, mkSingle(stats :+ add), addNull))
       }
 
       Seq(it, loop)

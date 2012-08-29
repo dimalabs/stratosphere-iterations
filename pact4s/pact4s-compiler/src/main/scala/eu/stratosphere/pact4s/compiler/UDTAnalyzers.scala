@@ -34,7 +34,7 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
 
       val currentThis = ThisType(localTyper.context.enclClass.owner)
       val norm = { tpe: Type => currentThis.baseClasses.foldLeft(tpe map { _.dealias }) { (tpe, base) => tpe.substThis(base, currentThis) } }
-      val infer = { tpe: Type => analyzer.inferImplicit(site, appliedType(udtClass.tpe, List(tpe)), true, false, localTyper.context).tree }
+      val infer = { tpe: Type => analyzer.inferImplicit(site, tpe, true, false, localTyper.context).tree }
 
       new UDTAnalyzerInstance(norm, infer).analyze(tpe)
     }
@@ -64,9 +64,9 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
         }
       }
 
-      private def analyzeList(id: Int, tpe: Type, bf: Tree, iter: Tree => Tree): UDTDescriptor = analyze(tpe.typeArgs.head) match {
+      private def analyzeList(id: Int, tpe: Type, cbf: () => Tree, iter: Tree => Tree): UDTDescriptor = analyze(tpe.typeArgs.head) match {
         case UnsupportedDescriptor(_, _, errs) => UnsupportedDescriptor(id, tpe, errs)
-        case desc                              => ListDescriptor(id, tpe, tpe.typeConstructor, bf, iter, desc)
+        case desc                              => ListDescriptor(id, tpe, tpe.typeConstructor, cbf, iter, desc)
       }
 
       private def analyzeClassHierarchy(id: Int, tpe: Type): UDTDescriptor = {
@@ -191,10 +191,15 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
       }
 
       private object OpaqueType {
-        def unapply(tpe: Type): Option[Tree] = infer(tpe) match {
+
+        private val treeCopy = new Transformer {
+          override val treeCopy = new StrictTreeCopier
+        }
+
+        def unapply(tpe: Type): Option[() => Tree] = infer(mkUdtOf(tpe)) match {
           case EmptyTree                          => None
           case ref if ref.symbol == unanalyzedUdt => None
-          case ref                                => Some(ref)
+          case ref                                => Some(() => treeCopy.transform(ref))
         }
       }
 
@@ -215,22 +220,31 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
 
       private object ListType {
 
-        def unapply(tpe: Type): Option[(Type, Tree, Tree => Tree)] = tpe match {
+        private val treeCopy = new Transformer {
+          override val treeCopy = new StrictTreeCopier
+        }
+
+        def unapply(tpe: Type): Option[(Type, () => Tree, Tree => Tree)] = tpe match {
 
           case ArrayType(elemTpe) => {
-            val manifest = localTyper.findManifest(elemTpe, false).tree
-            val builder = Apply(Select(localTyper.findManifest(elemTpe, false).tree, "newArrayBuilder"), List())
             val iter = { source: Tree => Select(Apply(TypeApply(Select(Select(Ident("scala"), "Predef"), "genericArrayOps"), List(TypeTree(elemTpe))), List(source)), "iterator") }
-            Some((elemTpe, builder, iter))
+            withCanBuildFrom(tpe, elemTpe, iter)
           }
 
-          case TraversableType(elemTpe, compSym) => {
-            val builder = TypeApply(Select(Ident(compSym), "newBuilder"), List(TypeTree(elemTpe)))
+          case TraversableType(elemTpe) => {
             val iter = { source: Tree => Select(source, "toIterator") }
-            Some((elemTpe, builder, iter))
+            withCanBuildFrom(tpe, elemTpe, iter)
           }
 
           case _ => None
+        }
+
+        private def withCanBuildFrom(tpe: Type, elemTpe: Type, iter: Tree => Tree): Option[(Type, () => Tree, Tree => Tree)] = {
+          val cbfTpe = appliedType(canBuildFromClass.tpe, List(tpe, elemTpe, tpe))
+          infer(cbfTpe) match {
+            case EmptyTree => None
+            case cbf       => Some((elemTpe, () => treeCopy.transform(cbf), iter))
+          }
         }
 
         private object ArrayType {
@@ -240,28 +254,14 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
           }
         }
 
-        private def applySizeHint(size: Tree, builder: Tree): Tree = EmptyTree
-
         private object TraversableType {
-
-          def unapply(tpe: Type): Option[(Type, Symbol)] = tpe match {
-            case _ if tpe.baseClasses.contains(genTraversableOnceClass) => tpe match {
-              case GenericCompanionType(compSym) => {
-
-                val abstrElemTpe = genTraversableOnceClass.typeConstructor.typeParams.head.tpe
-                val elemTpe = abstrElemTpe.asSeenFrom(tpe, genTraversableOnceClass)
-                Some((elemTpe, compSym))
-              }
+          def unapply(tpe: Type): Option[Type] = tpe match {
+            case _ if tpe.baseClasses.contains(genTraversableOnceClass) => {
+              val abstrElemTpe = genTraversableOnceClass.typeConstructor.typeParams.head.tpe
+              val elemTpe = abstrElemTpe.asSeenFrom(tpe, genTraversableOnceClass)
+              Some(elemTpe)
             }
             case _ => None
-          }
-
-          private object GenericCompanionType {
-            def unapply(tpe: Type): Option[Symbol] = analyzer.companionModuleOf(tpe.typeSymbol, localTyper.context) match {
-              case NoSymbol => None
-              case compSym if compSym.tpe.baseClasses.contains(colGenericCompanionClass) => Some(compSym)
-              case _ => None
-            }
           }
         }
       }

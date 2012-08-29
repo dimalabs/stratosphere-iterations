@@ -35,16 +35,25 @@ trait TreeGenerators { this: TypingTransformers =>
     def mkZero = Literal(Constant(0))
     def mkOne = Literal(Constant(1))
 
+    def mkAsInstanceOf(source: Tree, targetTpe: Type): Tree = TypeApply(Select(source, "asInstanceOf"), List(TypeTree(targetTpe)))
+
+    def maybeMkAsInstanceOf(source: Tree, sourceTpe: Type, targetTpe: Type): Tree = {
+      if (sourceTpe <:< targetTpe)
+        source
+      else
+        mkAsInstanceOf(source, targetTpe)
+    }
+
     def mkIdent(target: Symbol): Tree = Ident(target) setType target.tpe
 
     def mkVar(owner: Symbol, name: String, flags: Long, transient: Boolean, valTpe: Type)(value: Symbol => Tree): Tree = {
-      val valSym = owner.newValue(name) setFlag (flags | Flags.SYNTHETIC | Flags.MUTABLE) setInfo valTpe
+      val valSym = owner.newValue(name) setFlag (flags | Flags.MUTABLE) setInfo valTpe
       if (transient) valSym.addAnnotation(AnnotationInfo(definitions.TransientAttr.tpe, Nil, Nil))
       ValDef(valSym, value(valSym))
     }
 
     def mkVal(owner: Symbol, name: String, flags: Long, transient: Boolean, valTpe: Type)(value: Symbol => Tree): Tree = {
-      val valSym = owner.newValue(name) setFlag (flags | Flags.SYNTHETIC) setInfo valTpe
+      val valSym = owner.newValue(name) setFlag flags setInfo valTpe
       if (transient) valSym.addAnnotation(AnnotationInfo(definitions.TransientAttr.tpe, Nil, Nil))
       ValDef(valSym, value(valSym))
     }

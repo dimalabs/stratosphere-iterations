@@ -25,6 +25,8 @@ trait UDTDescriptors { this: Pact4sPlugin =>
     val id: Int
     val tpe: Type
 
+    def mkRoot: UDTDescriptor = this
+
     def flatten: Seq[UDTDescriptor]
 
     def findById(id: Int): Option[UDTDescriptor] = flatten.find { _.id == id }
@@ -33,6 +35,8 @@ trait UDTDescriptors { this: Pact4sPlugin =>
       val clazz = implicitly[Manifest[T]].erasure
       flatten filter { item => clazz.isAssignableFrom(item.getClass) } map { _.asInstanceOf[T] }
     }
+
+    def getRecursiveRefs: Seq[UDTDescriptor] = findByType[RecursiveDescriptor] flatMap { rd => findById(rd.refId) } map { _.mkRoot } distinct
   }
 
   case class UnsupportedDescriptor(id: Int, tpe: Type, errors: Seq[String]) extends UDTDescriptor {
@@ -54,7 +58,9 @@ trait UDTDescriptors { this: Pact4sPlugin =>
     }
   }
 
-  case class ListDescriptor(id: Int, tpe: Type, listType: Type, builder: Tree, iter: Tree => Tree, elem: UDTDescriptor) extends UDTDescriptor {
+  case class ListDescriptor(id: Int, tpe: Type, listType: Type, cbf: () => Tree, iter: Tree => Tree, elem: UDTDescriptor) extends UDTDescriptor {
+
+    private val cbfString = cbf().toString
 
     override def flatten = this +: elem.flatten
 
@@ -63,9 +69,9 @@ trait UDTDescriptors { this: Pact4sPlugin =>
       case _                    => elem
     }
 
-    override def hashCode() = (id, tpe, listType, elem).hashCode()
+    override def hashCode() = (id, tpe, listType, cbfString, elem).hashCode()
     override def equals(that: Any) = that match {
-      case ListDescriptor(thatId, thatTpe, thatListType, _, _, thatElem) => (id, tpe, listType, elem).equals((thatId, thatTpe, thatListType, thatElem))
+      case that @ ListDescriptor(thatId, thatTpe, thatListType, _, _, thatElem) => (id, tpe, listType, cbfString, elem).equals((thatId, thatTpe, thatListType, that.cbfString, thatElem))
       case _ => false
     }
   }
@@ -76,6 +82,8 @@ trait UDTDescriptors { this: Pact4sPlugin =>
   }
 
   case class CaseClassDescriptor(id: Int, tpe: Type, ctor: Symbol, ctorTpe: Type, getters: Seq[FieldAccessor]) extends UDTDescriptor {
+
+    override def mkRoot = this.copy(getters = getters map { _.copy(isBaseField = false) })
 
     override def flatten = this +: (getters flatMap { _.desc.flatten })
 
@@ -91,15 +99,17 @@ trait UDTDescriptors { this: Pact4sPlugin =>
 
   case class FieldAccessor(sym: Symbol, tpe: Type, isBaseField: Boolean, desc: UDTDescriptor)
 
-  case class OpaqueDescriptor(id: Int, tpe: Type, ref: Tree) extends UDTDescriptor {
+  case class OpaqueDescriptor(id: Int, tpe: Type, ref: () => Tree) extends UDTDescriptor {
+
+    private val refString = ref().toString
 
     override def flatten = Seq(this)
 
     // Use string representation of Trees to approximate structural hashing and
     // equality, since Tree doesn't provide an implementation of these methods.
-    override def hashCode() = (id, tpe, ref.toString).hashCode()
+    override def hashCode() = (id, tpe, refString).hashCode()
     override def equals(that: Any) = that match {
-      case OpaqueDescriptor(thatId, thatTpe, thatRef) => (id, tpe, ref.toString).equals((thatId, thatTpe, thatRef.toString))
+      case that @ OpaqueDescriptor(thatId, thatTpe, _) => (id, tpe, refString).equals((thatId, thatTpe, that.refString))
       case _ => false
     }
   }

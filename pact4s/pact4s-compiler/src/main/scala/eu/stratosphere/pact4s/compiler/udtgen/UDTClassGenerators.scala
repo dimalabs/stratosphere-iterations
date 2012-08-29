@@ -24,7 +24,7 @@ trait UDTClassGenerators extends UDTSerializerClassGenerators { this: Pact4sPlug
   import global._
   import defs._
 
-  trait UDTClassGenerator extends UDTSerializerClassGenerator { this: TreeGenerator =>
+  trait UDTClassGenerator extends UDTSerializerClassGenerator { this: TreeGenerator with LoggingTransformer =>
 
     protected def mkUdtClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 
@@ -60,7 +60,7 @@ trait UDTClassGenerators extends UDTSerializerClassGenerators { this: Pact4sPlug
           //             descriptors, so we don't know how many fields we
           //             need until runtime.
           case BaseClassDescriptor(_, _, getters, subTypes)     => (getters flatMap { f => getFieldTypes(f.desc) }) ++ (subTypes flatMap getFieldTypes)
-          case OpaqueDescriptor(_, _, ref)                      => Seq(Select(ref, "fieldTypes"))
+          case OpaqueDescriptor(_, _, ref)                      => Seq(Select(ref(), "fieldTypes"))
           // Box inner instances of recursive types
           case RecursiveDescriptor(_, _, _)                     => Seq(mkClassOf(pactRecordClass.tpe))
         }

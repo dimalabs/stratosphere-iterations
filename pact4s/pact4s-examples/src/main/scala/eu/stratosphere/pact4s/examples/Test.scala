@@ -27,17 +27,18 @@ import eu.stratosphere.pact.common.`type`.base._
 import scala.collection.JavaConversions._
 
 class SimpleTest {
+
   val primUdt = implicitly[UDT[Long]]
-  val boxdUdt = implicitly[UDT[Integer]]
+  val boxdUdt = implicitly[UDT[java.lang.Integer]]
 
-  abstract sealed class Simple { val x: Long }
-  case class A(x: Long, y: Long, z: B) extends Simple
-  case class B(x: Long, y: Long, z: Simple) extends Simple
+  abstract sealed class Simple[S, T] { val x: T }
+  case class A[S, T](x: T, y: A[S, T], z: Array[Simple[S, T]]) extends Simple[S, T]
+  case class B[S, T](x: T, y: Seq[Seq[B[S, T]]]) extends Simple[S, T]
+  case class C[S, T](x: T, y: Seq[Long]) extends Simple[S, T]
 
-  val simpUdt = implicitly[UDT[Simple]]
+  val simpUdt = implicitly[UDT[Simple[String, Long]]]
 }
 
-/*
 class BlockTest {
 
   val udt = {
@@ -65,9 +66,9 @@ class BlockTest {
   }
 
   val udtTestInst2 = new DataSource("", DelimetedDataSourceFormat({ s: String => (s, s, (s.toInt, s)) }))
-} //
+}
 
-abstract class Test extends PactProgram with TestGeneratedImplicits {
+abstract class Test extends TestGeneratedImplicits {
 
   abstract sealed class Foo
   case class Bar(x: Int, y: Long, z: Seq[Baz], zz: Baz) extends Foo
@@ -78,8 +79,8 @@ abstract class Test extends PactProgram with TestGeneratedImplicits {
   case class Thing[T](x: Long, y: Long, z: T)
 
   abstract sealed class Simple
-  case class B(b: Long, ba: A) extends Simple
-  case class A(a: Long, ab: B) extends Simple
+  case class B(b: Long, ba: A, s: Simple) extends Simple
+  case class A(a: Long, ab: B, s: Simple) extends Simple
 
   case class Test1(x1: Long, y1: Test1, z1: Test2)
   case class Test2(x2: Long, y2: Test1, z2: Test2)
@@ -90,6 +91,9 @@ abstract class Test extends PactProgram with TestGeneratedImplicits {
   case class Sub1[T](v: T, w: Base[T], override val x: Long, y: Option[Long]) extends Base[T]
   case class Sub2[T](v: T, w: Sub1[T], y: Some[Long], z: Long) extends Base[T]
   case class Sub3[T](v: T, w: Base[T], override val x: Long, y: Option[Long], z1: Base[T], z2: Seq[Base[T]], z3: List[Seq[Base[T]]], z4: Array[List[Seq[Base[T]]]]) extends Base[T]
+
+  val simpUdt1 = implicitly[UDT[Option[Simple]]]
+  val simpUdt2 = implicitly[UDT[Option[Simple]]]
 
   val baseUdt1 = implicitly[UDT[Base[String]]]
   val baseUdt2 = implicitly[UDT[Base[String]]]
@@ -172,4 +176,4 @@ class Outer {
     private val outerUdt = implicitly[UDT[Outer.this.Test[Y, Z]]]
   }
 }
-*/
+

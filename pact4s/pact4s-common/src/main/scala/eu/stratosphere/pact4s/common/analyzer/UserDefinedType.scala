@@ -74,7 +74,7 @@ object UDT extends UDTLowPriorityImplicits {
 
   implicit val booleanUdt = new BooleanUDT
   implicit val byteUdt = new ByteUDT
-  implicit val charUdt = new CharUDT
+  //implicit val charUdt = new CharUDT
   implicit val doubleUdt = new DoubleUDT
   implicit val intUdt = new IntUDT
   //implicit val longUdt = new LongUDT
@@ -82,7 +82,7 @@ object UDT extends UDTLowPriorityImplicits {
   //implicit val stringUdt = new StringUDT
 
   //implicit def arrayUdt[T](implicit m: Manifest[T], udt: UDT[T]): UDT[Array[T]] = new ArrayUDT[T]
-  //implicit def listUdt[T, L[T] <: GenTraversableOnce[T]](implicit udt: UDT[T], bf: CanBuildFrom[GenTraversableOnce[T], T, L[T]]): UDT[L[T]] = new ListUDT[T, L]
+  //implicit def listUdt[T, L[T] <: GenTraversableOnce[T]](implicit udt: UDT[T], bf: CanBuildFrom[L[T], T, L[T]]): UDT[L[T]] = new ListUDT[T, L]
 
   import ProductFactories._
 

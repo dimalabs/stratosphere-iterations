@@ -24,7 +24,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
   import global._
   import defs._
 
-  trait UDTSerializerClassGenerator extends UDTSerializeMethodGenerator with UDTDeserializeMethodGenerator { this: TreeGenerator =>
+  trait UDTSerializerClassGenerator extends UDTSerializeMethodGenerator with UDTDeserializeMethodGenerator { this: UDTClassGenerator with TreeGenerator with LoggingTransformer =>
 
     protected def mkUdtSerializerClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 
@@ -85,7 +85,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
       (listImpls.flatten, listTypes.flatten.toMap)
     }
 
-    def getIndexFields(desc: UDTDescriptor): Seq[UDTDescriptor] = desc match {
+    private def getIndexFields(desc: UDTDescriptor): Seq[UDTDescriptor] = desc match {
       case CaseClassDescriptor(_, _, _, _, getters) => getters filterNot { _.isBaseField } flatMap { f => getIndexFields(f.desc) }
       case BaseClassDescriptor(id, _, getters, subTypes) => (getters flatMap { f => getIndexFields(f.desc) }) ++ (subTypes flatMap getIndexFields)
       case _ => Seq(desc)
@@ -100,13 +100,13 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
       val fieldsAndInits = descFields map {
 
         case OpaqueDescriptor(id, tpe, ref) => {
-          val take = Apply(Select(Select(This(udtSerClassSym), iterName), "take"), List(Select(ref, "numFields")))
+          val take = Apply(Select(Select(This(udtSerClassSym), iterName), "take"), List(Select(ref(), "numFields")))
           val arr = Apply(TypeApply(Select(take, "toArray"), List(TypeTree(definitions.IntClass.tpe))), List(Select(Select(Ident("reflect"), "Manifest"), "Int")))
           val idxField = mkVal(udtSerClassSym, prefix + "Idx" + id, Flags.PRIVATE, true, intArrayTpe) { _ => arr }
 
           val serField = mkVar(udtSerClassSym, prefix + "Ser" + id, Flags.PRIVATE, false, mkUdtSerializerOf(tpe)) { _ => mkNull }
 
-          val serInst = Apply(Select(ref, "getSerializer"), List(Select(This(udtSerClassSym), prefix + "Idx" + id)))
+          val serInst = Apply(Select(ref(), "getSerializer"), List(Select(This(udtSerClassSym), prefix + "Idx" + id)))
           val serInit = Assign(Select(This(udtSerClassSym), prefix + "Ser" + id), serInst)
 
           (List(idxField, serField), List(serInit: Tree))
@@ -133,7 +133,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
         case ListDescriptor(_, _, _, _, _, elem) => getBoxedDescriptors(elem)
         case CaseClassDescriptor(_, _, _, _, getters) => getters filterNot { _.isBaseField } flatMap { f => getBoxedDescriptors(f.desc) }
         case BaseClassDescriptor(id, _, getters, subTypes) => (getters flatMap { f => getBoxedDescriptors(f.desc) }) ++ (subTypes flatMap getBoxedDescriptors)
-        case RecursiveDescriptor(_, _, refId) => desc.findById(refId).toSeq
+        case RecursiveDescriptor(_, _, refId) => desc.findById(refId).map(_.mkRoot).toSeq
         case _ => Seq()
       }
 
@@ -142,7 +142,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
           case Nil => None
           case fields => {
             val widths = fields map {
-              case OpaqueDescriptor(_, _, ref) => Select(ref, "numFields")
+              case OpaqueDescriptor(_, _, ref) => Select(ref(), "numFields")
               case _                           => mkOne
             }
             val sum = widths.reduce { (s, i) => Apply(Select(s, "$plus"), List(i)) }
