@@ -157,3 +157,4 @@ trait WordCountGeneratedImplicits { this: WordCount =>
   implicit def selOutput: FieldSelector[Function1[(String, Int), Unit]] = defaultFieldSelectorT[(String, Int), Unit]
   implicit def selCounts: FieldSelector[Function1[(String, Int), String]] = getFieldSelector[(String, Int), String](0)
 }
+

@@ -30,10 +30,10 @@ trait TreeGenerators { this: TypingTransformers =>
     def freshTypeName(name: String) = localTyper.context.unit.freshTypeName(name)
     def freshTermName(name: String) = localTyper.context.unit.freshTermName(name)
 
-    def mkUnit = Literal(Constant(()))
-    def mkNull = Literal(Constant(null))
-    def mkZero = Literal(Constant(0))
-    def mkOne = Literal(Constant(1))
+    def mkUnit = Literal(Constant(())) setType definitions.UnitClass.tpe
+    def mkNull = Literal(Constant(null)) setType ConstantType(Constant(null))
+    def mkZero = Literal(Constant(0)) setType ConstantType(Constant(0))
+    def mkOne = Literal(Constant(1)) setType ConstantType(Constant(1))
 
     def mkAsInstanceOf(source: Tree, targetTpe: Type): Tree = TypeApply(Select(source, "asInstanceOf"), List(TypeTree(targetTpe)))
 
@@ -46,16 +46,14 @@ trait TreeGenerators { this: TypingTransformers =>
 
     def mkIdent(target: Symbol): Tree = Ident(target) setType target.tpe
 
-    def mkVar(owner: Symbol, name: String, flags: Long, transient: Boolean, valTpe: Type)(value: Symbol => Tree): Tree = {
-      val valSym = owner.newValue(name) setFlag (flags | Flags.MUTABLE) setInfo valTpe
-      if (transient) valSym.addAnnotation(AnnotationInfo(definitions.TransientAttr.tpe, Nil, Nil))
-      ValDef(valSym, value(valSym))
-    }
-
     def mkVal(owner: Symbol, name: String, flags: Long, transient: Boolean, valTpe: Type)(value: Symbol => Tree): Tree = {
       val valSym = owner.newValue(name) setFlag flags setInfo valTpe
       if (transient) valSym.addAnnotation(AnnotationInfo(definitions.TransientAttr.tpe, Nil, Nil))
       ValDef(valSym, value(valSym))
+    }
+
+    def mkVar(owner: Symbol, name: String, flags: Long, transient: Boolean, valTpe: Type)(value: Symbol => Tree): Tree = {
+      mkVal(owner, name, flags | Flags.MUTABLE, transient, valTpe)(value)
     }
 
     def mkValAndGetter(owner: Symbol, name: String, flags: Long, valTpe: Type)(value: Symbol => Tree): List[Tree] = {
@@ -74,24 +72,34 @@ trait TreeGenerators { this: TypingTransformers =>
 
     def mkVarAndLazyGetter(owner: Symbol, name: String, flags: Long, valTpe: Type)(value: Symbol => Tree): List[Tree] = {
 
-      val privateFlag = if (owner.isClass) Flags.PRIVATE else 0
-      val varDef = mkVar(owner, name + " ", privateFlag, false, valTpe) { _ => Literal(Constant(null)) }
+      // Class-member vars without setters must have the local flag, but
+      // this flag causes an error when type checking the field and getter
+      // individually. This method is extremely anal about setting symbols
+      // and types on the generated trees so that they don't have to be
+      // explicitly run through the type checker. For some reason, the type 
+      // checker doesn't look at these trees when processing the parent ClassDef. 
 
-      val defDef = mkMethod(owner, name, privateFlag | flags | Flags.ACCESSOR, Nil, valTpe) { defSym =>
+      val varFlags = if (owner.isClass) Flags.PRIVATE | Flags.LOCAL else 0
+      val field = mkVar(owner, name + " ", varFlags, false, valTpe) { _ => mkNull }
 
-        def selVar = {
-          if (owner.isClass)
-            Select(This(owner), name + " ")
-          else
-            Ident(varDef.symbol)
+      val getter = mkMethod(owner, name, flags, Nil, valTpe) { defSym =>
+
+        def selField = {
+          val tree = owner.isClass match {
+            case true  => Select(This(owner) setType owner.thisType, name + " ")
+            case false => Ident(field.symbol)
+          }
+          tree setSymbol field.symbol setType valTpe
         }
 
-        val chk = Apply(Select(selVar, "$eq$eq"), List(Literal(Constant(null))))
-        val init = Assign(selVar, value(defSym))
-        Block(If(chk, init, EmptyTree), selVar)
+        val eqeqSym = definitions.Object_==
+        val eqeq = Select(selField, "$eq$eq") setSymbol eqeqSym setType eqeqSym.tpe
+        val chk = Apply(eqeq, List(mkNull)) setType definitions.BooleanClass.tpe
+        val init = Assign(selField, value(defSym)) setType definitions.UnitClass.tpe
+        Block(If(chk, init, EmptyTree) setType definitions.UnitClass.tpe, selField) setType valTpe
       }
 
-      List(varDef, defDef)
+      List(field setType NoType, getter setType NoType)
     }
 
     def mkWhile(cond: Tree)(body: Tree): Tree = {

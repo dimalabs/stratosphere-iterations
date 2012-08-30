@@ -124,32 +124,26 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
 
       private def mkUdtInst(owner: Symbol, desc: UDTDescriptor): List[Tree] = {
 
-        safely(Nil: List[Tree]) { e => "Error generating UDT[" + desc.tpe + "]: " + getMsgAndStackLine(e) } {
-          verbosely[List[Tree]] { case l => { val List(_, t) = l; "Generated " + t.symbol.fullName + "[" + desc.tpe + "] @ " + owner + " : " + t } } {
+        verbosely[List[Tree]] { case l => "Generated " + l.head.symbol.fullName + "[" + desc.tpe + "] @ " + owner } {
 
-            val privateFlag = if (owner.isClass) Flags.PRIVATE else 0
+          val privateFlag = if (owner.isClass) Flags.PRIVATE else 0
 
-            val List(valDef, defDef) = mkVarAndLazyGetter(owner, freshTermName("udtInst(") + ")", privateFlag | Flags.IMPLICIT, defs.mkUdtOf(desc.tpe)) { defSym =>
+          val stats = mkVarAndLazyGetter(owner, freshTermName("udtInst(") + ")", privateFlag | Flags.IMPLICIT, defs.mkUdtOf(desc.tpe)) { defSym =>
 
-              val udtClassDef = mkUdtClass(defSym, desc)
-              val udtInst = New(TypeTree(udtClassDef.symbol.tpe), List(List()))
+            val udtClassDef = mkUdtClass(defSym, desc)
+            val udtInst = New(TypeTree(udtClassDef.symbol.tpe), List(List()))
+            val rhs = Block(udtClassDef, udtInst)
 
-              Block(udtClassDef, udtInst)
-            }
-
-            if (owner.isClass) {
-              owner.info.decls enter valDef.symbol
-              owner.info.decls enter defDef.symbol
-            }
-
-            // Why is the UnCurry phase unhappy if we don't run the typer here?
-            // We're already running it for the enclosing ClassDef...
-            try {
-              List(localTyper.typed { valDef }, localTyper.typed { defDef })
-            } catch {
-              case e => { Inspect.browse(Block(valDef, defDef)); throw e }
+            safely(rhs: Tree) { e => Inspect.browse(rhs); "Error generating UDT[" + desc.tpe + "]: " + getMsgAndStackLine(e) } {
+              localTyper.typed { rhs }
             }
           }
+
+          if (owner.isClass) {
+            stats foreach { stat => owner.info.decls enter stat.symbol }
+          }
+
+          stats
         }
       }
     }

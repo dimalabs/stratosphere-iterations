@@ -50,7 +50,7 @@ class Pact4sPlugin(val global: Global) extends Plugin
     override val runsRightAfter = Some("Pact4s.UDTSite")
   }
 
-  override val logLevel = LogLevel.Inspect
+  //override val logLevel = LogLevel.Inspect
   override val name = "Pact4s"
   override val description = "Performs analysis and code generation for Pact4s programs."
   override val components = List[PluginComponent](udtGenSiteSelector, udtGenSiteTransformer)
