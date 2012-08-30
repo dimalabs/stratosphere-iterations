@@ -95,6 +95,7 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
+  /*
   implicit val orderSerializer: UDT[Order] = new UDT[Order] {
 
     override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactInteger], classOf[PactInteger], classOf[PactInteger], classOf[PactString], classOf[PactInteger])
@@ -331,6 +332,7 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
       }
     }
   }
+  */
 
   implicit def udf1: UDF1[Function1[Iterator[PrioritizedOrder], PrioritizedOrder]] = defaultUDF1IterT[PrioritizedOrder, PrioritizedOrder]
   implicit def udf2: UDF2[Function2[Order, LineItem, PrioritizedOrder]] = defaultUDF2[Order, LineItem, PrioritizedOrder]

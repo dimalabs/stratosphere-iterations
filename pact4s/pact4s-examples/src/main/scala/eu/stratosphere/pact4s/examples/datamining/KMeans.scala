@@ -108,6 +108,7 @@ trait KMeansGeneratedImplicits { this: KMeans =>
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
+  /*
   implicit val intPointSerializer: UDT[(Int, Point)] = new UDT[(Int, Point)] {
 
     override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactDouble], classOf[PactDouble])
@@ -344,6 +345,7 @@ trait KMeansGeneratedImplicits { this: KMeans =>
       }
     }
   }
+  */
 
   implicit def udf1: UDF1[Function1[Iterator[(Int, Distance)], (Int, Distance)]] = defaultUDF1IterT[(Int, Distance), (Int, Distance)]
   implicit def udf2: UDF1[Function1[(Int, Distance), (Int, PointSum)]] = defaultUDF1[(Int, Distance), (Int, PointSum)]
