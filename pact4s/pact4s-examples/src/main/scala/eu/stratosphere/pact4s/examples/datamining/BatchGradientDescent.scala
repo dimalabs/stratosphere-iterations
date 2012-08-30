@@ -107,6 +107,7 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
+  /*
   implicit val intArrayDoubleUDT: UDT[(Int, Array[Double])] = new UDT[(Int, Array[Double])] {
 
     override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactList[PactDouble]])
@@ -370,6 +371,7 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
       }
     }
   }
+  */
 
   implicit def udf1: UDF1[Function1[(Int, Array[Double]), (Int, Array[Double], Double)]] = defaultUDF1[(Int, Array[Double]), (Int, Array[Double], Double)]
   implicit def udf2: UDF1[Function1[Iterator[ValueAndGradient], ValueAndGradient]] = defaultUDF1IterT[ValueAndGradient, ValueAndGradient]

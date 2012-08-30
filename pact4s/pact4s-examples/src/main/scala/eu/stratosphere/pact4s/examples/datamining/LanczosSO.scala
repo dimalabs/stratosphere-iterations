@@ -186,6 +186,7 @@ trait LanczosSOGeneratedImplicits { this: LanczosSO =>
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
+  /*
   implicit def cellSerializer: UDT[Cell] = new UDT[Cell] {
 
     override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactDouble])
@@ -295,4 +296,5 @@ trait LanczosSOGeneratedImplicits { this: LanczosSO =>
       }
     }
   }
+  */
 }

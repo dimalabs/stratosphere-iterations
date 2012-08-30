@@ -90,6 +90,7 @@ trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
+  /*
   implicit val intIntUDT: UDT[(Int, Int)] = new UDT[(Int, Int)] {
 
     override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger])
@@ -140,6 +141,7 @@ trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>
       }
     }
   }
+  */
 
   implicit def udf1: UDF1[Function1[(Int, Int), Iterator[(Int, Int)]]] = defaultUDF1IterR[(Int, Int), (Int, Int)]
   implicit def udf2: UDF1[Function1[Iterator[(Int, Int)], (Int, Int)]] = defaultUDF1IterT[(Int, Int), (Int, Int)]
