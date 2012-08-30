@@ -23,7 +23,6 @@ import scala.tools.nsc.transform.TypingTransformers
 
 trait TypingTraversers { this: TypingTransformers =>
 
-  val global: Global
   import global._
 
   trait Traverser extends Transformer {

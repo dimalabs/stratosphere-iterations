@@ -26,6 +26,18 @@ import eu.stratosphere.pact.common.`type`.base._
 
 import scala.collection.JavaConversions._
 
+class GenericTest[T] {
+
+  val testFun: UDT[T] => UDT[(Int, T)] = { implicit udtEv: UDT[T] => implicitly[UDT[(Int, T)]] }
+
+  def testDef[T: UDT] = implicitly[UDT[(Int, T)]]
+
+  val udt = {
+    implicit val t1: UDT[T] = null
+    implicitly[UDT[(Int, T)]]
+  }
+}
+
 class SimpleTest {
 
   val primUdt = implicitly[UDT[Long]]
@@ -43,7 +55,7 @@ class BlockTest {
 
   val udt = {
     val x: Int = 0
-    implicitly[UDT[Short]]
+    implicitly[UDT[Int]]
   }
 
   def testDef(x: Int) = {
@@ -176,4 +188,3 @@ class Outer {
     private val outerUdt = implicitly[UDT[Outer.this.Test[Y, Z]]]
   }
 }
-

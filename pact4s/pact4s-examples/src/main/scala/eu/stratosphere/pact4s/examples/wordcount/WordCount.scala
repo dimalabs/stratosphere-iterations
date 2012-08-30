@@ -61,6 +61,7 @@ trait WordCountGeneratedImplicits { this: WordCount =>
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
+  /*
   implicit val stringSerializer: UDT[String] = new UDT[String] {
 
     override val fieldTypes = Array[Class[_ <: Value]](classOf[PactString])
@@ -147,6 +148,7 @@ trait WordCountGeneratedImplicits { this: WordCount =>
       }
     }
   }
+  */
 
   implicit def udf1: UDF1[Function1[String, Iterator[String]]] = defaultUDF1IterR[String, String]
   implicit def udf2: UDF1[Function1[String, Iterator[(String, Int)]]] = defaultUDF1IterR[String, (String, Int)]

@@ -25,7 +25,7 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
 
   trait UDTGenSiteTransformer extends Pact4sTransform with UDTGenSiteParticipant {
 
-    override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with LoggingTransformer with TreeGenerator with UDTClassGenerator {
+    override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with ScopingTransformer with LoggingTransformer with TreeGenerator with UDTClassGenerator {
 
       private val genSites = getSites(unit)
       private val unitRoot = new EagerAutoSwitch[Tree] { override def guard = unit.toString.contains("Test.scala") }
@@ -36,29 +36,51 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
 
           tree match {
 
-            // Generate UDT classes and inject them into the AST
+            // Generate UDT classes and inject them into the AST.
+
+            // Blocks are naked (no symbol), so new implicits
+            // must be manually inserted into the typer's context.            
             case Block(stats, ret) if genSites(tree).nonEmpty => {
 
-              atOwner(tree, currentOwner) {
+              val unmangledStats = stats match {
+                case List(Literal(Constant(()))) => Nil
+                case _                           => stats
+              }
+
+              val udtInstances = genSites(tree).toList flatMap { mkUdtInst(currentOwner, _) }
+              val newBlock @ Block(newStats, newRet) = localTyper.typed { treeCopy.Block(tree, udtInstances ++ unmangledStats, ret) }
+
+              withImplicits(newBlock) {
                 super.transform {
-
-                  verbosely[Tree] { tree => "GenSite Block[" + tree.pos.line + ":" + tree.pos.column + "] defines: " + localTyper.context.implicitss.flatten.filter(_.sym.owner == currentOwner).map(m => m.name.toString + ": " + m.tpe.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ") } {
-
-                    val udtInstances = genSites(tree).toList flatMap { mkUdtInst(currentOwner, _) }
-                    val newBlock @ Block(newStats, _) = localTyper.typed { treeCopy.Block(tree, udtInstances ++ stats, ret) }
-
-                    // Blocks are naked (no symbol), so they don't maintain a scope.
-                    // Enter the new implicits directly into the typer's scope instead.
-                    localTyper.context.scope = localTyper.context.scope.cloneScope
-                    newStats filter { stat => stat.hasSymbol && stat.symbol.isImplicit && stat.symbol.owner == currentOwner } map { _.symbol } foreach { localTyper.context.scope.enter }
-
+                  verbosely[Tree] { tree => "GenSite Block[" + posString(tree.pos) + "] defines: " + localTyper.context.implicitss.flatten.filter(_.sym.owner == currentOwner).map(m => m.name.toString + ": " + m.tpe.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ") } {
                     newBlock
                   }
                 }
               }
             }
 
-            // Generate UDT classes and inject them into the AST
+            // If a DefDef or a Function is a gen site, then it's rhs is
+            // not a Block (otherwise the block would be the gen site).
+            // The rhs must therefore be transformed into a block so that
+            // we have somewhere to insert new statements.
+            case Function(vparams, rhs) if genSites(tree).nonEmpty => {
+              super.transform {
+                val mangledRhs = Block(mkUnit, rhs) setPos rhs.pos
+                genSites(mangledRhs) = genSites(tree)
+                localTyper.typed { treeCopy.Function(tree, vparams, mangledRhs) }
+              }
+            }
+
+            case DefDef(mods, name, tparams, vparamss, tpt, rhs) if genSites(tree).nonEmpty => {
+              super.transform {
+                val mangledRhs = Block(mkUnit, rhs) setPos rhs.pos
+                genSites(mangledRhs) = genSites(tree)
+                localTyper.typed { treeCopy.DefDef(tree, mods, name, tparams, vparamss, tpt, mangledRhs) }
+              }
+            }
+
+            // Classes have a body in which to insert new statements and a scope
+            // in which to insert new implicits, so no mangling is needed here.
             case ClassDef(mods, name, tparams, template @ Template(parents, self, body)) if genSites(tree).nonEmpty => {
 
               super.transform {
@@ -80,7 +102,7 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
                   val udtInst = analyzer.inferImplicit(tree, defs.mkUdtOf(t.tpe), true, false, localTyper.context)
 
                   udtInst.tree match {
-                    case t if t.isEmpty || t.symbol == defs.unanalyzedUdt => {
+                    case t1 if t1.isEmpty || t1.symbol == defs.unanalyzedUdt => {
                       val availUdts = localTyper.context.implicitss.flatten.map(m => m.name.toString + ": " + m.tpe.toString).filter(_.startsWith("udtInst")).sorted.mkString(", ")
                       val implicitCount = localTyper.context.implicitss.flatten.length
                       Error.report("Failed to apply " + defs.mkUdtOf(t.tpe) + ". Total Implicits: " + implicitCount + ". Available UDTs: " + availUdts)
@@ -125,7 +147,7 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
             try {
               List(localTyper.typed { valDef }, localTyper.typed { defDef })
             } catch {
-              case e => { Debug.browse(Block(valDef, defDef)); throw e }
+              case e => { Inspect.browse(Block(valDef, defDef)); throw e }
             }
           }
         }

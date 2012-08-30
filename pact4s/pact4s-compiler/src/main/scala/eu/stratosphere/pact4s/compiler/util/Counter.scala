@@ -21,8 +21,10 @@ class Counter {
   private var value: Int = 0
 
   def next: Int = {
-    val current = value
-    value += 1
-    current
+    this.synchronized {
+      val current = value
+      value += 1
+      current
+    }
   }
 }

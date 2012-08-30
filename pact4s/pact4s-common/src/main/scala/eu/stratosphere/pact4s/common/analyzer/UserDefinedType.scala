@@ -72,17 +72,18 @@ trait UDTLowPriorityImplicits {
 
 object UDT extends UDTLowPriorityImplicits {
 
+  /*
   implicit val booleanUdt = new BooleanUDT
   implicit val byteUdt = new ByteUDT
-  //implicit val charUdt = new CharUDT
+  implicit val charUdt = new CharUDT
   implicit val doubleUdt = new DoubleUDT
   implicit val intUdt = new IntUDT
-  //implicit val longUdt = new LongUDT
+  implicit val longUdt = new LongUDT
   implicit val shortUdt = new ShortUDT
-  //implicit val stringUdt = new StringUDT
+  implicit val stringUdt = new StringUDT
 
-  //implicit def arrayUdt[T](implicit m: Manifest[T], udt: UDT[T]): UDT[Array[T]] = new ArrayUDT[T]
-  //implicit def listUdt[T, L[T] <: GenTraversableOnce[T]](implicit udt: UDT[T], bf: CanBuildFrom[L[T], T, L[T]]): UDT[L[T]] = new ListUDT[T, L]
+  implicit def arrayUdt[T](implicit m: Manifest[T], udt: UDT[T]): UDT[Array[T]] = new ArrayUDT[T]
+  implicit def listUdt[T, L[T] <: GenTraversableOnce[T]](implicit udt: UDT[T], bf: CanBuildFrom[L[T], T, L[T]]): UDT[L[T]] = new ListUDT[T, L]
 
   import ProductFactories._
 
@@ -123,5 +124,6 @@ object UDT extends UDTLowPriorityImplicits {
   implicit def product20Udt[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT, T8: UDT, T9: UDT, T10: UDT, T11: UDT, T12: UDT, T13: UDT, T14: UDT, T15: UDT, T16: UDT, T17: UDT, T18: UDT, T19: UDT, T20: UDT] = new Product20UDT[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, Tuple20[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20]]
   implicit def product21Udt[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT, T8: UDT, T9: UDT, T10: UDT, T11: UDT, T12: UDT, T13: UDT, T14: UDT, T15: UDT, T16: UDT, T17: UDT, T18: UDT, T19: UDT, T20: UDT, T21: UDT] = new Product21UDT[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, Tuple21[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21]]
   implicit def product22Udt[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT, T8: UDT, T9: UDT, T10: UDT, T11: UDT, T12: UDT, T13: UDT, T14: UDT, T15: UDT, T16: UDT, T17: UDT, T18: UDT, T19: UDT, T20: UDT, T21: UDT, T22: UDT] = new Product22UDT[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, Tuple22[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22]]
+  */
 }
 

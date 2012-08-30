@@ -33,9 +33,10 @@ trait Loggers { this: TypingTransformers =>
     case object Error extends LogLevel { override val toInt = 1 }
     case object Warn extends LogLevel { override val toInt = 2 }
     case object Debug extends LogLevel { override val toInt = 3 }
+    case object Inspect extends LogLevel { override val toInt = 4 }
   }
 
-  var logLevel: LogLevel = LogLevel.Debug
+  val logLevel: LogLevel = LogLevel.Debug
   private val counter = new Counter
 
   type LoggingTransformer = Logger#LoggingTransformer
@@ -48,17 +49,12 @@ trait Loggers { this: TypingTransformers =>
         protected val toInt: Int
         protected def reportInner(msg: String, pos: Position)
 
-        def isEnabled = logLevel.toInt >= this.toInt
+        def isEnabled = this.toInt <= logLevel.toInt
 
         def report(msg: String, pos: Position = curTree.pos) = {
-          if (isEnabled)
+          if (isEnabled) {
             reportInner("%04d".format(counter.next) + "#" + phaseName + " - " + msg, pos)
-        }
-
-        def browse(tree: Tree): Tree = {
-          if (isEnabled)
-            treeBrowsers.create().browse(tree)
-          tree
+          }
         }
       }
 
@@ -77,11 +73,26 @@ trait Loggers { this: TypingTransformers =>
         override def reportInner(msg: String, pos: Position) = reporter.info(pos, msg, true)
       }
 
+      case object Inspect extends Severity {
+        override val toInt = LogLevel.Inspect.toInt
+        override def reportInner(msg: String, pos: Position) = reporter.info(pos, msg, true)
+
+        def browse(tree: Tree) = {
+          if (isEnabled)
+            treeBrowsers.create().browse(tree)
+        }
+      }
+
       def getMsgAndStackLine(e: Throwable) = {
         val lines = e.getStackTrace.map(_.toString)
         val relevant = lines filter { _.contains("eu.stratosphere") }
         val stackLine = relevant.headOption getOrElse e.getStackTrace.toString
         e.getMessage() + " @ " + stackLine
+      }
+
+      def posString(pos: Position): String = pos match {
+        case NoPosition => "?:?"
+        case _          => pos.line + ":" + pos.column
       }
 
       def safely[T](default: => T)(onError: Throwable => String)(block: => T): T = {
@@ -106,7 +117,7 @@ trait Loggers { this: TypingTransformers =>
 
       def visually(gate: Gate[Tree])(block: => Tree): Tree = {
         val ret = block
-        if (gate.getState(ret)) Debug.browse(ret)
+        if (gate.getState(ret)) Inspect.browse(ret)
         ret
       }
 

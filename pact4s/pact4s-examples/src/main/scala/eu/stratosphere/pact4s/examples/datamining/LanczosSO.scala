@@ -186,7 +186,7 @@ trait LanczosSOGeneratedImplicits { this: LanczosSO =>
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
-  implicit val cellSerializer: UDT[Cell] = new UDT[Cell] {
+  implicit def cellSerializer: UDT[Cell] = new UDT[Cell] {
 
     override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactDouble])
 
@@ -251,13 +251,7 @@ trait LanczosSOGeneratedImplicits { this: LanczosSO =>
     }
   }
 
-  implicit def seqUDT[T: UDT]: UDT[Seq[T]] = {
-    val seqBuilder = new collection.generic.CanBuildFrom[collection.GenTraversableOnce[T], T, Seq[T]] {
-      override def apply() = new collection.mutable.ListBuffer[T]()
-      override def apply(from: collection.GenTraversableOnce[T]) = new collection.mutable.ListBuffer[T]()
-    }
-    new udts.ListUDT[T, Seq]()(implicitly[UDT[T]], seqBuilder)
-  }
+  implicit def seqUDT[T: UDT]: UDT[Seq[T]] = new udts.ListUDT[T, Seq]()(implicitly[UDT[T]], Seq.canBuildFrom)
 
   implicit def taggedItemSerializer[T: UDT]: UDT[TaggedItem[T]] = new UDT[TaggedItem[T]] {
 
