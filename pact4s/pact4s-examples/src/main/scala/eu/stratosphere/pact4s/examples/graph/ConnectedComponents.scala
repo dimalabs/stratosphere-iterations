@@ -45,13 +45,15 @@ class ConnectedComponents(verticesInput: String, edgesInput: String, componentsO
 
   def propagateComponent = (s: DataStream[(Int, Int)], ws: DataStream[(Int, Int)]) => {
 
-    val allNeighbors = ws join undirectedEdges on { case (v, _) => v } isEqualTo { case (from, _) => from } map { case ((_, c), (_, to)) => to -> c }
+    val allNeighbors = ws join undirectedEdges on { case (v, _) => v } isEqualTo { case (from, _) => from } map { (w, e) => e._2 -> w._2 }
     val minNeighbors = allNeighbors groupBy { case (to, _) => to } combine { cs => cs minBy { _._2 } }
 
     // updated solution elements == new workset
-    val s1 = minNeighbors join s on { _._1 } isEqualTo { _._1 } flatMap {
-      case ((v, cNew), (_, cOld)) if cNew < cOld => Some((v, cNew))
-      case _                                     => None
+    val s1 = minNeighbors join s on { _._1 } isEqualTo { _._1 } flatMap { (n, s) =>
+      (n, s) match {
+        case ((v, cNew), (_, cOld)) if cNew < cOld => Some((v, cNew))
+        case _                                     => None
+      }
     }
 
     allNeighbors.hints = PactName("All Neighbors")
@@ -143,11 +145,14 @@ trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>
   }
   */
 
-  implicit def udf1: UDF1[Function1[(Int, Int), Iterator[(Int, Int)]]] = defaultUDF1IterR[(Int, Int), (Int, Int)]
-  implicit def udf2: UDF1[Function1[Iterator[(Int, Int)], (Int, Int)]] = defaultUDF1IterT[(Int, Int), (Int, Int)]
-  implicit def udf3: UDF2[Function2[(Int, Int), (Int, Int), (Int, Int)]] = defaultUDF2[(Int, Int), (Int, Int), (Int, Int)]
-  implicit def udf4: UDF2[Function2[(Int, Int), (Int, Int), Iterator[(Int, Int)]]] = defaultUDF2IterR[(Int, Int), (Int, Int), (Int, Int)]
+  /*
+  implicit def udf1(fun: Function1[(Int, Int), Iterator[(Int, Int)]]): UDF1Code[Function1[(Int, Int), Iterator[(Int, Int)]]] = AnalyzedUDF1.defaultIterR(fun)
+  implicit def udf2(fun: Function1[Iterator[(Int, Int)], (Int, Int)]): UDF1Code[Function1[Iterator[(Int, Int)], (Int, Int)]] = AnalyzedUDF1.defaultIterT(fun)
+  implicit def udf3(fun: Function2[(Int, Int), (Int, Int), (Int, Int)]): UDF2Code[Function2[(Int, Int), (Int, Int), (Int, Int)]] = AnalyzedUDF2.default(fun)
+  implicit def udf4(fun: Function2[(Int, Int), (Int, Int), Iterator[(Int, Int)]]): UDF2Code[Function2[(Int, Int), (Int, Int), Iterator[(Int, Int)]]] = AnalyzedUDF2.defaultIterR(fun)
+  implicit def udfOut(fun: Function1[(Int, Int), String]): UDF1Code[Function1[(Int, Int), String]] = AnalyzedUDF1.default(fun)
+  */
 
-  implicit def selOutput: FieldSelector[Function1[(Int, Int), Unit]] = defaultFieldSelectorT[(Int, Int), Unit]
-  implicit def selFirst: FieldSelector[Function1[(Int, Int), Int]] = getFieldSelector[(Int, Int), Int](0)
+  implicit def selFirst(fun: Function1[(Int, Int), Int]): FieldSelectorCode[Function1[(Int, Int), Int]] = AnalyzedFieldSelector(fun, Set(0))
 }
+

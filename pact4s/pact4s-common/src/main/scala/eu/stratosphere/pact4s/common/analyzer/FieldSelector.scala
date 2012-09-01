@@ -17,7 +17,9 @@
 
 package eu.stratosphere.pact4s.common.analyzer
 
-trait FieldSelector[+F <: _ => _] extends Serializable {
+import scala.reflect.Code
+
+trait FieldSelector extends Serializable {
 
   def isGlobalized: Boolean
   def getFields: Array[Int]
@@ -29,13 +31,19 @@ trait FieldSelector[+F <: _ => _] extends Serializable {
   def relocateField(oldPosition: Int, newPosition: Int)
 }
 
+trait FieldSelectorCode[T] extends FieldSelector.EmptyCode[T] with FieldSelector
+
 trait FieldSelectorLowPriorityImplicits {
 
-  class FieldSelectorAnalysisFailedException extends RuntimeException("Field selector analysis failed. This should never happen.")
+  class FieldSelectorAnalysisFailedException extends RuntimeException("Field selector analysis failed. This should have been caught at compile time.")
 
-  implicit def unanalyzedFieldSelector[T1, R]: FieldSelector[T1 => R] = throw new FieldSelectorAnalysisFailedException
+  implicit def unanalyzedFieldSelector[T1, R](fun: T1 => R): FieldSelectorCode[T1 => R] = throw new FieldSelectorAnalysisFailedException
+  implicit def unanalyzedFieldSelectorCode[T1, R](fun: Code[T1 => R]): FieldSelectorCode[T1 => R] = throw new FieldSelectorAnalysisFailedException
 }
 
 object FieldSelector extends FieldSelectorLowPriorityImplicits {
 
+  abstract class EmptyCode[T] extends Code[T](null) {
+    @transient override val tree = null
+  }
 }

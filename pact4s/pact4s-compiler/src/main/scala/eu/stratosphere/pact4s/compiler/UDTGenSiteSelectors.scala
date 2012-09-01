@@ -42,20 +42,30 @@ trait UDTGenSiteSelectors { this: Pact4sPlugin =>
 
         withImplicits(tree) { // Add local implicits to the typer's context
 
+          def analyze(tpe: Type): Unit = getUDTDescriptor(tpe, tree) match {
+            case UnsupportedDescriptor(_, _, errs) => errs foreach { err => Error.report("Could not generate UDT[" + tpe + "]: " + err + " @ " + posString(tree.pos)) }
+            case d @ OpaqueDescriptor(_, _, _)     => collectInferences(d) foreach { traverse(_) }
+            case desc                              => if (updateGenSite(desc)) collectInferences(desc) foreach { traverse(_) }
+          }
+
+          def analyzeUDF(tparams: List[Tree]): Unit = tparams foreach { t => analyze(defs.unwrapIter(t.tpe)) }
+
           tree match {
 
             // Analyze unanalyzed Udts
             case TypeApply(s: Select, List(t)) if s.symbol == defs.unanalyzedUdt => {
 
-              getUDTDescriptor(t.tpe, tree) match {
-                case UnsupportedDescriptor(_, _, errs) => errs foreach { err => Error.report("Could not generate UDT[" + t.tpe + "]: " + err + " @ " + posString(tree.pos)) }
-                case desc                              => if (updateGenSite(desc)) collectInferences(desc) foreach { traverse(_) }
-              }
-
-              super.traverse(tree)
+              analyze(t.tpe)
+              super.traverse(tree); tree
             }
 
-            case _ => super.traverse(tree)
+            // Analyze UDF type parameters
+            case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF1 => analyzeUDF(tps)
+            case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF1Code => analyzeUDF(tps)
+            case Apply(TypeApply(unanalyzed, tps @ List(t1, t2, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF2 => analyzeUDF(tps)
+            case Apply(TypeApply(unanalyzed, tps @ List(t1, t2, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF2Code => analyzeUDF(tps)
+
+            case _ => super.traverse(tree); tree
           }
         }
       }

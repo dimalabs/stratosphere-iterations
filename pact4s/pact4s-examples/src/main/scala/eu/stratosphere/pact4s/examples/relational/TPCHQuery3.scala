@@ -334,12 +334,15 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
   }
   */
 
-  implicit def udf1: UDF1[Function1[Iterator[PrioritizedOrder], PrioritizedOrder]] = defaultUDF1IterT[PrioritizedOrder, PrioritizedOrder]
-  implicit def udf2: UDF2[Function2[Order, LineItem, PrioritizedOrder]] = defaultUDF2[Order, LineItem, PrioritizedOrder]
-  implicit def udf3: FieldSelector[Function1[Order, Boolean]] = defaultFieldSelectorT[Order, Boolean]
+  /*
+  implicit def udf1(fun: Function1[Iterator[PrioritizedOrder], PrioritizedOrder]): UDF1Code[Function1[Iterator[PrioritizedOrder], PrioritizedOrder]] = AnalyzedUDF1.defaultIterT(fun)
+  implicit def udf2(fun: Function2[Order, LineItem, PrioritizedOrder]): UDF2Code[Function2[Order, LineItem, PrioritizedOrder]] = AnalyzedUDF2.default(fun)
+  implicit def udf3(fun: Function1[Order, Boolean]): UDF1Code[Function1[Order, Boolean]] = AnalyzedUDF1.default(fun)
+  implicit def udfOut(fun: Function1[PrioritizedOrder, String]): UDF1Code[Function1[PrioritizedOrder, String]] = AnalyzedUDF1.default(fun)
+  */
 
-  implicit def selOutput: FieldSelector[Function1[PrioritizedOrder, Unit]] = defaultFieldSelectorT[PrioritizedOrder, Unit]
-  implicit def selPrioritizedItemsLeft: FieldSelector[Function1[Order, Int]] = getFieldSelector[Order, Int](0)
-  implicit def selPrioritizedItemsRight: FieldSelector[Function1[LineItem, Int]] = getFieldSelector[LineItem, Int](0)
-  implicit def selPrioritizedOrders: FieldSelector[Function1[PrioritizedOrder, (Int, Int)]] = getFieldSelector[PrioritizedOrder, (Int, Int)](0, 1)
+  implicit def selPrioritizedItemsLeft(fun: Function1[Order, Int]): FieldSelectorCode[Function1[Order, Int]] = AnalyzedFieldSelector(fun, Set(0))
+  implicit def selPrioritizedItemsRight(fun: Function1[LineItem, Int]): FieldSelectorCode[Function1[LineItem, Int]] = AnalyzedFieldSelector(fun, Set(0))
+  implicit def selPrioritizedOrders(fun: Function1[PrioritizedOrder, (Int, Int)]): FieldSelectorCode[Function1[PrioritizedOrder, (Int, Int)]] = AnalyzedFieldSelector(fun, Set(0, 1))
 }
+

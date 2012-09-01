@@ -79,17 +79,16 @@ class IterateOperator[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStrea
 
 class WorksetIterateOperator[SolutionItem: UDT, WorksetItem: UDT](stepFunction: (DataStream[SolutionItem], DataStream[WorksetItem]) => (DataStream[SolutionItem], DataStream[WorksetItem])) extends Serializable {
 
-  def iterate[Key, SolutionKeySelector: SelectorBuilder[SolutionItem, Key]#Selector](s0: DistinctDataStream[SolutionItem, Key, SolutionKeySelector], ws0: DataStream[WorksetItem]) = new DataStream[SolutionItem] {
+  def iterate(s0: DistinctDataStream[SolutionItem], ws0: DataStream[WorksetItem]) = new DataStream[SolutionItem] {
 
     override def createContract = {
 
-      val keyFieldSelector = implicitly[FieldSelector[SolutionItem => Key]]
-      val keyFields = keyFieldSelector.getFields filter { _ >= 0 }
+      val keyFields = s0.keySelector.getFields filter { _ >= 0 }
       val keyFieldTypes = implicitly[UDT[SolutionItem]].getKeySet(keyFields)
 
-      val contract = new WorksetIteration with WorksetIterate4sContract[Key, SolutionItem, WorksetItem] {
+      val contract = new WorksetIteration with WorksetIterate4sContract[SolutionItem, WorksetItem] {
 
-        override val keySelector = keyFieldSelector
+        override val keySelector = s0.keySelector
       }
 
       val solutionInput = new DataStream[SolutionItem] {
@@ -113,8 +112,8 @@ class WorksetIterateOperator[SolutionItem: UDT, WorksetItem: UDT](stepFunction: 
 }
 
 class DistinctByOperator[T: UDT](stream: DataStream[T]) extends Serializable {
-  def distinctBy[Key, SolutionKeySelector: SelectorBuilder[T, Key]#Selector](keySelector: T => Key) = new DistinctDataStream(stream, keySelector)
+  def distinctBy[Key](keySelector: FieldSelectorCode[T => Key]) = new DistinctDataStream(stream, keySelector)
 }
 
-case class DistinctDataStream[T: UDT, Key, SolutionKeySelector: SelectorBuilder[T, Key]#Selector](stream: DataStream[T], keySelector: T => Key)
+case class DistinctDataStream[T: UDT](stream: DataStream[T], keySelector: FieldSelector)
 

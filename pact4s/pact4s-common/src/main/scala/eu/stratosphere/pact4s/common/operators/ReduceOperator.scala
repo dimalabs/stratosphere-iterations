@@ -26,52 +26,45 @@ import eu.stratosphere.pact.common.contract._
 
 class ReduceOperator[In: UDT](input: DataStream[In]) extends Serializable {
 
-  def groupBy[Key, GroupByKeySelector: SelectorBuilder[In, Key]#Selector](keySelector: In => Key) = new Serializable {
+  def groupBy[Key](keySelector: FieldSelectorCode[In => Key]) = new Serializable {
 
-    def reduce[Out: UDT, F: UDF1Builder[Iterator[In], Out]#UDF](reduceFunction: Iterator[In] => Out): DataStream[Out] = {
+    def reduce[Out: UDT](reduceFunction: UDF1Code[Iterator[In] => Out]): DataStream[Out] = new ReduceStream(input, keySelector, None, reduceFunction.userFunction, null, reduceFunction)
 
-      implicit val dummyCombinerUDF = new AnalyzedUDF1[Iterator[In], In](0, 0)
-      new ReduceStream(input, keySelector, None, reduceFunction)
-    }
-
-    def combine[F: UDF1Builder[Iterator[In], In]#UDF](combineFunction: Iterator[In] => In): DataStream[In] = new ReduceStream(input, keySelector, Some(combineFunction), combineFunction) {
+    def combine(combineFunction: UDF1Code[Iterator[In] => In]): DataStream[In] = new ReduceStream(input, keySelector, Some(combineFunction.userFunction), combineFunction.userFunction, combineFunction, combineFunction) {
 
       private val outer = this
 
-      def reduce[Out: UDT, F: UDF1Builder[Iterator[In], Out]#UDF](reduceFunction: Iterator[In] => Out): DataStream[Out] = new ReduceStream(input, keySelector, Some(combineFunction), reduceFunction) {
+      def reduce[Out: UDT](reduceFunction: UDF1Code[Iterator[In] => Out]): DataStream[Out] = new ReduceStream(input, keySelector, Some(combineFunction.userFunction), reduceFunction.userFunction, combineFunction, reduceFunction) {
 
         override def getHints = outer.getGenericHints ++ this.hints
       }
     }
   }
 
-  private class ReduceStream[Key, Out: UDT, GroupByKeySelector: SelectorBuilder[In, Key]#Selector, FC: UDF1Builder[Iterator[In], In]#UDF, FR: UDF1Builder[Iterator[In], Out]#UDF](
+  private class ReduceStream[Out: UDT](
     input: DataStream[In],
-    keySelector: In => Key,
+    keySelector: FieldSelector,
     combineFunction: Option[Iterator[In] => In],
-    reduceFunction: Iterator[In] => Out)
+    reduceFunction: Iterator[In] => Out,
+    combineUDF: UDF1,
+    reduceUDF: UDF1)
     extends DataStream[Out] {
 
     override def createContract = {
 
-      val keyFieldSelector = implicitly[FieldSelector[In => Key]]
-      val keyFields = keyFieldSelector.getFields filter { _ >= 0 }
+      val keyFields = keySelector.getFields filter { _ >= 0 }
       val keyFieldTypes = implicitly[UDT[In]].getKeySet(keyFields)
 
       val udfs = {
-
-        val combineUDF = implicitly[UDF1[Iterator[In] => In]]
-        val reduceUDF = implicitly[UDF1[Iterator[In] => Out]]
-
         if (combineUDF eq reduceUDF)
-          (combineUDF, combineUDF.copy().asInstanceOf[UDF1[Iterator[In] => Out]])
+          (combineUDF, combineUDF.copy())
         else
           (combineUDF, reduceUDF)
       }
 
-      new ReduceContract(Reduce4sContract.getStub, keyFieldTypes, keyFields, input.getContract) with Reduce4sContract[Key, In, Out] {
+      new ReduceContract(Reduce4sContract.getStub, keyFieldTypes, keyFields, input.getContract) with Reduce4sContract[In, Out] {
 
-        override val keySelector = keyFieldSelector
+        override val keySelector = ReduceStream.this.keySelector
         override val inputUDT = implicitly[UDT[In]]
         override val outputUDT = implicitly[UDT[Out]]
         override val (combineUDF, reduceUDF) = udfs

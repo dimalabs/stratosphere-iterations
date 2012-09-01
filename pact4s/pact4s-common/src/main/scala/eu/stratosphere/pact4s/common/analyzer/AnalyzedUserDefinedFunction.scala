@@ -19,12 +19,15 @@ package eu.stratosphere.pact4s.common.analyzer
 
 import scala.collection.mutable
 
-abstract class AnalyzedUDF(outputLength: Int) extends UDF {
+trait AnalyzedUDF extends UDF {
 
-  private case class WriteField(val pos: Int, val isCopy: Boolean, val discard: Boolean)
+  protected case class WriteField(val pos: Int, val isCopy: Boolean, val discard: Boolean)
 
   private var globalized = false
-  private val writeFields = createIdentityMap(outputLength) map { WriteField(_, false, false) }
+  protected val writeFields: Array[WriteField]
+
+  protected def getInitialReadFields(inputLength: Int): Array[Int] = createIdentityMap(inputLength)
+  protected def getInitialWriteFields(outputLength: Int): Array[WriteField] = createIdentityMap(outputLength) map { WriteField(_, false, false) }
 
   override def isGlobalized = globalized
 
@@ -105,9 +108,9 @@ abstract class AnalyzedUDF(outputLength: Int) extends UDF {
   }
 }
 
-class AnalyzedUDF1[T1, R](inputLength: Int, outputLength: Int) extends AnalyzedUDF(outputLength) with UDF1[T1 => R] {
+trait AnalyzedUDF1 extends AnalyzedUDF with UDF1 {
 
-  private val readFields = createIdentityMap(inputLength)
+  protected val readFields: Array[Int]
   private val copiedFields = mutable.Map[Int, Int]()
   private val ambientFields = mutable.Map[Int, Boolean]()
 
@@ -127,12 +130,17 @@ class AnalyzedUDF1[T1, R](inputLength: Int, outputLength: Int) extends AnalyzedU
     } toMap
   }
 
-  def copy(): AnalyzedUDF1[T1, R] = {
+  def copy(): AnalyzedUDF1 = {
     assertGlobalized(false)
 
-    val udf = new AnalyzedUDF1[T1, R](inputLength, outputLength)
+    val inLength = readFields.length
+    val outLength = getWriteFields.length
+    val udf = new AnalyzedUDF1 {
+      override val readFields = getInitialReadFields(inLength)
+      override val writeFields = getInitialWriteFields(outLength)
+    }
 
-    for (field <- 0 until inputLength if readFields(field) < 0)
+    for (field <- 0 until readFields.length if readFields(field) < 0)
       udf.markInputFieldUnread(field)
 
     for ((to, from) <- copiedFields)
@@ -198,10 +206,31 @@ class AnalyzedUDF1[T1, R](inputLength: Int, outputLength: Int) extends AnalyzedU
   }
 }
 
-class AnalyzedUDF2[T1, T2, R](leftInputLength: Int, rightInputLength: Int, outputLength: Int) extends AnalyzedUDF(outputLength) with UDF2[(T1, T2) => R] {
+object AnalyzedUDF1 {
 
-  private val leftReadFields = createIdentityMap(leftInputLength)
-  private val rightReadFields = createIdentityMap(rightInputLength)
+  def default[T1: UDT, R: UDT](fun: T1 => R): UDF1Code[T1 => R] = new UDF1Code[T1 => R] with AnalyzedUDF1 {
+    override def userFunction = fun
+    override val readFields = getInitialReadFields(implicitly[UDT[T1]].numFields)
+    override val writeFields = getInitialWriteFields(implicitly[UDT[R]].numFields)
+  }
+
+  def defaultIterT[T1: UDT, R: UDT](fun: Iterator[T1] => R): UDF1Code[Iterator[T1] => R] = new UDF1Code[Iterator[T1] => R] with AnalyzedUDF1 {
+    override def userFunction = fun
+    override val readFields = getInitialReadFields(implicitly[UDT[T1]].numFields)
+    override val writeFields = getInitialWriteFields(implicitly[UDT[R]].numFields)
+  }
+
+  def defaultIterR[T1: UDT, R: UDT](fun: T1 => Iterator[R]): UDF1Code[T1 => Iterator[R]] = new UDF1Code[T1 => Iterator[R]] with AnalyzedUDF1 {
+    override def userFunction = fun
+    override val readFields = getInitialReadFields(implicitly[UDT[T1]].numFields)
+    override val writeFields = getInitialWriteFields(implicitly[UDT[R]].numFields)
+  }
+}
+
+trait AnalyzedUDF2 extends AnalyzedUDF with UDF2 {
+
+  protected val leftReadFields: Array[Int]
+  protected val rightReadFields: Array[Int]
   private var copiedFields = mutable.Map[Int, Either[Int, Int]]()
   private val ambientFields = mutable.Map[Either[Int, Int], Boolean]()
 
@@ -290,3 +319,33 @@ class AnalyzedUDF2[T1, T2, R](leftInputLength: Int, rightInputLength: Int, outpu
   }
 }
 
+object AnalyzedUDF2 {
+
+  def default[T1: UDT, T2: UDT, R: UDT](fun: (T1, T2) => R): UDF2Code[(T1, T2) => R] = new UDF2Code[(T1, T2) => R] with AnalyzedUDF2 {
+    override def userFunction = fun
+    override val leftReadFields = getInitialReadFields(implicitly[UDT[T1]].numFields)
+    override val rightReadFields = getInitialReadFields(implicitly[UDT[T2]].numFields)
+    override val writeFields = getInitialWriteFields(implicitly[UDT[R]].numFields)
+  }
+
+  def defaultIterR[T1: UDT, T2: UDT, R: UDT](fun: (T1, T2) => Iterator[R]): UDF2Code[(T1, T2) => Iterator[R]] = new UDF2Code[(T1, T2) => Iterator[R]] with AnalyzedUDF2 {
+    override def userFunction = fun
+    override val leftReadFields = getInitialReadFields(implicitly[UDT[T1]].numFields)
+    override val rightReadFields = getInitialReadFields(implicitly[UDT[T2]].numFields)
+    override val writeFields = getInitialWriteFields(implicitly[UDT[R]].numFields)
+  }
+
+  def defaultIterT[T1: UDT, T2: UDT, R: UDT](fun: (Iterator[T1], Iterator[T2]) => R): UDF2Code[(Iterator[T1], Iterator[T2]) => R] = new UDF2Code[(Iterator[T1], Iterator[T2]) => R] with AnalyzedUDF2 {
+    override def userFunction = fun
+    override val leftReadFields = getInitialReadFields(implicitly[UDT[T1]].numFields)
+    override val rightReadFields = getInitialReadFields(implicitly[UDT[T2]].numFields)
+    override val writeFields = getInitialWriteFields(implicitly[UDT[R]].numFields)
+  }
+
+  def defaultIterTR[T1: UDT, T2: UDT, R: UDT](fun: (Iterator[T1], Iterator[T2]) => Iterator[R]): UDF2Code[(Iterator[T1], Iterator[T2]) => Iterator[R]] = new UDF2Code[(Iterator[T1], Iterator[T2]) => Iterator[R]] with AnalyzedUDF2 {
+    override def userFunction = fun
+    override val leftReadFields = getInitialReadFields(implicitly[UDT[T1]].numFields)
+    override val rightReadFields = getInitialReadFields(implicitly[UDT[T2]].numFields)
+    override val writeFields = getInitialWriteFields(implicitly[UDT[R]].numFields)
+  }
+}

@@ -57,11 +57,11 @@ case class RecordsEmitted(val avgNumRecords: Float) extends CompilerHint[Nothing
   override def applyToContract(contract: Contract) = contract.getCompilerHints().setAvgRecordsEmittedPerStubCall(avgNumRecords)
 }
 
-case class UniqueKey[T: UDT, Key, KeySelector: SelectorBuilder[T, Key]#Selector](val keySelector: T => Key) extends CompilerHint[T] {
+case class UniqueKey[T: UDT, Key, KeySelector >: T => Key <% FieldSelector](val keySelector: T => Key) extends CompilerHint[T] {
 
   override def applyToContract(contract: Contract) = {
 
-    val fieldSet = new FieldSet(implicitly[FieldSelector[T => Key]].getFields)
+    val fieldSet = new FieldSet((keySelector: FieldSelector).getFields)
     val hints = contract.getCompilerHints()
 
     val fieldSets = hints.getUniqueFields()
@@ -72,13 +72,13 @@ case class UniqueKey[T: UDT, Key, KeySelector: SelectorBuilder[T, Key]#Selector]
   }
 }
 
-case class KeyCardinality[T: UDT, Key, KeySelector: SelectorBuilder[T, Key]#Selector](val keySelector: T => Key, val numDistinctKeys: Long, val avgNumRecordsPerKey: Option[Long] = None) extends CompilerHint[T] {
+case class KeyCardinality[T: UDT, Key, KeySelector >: T => Key <% FieldSelector](val keySelector: T => Key, val numDistinctKeys: Long, val avgNumRecordsPerKey: Option[Long] = None) extends CompilerHint[T] {
 
   def this(keySelector: T => Key, numDistinctKeys: Long, avgNumRecordsPerKey: Long) = this(keySelector, numDistinctKeys, Some(avgNumRecordsPerKey))
 
   override def applyToContract(contract: Contract) = {
 
-    val fieldSet = new FieldSet(implicitly[FieldSelector[T => Key]].getFields)
+    val fieldSet = new FieldSet((keySelector: FieldSelector).getFields)
     val hints = contract.getCompilerHints()
     hints.setDistinctCount(fieldSet, numDistinctKeys)
 

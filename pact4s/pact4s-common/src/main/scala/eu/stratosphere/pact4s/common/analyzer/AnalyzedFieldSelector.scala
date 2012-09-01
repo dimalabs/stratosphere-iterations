@@ -17,10 +17,12 @@
 
 package eu.stratosphere.pact4s.common.analyzer
 
-class AnalyzedFieldSelector[T1, R](fieldCount: Int) extends FieldSelector[T1 => R] {
+trait AnalyzedFieldSelector extends FieldSelector {
 
   private var globalized = false
-  private val fields = (0 until fieldCount).toArray
+  protected val fields: Array[Int]
+
+  protected def getInitialFields(fieldCount: Int): Array[Int] = (0 until fieldCount).toArray
 
   override def isGlobalized = globalized
   override def getFields = fields
@@ -54,5 +56,25 @@ class AnalyzedFieldSelector[T1, R](fieldCount: Int) extends FieldSelector[T1 => 
       fields(fieldNum) = newPosition
     }
   }
+}
+
+object AnalyzedFieldSelector {
+
+  def apply[T1: UDT, R](fun: T1 => R): FieldSelectorCode[T1 => R] = new FieldSelectorImpl[T1, R](implicitly[UDT[T1]].numFields)
+
+  def apply[T1: UDT, R](fun: T1 => R, selFields: Set[Int]): FieldSelectorCode[T1 => R] = {
+    val inputLength = implicitly[UDT[T1]].numFields
+    val sel = new FieldSelectorImpl[T1, R](inputLength)
+    ((0 until inputLength).toSet diff selFields) foreach { sel.markFieldUnused(_) }
+    sel
+  }
+
+  private class FieldSelectorImpl[T1, R](fieldCount: Int) extends FieldSelectorCode[T1 => R] with AnalyzedFieldSelector {
+    override val fields = getInitialFields(fieldCount)
+  }
+
+  def apply[T1, R](udt: UDT[T1]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R)(udt)
+  def apply[T1, R](udt: UDT[T1], selFields: Set[Int]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, selFields)(udt)
+  def apply[T1, R](udt: UDT[T1], selections: Seq[Seq[String]]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, (selections map udt.getFieldIndex).toSet)(udt)
 }
 

@@ -28,6 +28,7 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
 
   trait UDTAnalyzer { this: TypingTransformer with LoggingTransformer =>
 
+    private val seenTpe = new SetGate[Type]
     private val seen = new MapGate[Type, UDTDescriptor]
 
     def getUDTDescriptor(tpe: Type, site: Tree): UDTDescriptor = {
@@ -36,6 +37,7 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
       val norm = { tpe: Type => currentThis.baseClasses.foldLeft(tpe map { _.dealias }) { (tpe, base) => tpe.substThis(base, currentThis) } }
       val infer = { tpe: Type => analyzer.inferImplicit(site, tpe, true, false, localTyper.context).tree }
 
+      maybeVerbosely(seenTpe) { t => "Analyzing UDT[" + t + "]" } { norm(tpe) }
       new UDTAnalyzerInstance(norm, infer).analyze(tpe)
     }
 

@@ -150,11 +150,13 @@ trait WordCountGeneratedImplicits { this: WordCount =>
   }
   */
 
-  implicit def udf1: UDF1[Function1[String, Iterator[String]]] = defaultUDF1IterR[String, String]
-  implicit def udf2: UDF1[Function1[String, Iterator[(String, Int)]]] = defaultUDF1IterR[String, (String, Int)]
-  implicit def udf3: UDF1[Function1[Iterator[(String, Int)], (String, Int)]] = defaultUDF1IterT[(String, Int), (String, Int)]
+  /*
+  implicit def udf1(fun: Function1[String, Iterator[String]]): UDF1Code[Function1[String, Iterator[String]]] = AnalyzedUDF1.defaultIterR(fun)
+  implicit def udf2(fun: Function1[String, Iterator[(String, Int)]]): UDF1Code[Function1[String, Iterator[(String, Int)]]] = AnalyzedUDF1.defaultIterR(fun)
+  implicit def udf3(fun: Function1[Iterator[(String, Int)], (String, Int)]): UDF1Code[Function1[Iterator[(String, Int)], (String, Int)]] = AnalyzedUDF1.defaultIterT(fun)
+  implicit def udfOut(fun: Function1[(String, Int), String]): UDF1Code[Function1[(String, Int), String]] = AnalyzedUDF1.default(fun)
+  */
 
-  implicit def selOutput: FieldSelector[Function1[(String, Int), Unit]] = defaultFieldSelectorT[(String, Int), Unit]
-  implicit def selCounts: FieldSelector[Function1[(String, Int), String]] = getFieldSelector[(String, Int), String](0)
+  implicit def selCounts(fun: Function1[(String, Int), String]): FieldSelectorCode[Function1[(String, Int), String]] = AnalyzedFieldSelector(fun, Set(0))
 }
 

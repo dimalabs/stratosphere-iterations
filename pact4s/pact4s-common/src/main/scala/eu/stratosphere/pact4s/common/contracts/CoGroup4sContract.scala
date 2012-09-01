@@ -22,14 +22,14 @@ import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-trait CoGroup4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContract { this: CoGroupContract =>
+trait CoGroup4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { this: CoGroupContract =>
 
-  val leftKeySelector: FieldSelector[LeftIn => Key]
-  val rightKeySelector: FieldSelector[RightIn => Key]
+  val leftKeySelector: FieldSelector
+  val rightKeySelector: FieldSelector
   val leftUDT: UDT[LeftIn]
   val rightUDT: UDT[RightIn]
   val outputUDT: UDT[Out]
-  val coGroupUDF: UDF2[(Iterator[LeftIn], Iterator[RightIn]) => _]
+  val coGroupUDF: UDF2
   val userFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]
 
   override def annotations = Seq(
@@ -63,5 +63,5 @@ object CoGroup4sContract {
 
   def getStub[LeftIn, RightIn, Out] = classOf[CoGroup4sStub[LeftIn, RightIn, Out]]
 
-  def unapply(c: CoGroup4sContract[_, _, _, _]) = Some((c.leftInput, c.rightInput, c.leftKeySelector, c.rightKeySelector, c.leftUDT, c.rightUDT, c.outputUDT, c.coGroupUDF))
+  def unapply(c: CoGroup4sContract[_, _, _]) = Some((c.leftInput, c.rightInput, c.leftKeySelector, c.rightKeySelector, c.leftUDT, c.rightUDT, c.outputUDT, c.coGroupUDF))
 }

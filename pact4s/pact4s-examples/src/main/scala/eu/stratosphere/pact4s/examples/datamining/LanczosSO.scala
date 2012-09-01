@@ -57,12 +57,14 @@ class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outp
   val t = triDiag(α, β filter { _.col > 0 })
   val (q, d) = decompose(t)
 
-  val λ = d filter { c => c.col == c.row } map { TaggedItem("", _) } groupBy { _.tag } reduce { eigenValues =>
+  val diag = d filter { c => c.col == c.row } map { TaggedItem("", _) }
+  val diagGrouped = diag groupBy { _.tag }
+  val λ = diagGrouped reduce { eigenValues =>
     val highToLow = eigenValues.toSeq.sortBy(tc => abs(tc.item.value))(Ordering[Double].reverse)
     highToLow take (k) map { tc => tc.item.copy(row = 0) }
   } flatMap { c => c }
 
-  val y = mulMM(v, q join λ on { _.col } isEqualTo { _.col } map { case (q, _) => q })
+  val y = mulMM(v, q join λ on { _.col } isEqualTo { _.col } map { (q, _) => q })
 
   override def outputs = Seq(λsink <~ λ, ysink <~ y)
 
@@ -109,31 +111,32 @@ class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outp
       val j = 1 // need current iteration!
 
       (qvt map { (0, _) }) cogroup (βᵢʹvᵢᐩʹʹ map { (0, _) }) on { _._1 } isEqualTo { _._1 } flatMap {
-        case (qvt, βᵢʹvᵢᐩʹʹ) => {
+        (qvt, βᵢʹvᵢᐩʹʹ) =>
+          {
 
-          val (tq, vt) = qvt.toSeq map { _._2 } partition { _.tag == "q" }
-          val (tv, tt) = vt partition { _.tag == "v" }
-          val q = tq map { _.item }
-          val qij = q.find(c => c.row == i && c.col == j).get.value
-          val normT = tt.head.item.value
+            val (tq, vt) = qvt.toSeq map { _._2 } partition { _.tag == "q" }
+            val (tv, tt) = vt partition { _.tag == "v" }
+            val q = tq map { _.item }
+            val qij = q.find(c => c.row == i && c.col == j).get.value
+            val normT = tt.head.item.value
 
-          val (tβᵢʹ, tvᵢᐩʹʹ) = βᵢʹvᵢᐩʹʹ.toSeq map { _._2 } partition { _.tag == "β" }
-          val βᵢʹ = tβᵢʹ.head.item.value
+            val (tβᵢʹ, tvᵢᐩʹʹ) = βᵢʹvᵢᐩʹʹ.toSeq map { _._2 } partition { _.tag == "β" }
+            val βᵢʹ = tβᵢʹ.head.item.value
 
-          if (βᵢʹ * abs(qij) <= sqrt(ε) * normT) {
-            val v = tv map { _.item }
-            val vᵢᐩʹʹ = tvᵢᐩʹʹ map { _.item }
-            val r = mulMV(v, q filter { _.col == j })
+            if (βᵢʹ * abs(qij) <= sqrt(ε) * normT) {
+              val v = tv map { _.item }
+              val vᵢᐩʹʹ = tvᵢᐩʹʹ map { _.item }
+              val r = mulMV(v, q filter { _.col == j })
 
-            val vᵢᐩʹ = sub(vᵢᐩʹʹ, mulVS(r, dot(r, vᵢᐩʹʹ)))
-            val βᵢ = Cell(0, i, norm(vᵢᐩʹ))
+              val vᵢᐩʹ = sub(vᵢᐩʹʹ, mulVS(r, dot(r, vᵢᐩʹʹ)))
+              val βᵢ = Cell(0, i, norm(vᵢᐩʹ))
 
-            TaggedItem("β", βᵢ) +: (vᵢᐩʹ map { c => TaggedItem("v", c) })
+              TaggedItem("β", βᵢ) +: (vᵢᐩʹ map { c => TaggedItem("v", c) })
 
-          } else {
-            tβᵢʹ ++ tvᵢᐩʹʹ
+            } else {
+              tβᵢʹ ++ tvᵢᐩʹʹ
+            }
           }
-        }
       }
     }
   }
@@ -146,7 +149,8 @@ class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outp
   }
 
   def union[T: analyzer.UDT](x: DataStream[T], y: DataStream[T]) = {
-    (x map { (0, _) }) cogroup (y map { (0, _) }) on { _._1 } isEqualTo { _._1 } flatMap { case (xs, ys) => (xs map { _._2 }) ++ (ys map { _._2 }) }
+    implicit def sel(fun: Function1[(Int, T), Int]): analyzer.FieldSelectorCode[Function1[(Int, T), Int]] = analyzer.AnalyzedFieldSelector(fun, Set[Int](0))
+    (x map { (0, _) }) cogroup (y map { (0, _) }) on { _._1 } isEqualTo { _._1 } flatMap { (xs, ys) => (xs map { _._2 }) ++ (ys map { _._2 }) }
   }
 
   def normV(x: DataStream[Cell]): DataStream[Double] = throw new RuntimeException("Not implemented")
@@ -297,4 +301,9 @@ trait LanczosSOGeneratedImplicits { this: LanczosSO =>
     }
   }
   */
+
+  // These defs are non-functional and only prevent compiler errors about missing key selectors
+  implicit def sel0(fun: Function1[TaggedItem[Cell], String]): FieldSelectorCode[Function1[TaggedItem[Cell], String]] = AnalyzedFieldSelector(fun, Set[Int]())
+  implicit def sel1(fun: Function1[Cell, Int]): FieldSelectorCode[Function1[Cell, Int]] = AnalyzedFieldSelector(fun, Set[Int]())
+  implicit def sel2(fun: Function1[(Int, TaggedItem[Cell]), Int]): FieldSelectorCode[Function1[(Int, TaggedItem[Cell]), Int]] = AnalyzedFieldSelector(fun, Set[Int]())
 }

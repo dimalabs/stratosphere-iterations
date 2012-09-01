@@ -50,8 +50,9 @@ trait Loggers { this: TypingTransformers =>
         protected def reportInner(msg: String, pos: Position)
 
         def isEnabled = this.toInt <= logLevel.toInt
+        private def curPos = if (curTree == null) NoPosition else curTree.pos
 
-        def report(msg: String, pos: Position = curTree.pos) = {
+        def report(msg: String, pos: Position = curPos) = {
           if (isEnabled) {
             reportInner("%04d".format(counter.next) + "#" + phaseName + " - " + msg, pos)
           }

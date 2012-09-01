@@ -347,13 +347,16 @@ trait KMeansGeneratedImplicits { this: KMeans =>
   }
   */
 
-  implicit def udf1: UDF1[Function1[Iterator[(Int, Distance)], (Int, Distance)]] = defaultUDF1IterT[(Int, Distance), (Int, Distance)]
-  implicit def udf2: UDF1[Function1[(Int, Distance), (Int, PointSum)]] = defaultUDF1[(Int, Distance), (Int, PointSum)]
-  implicit def udf3: UDF1[Function1[Iterator[(Int, PointSum)], (Int, PointSum)]] = defaultUDF1IterT[(Int, PointSum), (Int, PointSum)]
-  implicit def udf4: UDF1[Function1[(Int, PointSum), (Int, Point)]] = defaultUDF1[(Int, PointSum), (Int, Point)]
-  implicit def udf5: UDF2[Function2[(Int, Point), (Int, Point), (Int, Distance)]] = defaultUDF2[(Int, Point), (Int, Point), (Int, Distance)]
+  /*
+  implicit def udf1(fun: Function1[Iterator[(Int, Distance)], (Int, Distance)]): UDF1Code[Function1[Iterator[(Int, Distance)], (Int, Distance)]] = AnalyzedUDF1.defaultIterT(fun)
+  implicit def udf2(fun: Function1[(Int, Distance), (Int, PointSum)]): UDF1Code[Function1[(Int, Distance), (Int, PointSum)]] = AnalyzedUDF1.default(fun)
+  implicit def udf3(fun: Function1[Iterator[(Int, PointSum)], (Int, PointSum)]): UDF1Code[Function1[Iterator[(Int, PointSum)], (Int, PointSum)]] = AnalyzedUDF1.defaultIterT(fun)
+  implicit def udf4(fun: Function1[(Int, PointSum), (Int, Point)]): UDF1Code[Function1[(Int, PointSum), (Int, Point)]] = AnalyzedUDF1.default(fun)
+  implicit def udf5(fun: Function2[(Int, Point), (Int, Point), (Int, Distance)]): UDF2Code[Function2[(Int, Point), (Int, Point), (Int, Distance)]] = AnalyzedUDF2.default(fun)
+  implicit def udfOut(fun: Function1[(Int, Point), String]): UDF1Code[Function1[(Int, Point), String]] = AnalyzedUDF1.default(fun)
+  */
 
-  implicit def selNewClusterPoints: FieldSelector[Function1[(Int, Point), Unit]] = defaultFieldSelectorT[(Int, Point), Unit]
-  implicit def selNearestCenters: FieldSelector[Function1[(Int, Distance), Int]] = getFieldSelector[(Int, Distance), Int](0)
-  implicit def selNewCenters: FieldSelector[Function1[(Int, PointSum), Int]] = getFieldSelector[(Int, PointSum), Int](0)
+  implicit def selNearestCenters(fun: Function1[(Int, Distance), Int]): FieldSelectorCode[Function1[(Int, Distance), Int]] = AnalyzedFieldSelector(fun, Set(0))
+  implicit def selNewCenters(fun: Function1[(Int, PointSum), Int]): FieldSelectorCode[Function1[(Int, PointSum), Int]] = AnalyzedFieldSelector(fun, Set(0))
 }
+

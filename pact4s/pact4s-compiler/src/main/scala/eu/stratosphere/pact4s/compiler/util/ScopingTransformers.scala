@@ -1,6 +1,7 @@
 package eu.stratosphere.pact4s.compiler.util
 
 import scala.tools.nsc.Global
+import scala.tools.nsc.symtab.Flags
 import scala.tools.nsc.transform.Transform
 import scala.tools.nsc.transform.TypingTransformers
 
@@ -10,14 +11,16 @@ trait ScopingTransformers { this: TypingTransformers =>
 
   trait ScopingTransformer { this: TypingTransformer =>
 
+    private def treesToSyms(trees: Seq[Tree]): Seq[Symbol] = trees filter { _.hasSymbol } map { _.symbol }
+
     def withImplicits[T](stat: Tree)(trans: => T): T = stat match {
-      case Block(stats, ret)             => withImplicits(stats :+ ret) { trans }
-      case Function(vparams, _)          => withImplicits(vparams) { trans }
-      case DefDef(_, _, _, params, _, _) => withImplicits(params.flatten) { trans }
+      case Block(stats, ret)             => withImplicits(treesToSyms(stats :+ ret)) { trans }
+      case Function(vparams, _)          => withImplicits(treesToSyms(vparams)) { trans }
+      case DefDef(_, _, _, params, _, _) => withImplicits(treesToSyms(params.flatten)) { trans }
       case _                             => trans
     }
 
-    def withImplicits[T](stats: Seq[Tree])(trans: => T): T = stats filter { stat => stat.hasSymbol && stat.symbol.isImplicit } map { _.symbol } match {
+    def withImplicits[T](syms: Seq[Symbol])(trans: => T): T = syms filter { sym => sym.isImplicit } match {
 
       case Seq() => trans
 

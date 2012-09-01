@@ -71,7 +71,7 @@ abstract class DataSourceFormat[Out: UDT] extends Serializable {
 
   val stub: Class[_ <: InputFormat[_, _]]
   val outputUDT: UDT[Out] = implicitly[UDT[Out]]
-  val fieldSelector: FieldSelector[Unit => Out] = defaultFieldSelectorR[Unit, Out]
+  val fieldSelector: FieldSelector = AnalyzedFieldSelector(implicitly[UDT[Out]])
 
   def persistConfiguration(config: Configuration) = {}
 }

@@ -27,7 +27,7 @@ trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { thi
   val leftUDT: UDT[LeftIn]
   val rightUDT: UDT[RightIn]
   val outputUDT: UDT[Out]
-  val crossUDF: UDF2[(LeftIn, RightIn) => _]
+  val crossUDF: UDF2
   val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
 
   override def annotations = Seq(

@@ -77,7 +77,7 @@ object Pact4sTwoInputContract {
 trait DataSource4sContract[Out] extends Pact4sContract { this: GenericDataSource[_ <: InputFormat[_, _]] =>
 
   val outputUDT: UDT[Out]
-  val fieldSelector: FieldSelector[_ => Out]
+  val fieldSelector: FieldSelector
 }
 
 object DataSource4sContract {
@@ -88,7 +88,7 @@ object DataSource4sContract {
 trait DataSink4sContract[In] extends Pact4sOneInputContract { this: GenericDataSink =>
 
   val inputUDT: UDT[In]
-  val fieldSelector: FieldSelector[In => _]
+  val fieldSelector: FieldSelector
 }
 
 object DataSink4sContract {

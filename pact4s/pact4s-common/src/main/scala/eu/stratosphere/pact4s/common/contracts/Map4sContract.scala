@@ -28,7 +28,7 @@ trait Map4sContract[In, Out] extends Pact4sOneInputContract { this: MapContract 
 
   val inputUDT: UDT[In]
   val outputUDT: UDT[Out]
-  val mapUDF: UDF1[In => _]
+  val mapUDF: UDF1
   val userFunction: Either[In => Out, In => Iterator[Out]]
 
   private def outCardBound = userFunction.fold({ _ => Annotations.CARD_INPUTCARD }, { _ => Annotations.CARD_UNKNOWN })

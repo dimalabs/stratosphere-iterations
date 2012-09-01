@@ -48,7 +48,7 @@ abstract class BatchGradientDescent(eps: Double, eta: Double, lambda: Double, ex
 
   def gradientDescent = (s: DataStream[(Int, Array[Double])], ws: DataStream[(Int, Array[Double], Double)]) => {
 
-    val lossesAndGradients = ws cross examples map { case ((id, w, _), (_, ex)) => new ValueAndGradient(id, computeGradient(ex, w)) }
+    val lossesAndGradients = ws cross examples map { (w, ex) => new ValueAndGradient(w._1, computeGradient(ex._2, w._2)) }
     val lossAndGradientSums = lossesAndGradients groupBy { _.id } combine { _.reduce (_ + _) }
     val newWeights = ws join lossAndGradientSums on { _._1 } isEqualTo { _.id } map updateWeight
 
@@ -373,16 +373,19 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
   }
   */
 
-  implicit def udf1: UDF1[Function1[(Int, Array[Double]), (Int, Array[Double], Double)]] = defaultUDF1[(Int, Array[Double]), (Int, Array[Double], Double)]
-  implicit def udf2: UDF1[Function1[Iterator[ValueAndGradient], ValueAndGradient]] = defaultUDF1IterT[ValueAndGradient, ValueAndGradient]
-  implicit def udf3: UDF1[Function1[(Int, Double, Array[Double], Double), (Int, Array[Double], Double)]] = defaultUDF1[(Int, Double, Array[Double], Double), (Int, Array[Double], Double)]
-  implicit def udf4: UDF1[Function1[(Int, Double, Array[Double], Double), (Int, Array[Double])]] = defaultUDF1[(Int, Double, Array[Double], Double), (Int, Array[Double])]
-  implicit def udf5: UDF2[Function2[(Int, Array[Double], Double), (Int, Array[Double]), ValueAndGradient]] = defaultUDF2[(Int, Array[Double], Double), (Int, Array[Double]), ValueAndGradient]
-  implicit def udf6: UDF2[Function2[(Int, Array[Double], Double), ValueAndGradient, (Int, Double, Array[Double], Double)]] = defaultUDF2[(Int, Array[Double], Double), ValueAndGradient, (Int, Double, Array[Double], Double)]
-  implicit def udf7: FieldSelector[Function1[(Int, Double, Array[Double], Double), Boolean]] = defaultFieldSelectorT[(Int, Double, Array[Double], Double), Boolean]
+  /*
+  implicit def udf1(fun: ((Int, Array[Double])) => (Int, Array[Double], Double)): UDF1Code[((Int, Array[Double])) => (Int, Array[Double], Double)] = AnalyzedUDF1.default(fun)
+  implicit def udf2(fun: Iterator[ValueAndGradient] => ValueAndGradient): UDF1Code[Iterator[ValueAndGradient] => ValueAndGradient] = AnalyzedUDF1.defaultIterT(fun)
+  implicit def udf3(fun: ((Int, Double, Array[Double], Double)) => (Int, Array[Double], Double)): UDF1Code[((Int, Double, Array[Double], Double)) => (Int, Array[Double], Double)] = AnalyzedUDF1.default(fun)
+  implicit def udf4(fun: ((Int, Double, Array[Double], Double)) => (Int, Array[Double])): UDF1Code[((Int, Double, Array[Double], Double)) => (Int, Array[Double])] = AnalyzedUDF1.default(fun)
+  implicit def udf5(fun: ((Int, Array[Double], Double), (Int, Array[Double])) => ValueAndGradient): UDF2Code[((Int, Array[Double], Double), (Int, Array[Double])) => ValueAndGradient] = AnalyzedUDF2.default(fun)
+  implicit def udf6(fun: ((Int, Array[Double], Double), ValueAndGradient) => (Int, Double, Array[Double], Double)): UDF2Code[((Int, Array[Double], Double), ValueAndGradient) => (Int, Double, Array[Double], Double)] = AnalyzedUDF2.default(fun)
+  implicit def udf7(fun: ((Int, Double, Array[Double], Double)) => Boolean): UDF1Code[((Int, Double, Array[Double], Double)) => Boolean] = AnalyzedUDF1.default(fun)
+  implicit def udfOut(fun: ((Int, Array[Double])) => String): UDF1Code[((Int, Array[Double])) => String] = AnalyzedUDF1.default(fun)
+  */
 
-  implicit def selOutput: FieldSelector[Function1[(Int, Array[Double]), Unit]] = defaultFieldSelectorT[(Int, Array[Double]), Unit]
-  implicit def selNewWeights: FieldSelector[Function1[(Int, Array[Double]), Int]] = getFieldSelector[(Int, Array[Double]), Int](0)
-  implicit def selLossAndGradientSums: FieldSelector[Function1[ValueAndGradient, Int]] = getFieldSelector[ValueAndGradient, Int](0)
-  implicit def selGdNewWeightsLeft: FieldSelector[Function1[(Int, Array[Double], Double), Int]] = getFieldSelector[(Int, Array[Double], Double), Int](0)
+  implicit def selNewWeights(fun: ((Int, Array[Double])) => Int): FieldSelectorCode[((Int, Array[Double])) => Int] = AnalyzedFieldSelector(fun, Set(0))
+  implicit def selLossAndGradientSums(fun: ValueAndGradient => Int): FieldSelectorCode[ValueAndGradient => Int] = AnalyzedFieldSelector(fun, Set(0))
+  implicit def selGdNewWeightsLeft(fun: ((Int, Array[Double], Double)) => Int): FieldSelectorCode[((Int, Array[Double], Double)) => Int] = AnalyzedFieldSelector(fun, Set(0))
 }
+

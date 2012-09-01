@@ -24,12 +24,12 @@ import eu.stratosphere.pact.common.contract._
 
 trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContract { this: MatchContract =>
 
-  val leftKeySelector: FieldSelector[LeftIn => Key]
-  val rightKeySelector: FieldSelector[RightIn => Key]
+  val leftKeySelector: FieldSelector
+  val rightKeySelector: FieldSelector
   val leftUDT: UDT[LeftIn]
   val rightUDT: UDT[RightIn]
   val outputUDT: UDT[Out]
-  val joinUDF: UDF2[(LeftIn, RightIn) => _]
+  val joinUDF: UDF2
   val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
 
   override def annotations = Seq(

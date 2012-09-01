@@ -22,13 +22,13 @@ import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputContract { this: ReduceContract =>
+trait Reduce4sContract[In, Out] extends Pact4sOneInputContract { this: ReduceContract =>
 
-  val keySelector: FieldSelector[In => Key]
+  val keySelector: FieldSelector
   val inputUDT: UDT[In]
   val outputUDT: UDT[Out]
-  val combineUDF: UDF1[Iterator[In] => In]
-  val reduceUDF: UDF1[Iterator[In] => Out]
+  val combineUDF: UDF1
+  val reduceUDF: UDF1
   val userCombineFunction: Option[Iterator[In] => In]
   val userReduceFunction: Iterator[In] => Out
 
@@ -65,5 +65,5 @@ object Reduce4sContract {
 
   def getStub[In, Out] = classOf[Reduce4sStub[In, Out]]
 
-  def unapply(c: Reduce4sContract[_, _, _]) = Some((c.singleInput, c.keySelector, c.inputUDT, c.outputUDT, c.combineUDF, c.reduceUDF))
+  def unapply(c: Reduce4sContract[_, _]) = Some((c.singleInput, c.keySelector, c.inputUDT, c.outputUDT, c.combineUDF, c.reduceUDF))
 }

@@ -29,6 +29,7 @@ class Pact4sPlugin(val global: Global) extends Plugin
   with TypingTransformers with TypingTraversers with ScopingTransformers
   with UDTDescriptors with UDTAnalyzers
   with UDTGenSiteParticipants with UDTGenSiteSelectors with UDTGenSiteTransformers
+  with Unlifters
   with TreeGenerators with Definitions with Loggers {
 
   import global._
@@ -50,9 +51,15 @@ class Pact4sPlugin(val global: Global) extends Plugin
     override val runsRightAfter = Some("Pact4s.UDTSite")
   }
 
-  //override val logLevel = LogLevel.Inspect
+  object unlifter extends Unlifter {
+    override val phaseName = "Pact4s.Unlift"
+    override val runsAfter = List[String]("Pact4s.UDTCode");
+    override val runsRightAfter = Some("Pact4s.UDTCode")
+  }
+
+  override val logLevel = LogLevel.Inspect
   override val name = "Pact4s"
   override val description = "Performs analysis and code generation for Pact4s programs."
-  override val components = List[PluginComponent](udtGenSiteSelector, udtGenSiteTransformer)
+  override val components = List[PluginComponent](udtGenSiteSelector, udtGenSiteTransformer, unlifter)
 }
 

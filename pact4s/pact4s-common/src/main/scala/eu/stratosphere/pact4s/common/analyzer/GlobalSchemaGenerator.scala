@@ -283,7 +283,7 @@ trait GlobalSchemaGenerator {
     result
   }
 
-  private def setKeyColumns(contract: Pact4sContract, keys: FieldSelector[_]*) = {
+  private def setKeyColumns(contract: Pact4sContract, keys: FieldSelector*) = {
 
     for ((key, inputNum) <- keys.zipWithIndex) {
       val oldKeyColumns = contract.asInstanceOf[AbstractPact[_]].getKeyColumnNumbers(inputNum)

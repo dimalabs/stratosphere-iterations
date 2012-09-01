@@ -28,7 +28,7 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
     override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with ScopingTransformer with LoggingTransformer with TreeGenerator with UDTClassGenerator {
 
       private val genSites = getSites(unit)
-      private val unitRoot = new EagerAutoSwitch[Tree] { override def guard = unit.toString.contains("Test.scala") }
+      private val unitRoot = new EagerAutoSwitch[Tree] { override def guard = unit.toString.contains("LanczosSO.scala") }
 
       override def transform(tree: Tree): Tree = {
 

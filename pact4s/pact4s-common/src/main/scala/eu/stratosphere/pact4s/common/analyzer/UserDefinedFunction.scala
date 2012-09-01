@@ -17,6 +17,8 @@
 
 package eu.stratosphere.pact4s.common.analyzer
 
+import scala.reflect.Code
+
 abstract sealed class AmbientFieldBehavior
 
 object AmbientFieldBehavior {
@@ -34,26 +36,34 @@ trait UDF extends Serializable {
   def relocateInputField(oldPosition: Int, newPosition: Int)
 }
 
+trait UDF1Code[T] extends UDF.EmptyCode[T] with UDF1 { def userFunction: T }
+trait UDF2Code[T] extends UDF.EmptyCode[T] with UDF2 { def userFunction: T }
+
 trait UDFLowPriorityImplicits {
 
-  class UDFAnalysisFailedException extends RuntimeException("UDF analysis failed. This should never happen.")
+  class UDFAnalysisFailedException extends RuntimeException("UDF analysis failed. This should have been caught at compile time.")
 
-  implicit def unanalyzedUDF1[T1, R]: UDF1[T1 => R] = throw new UDFAnalysisFailedException
-  implicit def unanalyzedUDF2[T1, T2, R]: UDF2[(T1, T2) => R] = throw new UDFAnalysisFailedException
+  implicit def unanalyzedUDF1[T1, R](fun: T1 => R): UDF1Code[T1 => R] = throw new UDFAnalysisFailedException
+  implicit def unanalyzedUDF2[T1, T2, R](fun: (T1, T2) => R): UDF2Code[(T1, T2) => R] = throw new UDFAnalysisFailedException
+  implicit def unanalyzedUDF1Code[T1, R](fun: Code[T1 => R]): UDF1Code[T1 => R] = throw new UDFAnalysisFailedException
+  implicit def unanalyzedUDF2Code[T1, T2, R](fun: Code[(T1, T2) => R]): UDF2Code[(T1, T2) => R] = throw new UDFAnalysisFailedException
 }
 
 object UDF extends UDFLowPriorityImplicits {
 
+  abstract class EmptyCode[T] extends Code[T](null) {
+    @transient override val tree = null
+  }
 }
 
-trait UDF1[+F <: _ => _] extends UDF {
+trait UDF1 extends UDF {
 
   def getReadFields: Array[Int]
   def getCopiedFields: Map[Int, Int]
   def getForwardedFields: Array[Int]
   def getDiscardedFields: Array[Int]
 
-  def copy(): UDF1[F]
+  def copy(): UDF1
   def markInputFieldUnread(inputFieldNum: Int)
   def markInputFieldCopied(fromInputFieldNum: Int, toOutputFieldNum: Int)
 
@@ -68,7 +78,7 @@ trait UDF1[+F <: _ => _] extends UDF {
   def setAmbientFieldBehavior(position: Int, behavior: AmbientFieldBehavior)
 }
 
-trait UDF2[+F <: (_, _) => _] extends UDF {
+trait UDF2 extends UDF {
 
   def getReadFields: (Array[Int], Array[Int])
   def getCopiedFields: Map[Int, Either[Int, Int]]

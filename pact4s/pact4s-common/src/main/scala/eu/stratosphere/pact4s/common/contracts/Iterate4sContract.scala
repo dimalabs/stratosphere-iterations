@@ -32,14 +32,14 @@ object Iterate4sContract {
   }
 }
 
-trait WorksetIterate4sContract[Key, SolutionItem, WorksetItem] extends Pact4sContract { this: WorksetIteration =>
+trait WorksetIterate4sContract[SolutionItem, WorksetItem] extends Pact4sContract { this: WorksetIteration =>
 
-  val keySelector: FieldSelector[SolutionItem => Key]
+  val keySelector: FieldSelector
 }
 
 object WorksetIterate4sContract {
 
-  def unapply(c: WorksetIterate4sContract[_, _, _]) = {
+  def unapply(c: WorksetIterate4sContract[_, _]) = {
     val iter = c.asInstanceOf[WorksetIteration]
     Some((iter.getInitialPartialSolution(), iter.getInitialWorkset(), c.keySelector, iter.getPartialSolutionDelta(), iter.getNextWorkset(), iter.getPartialSolution(), iter.getWorkset()))
   }

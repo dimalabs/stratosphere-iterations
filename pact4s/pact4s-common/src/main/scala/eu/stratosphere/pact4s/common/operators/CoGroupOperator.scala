@@ -28,34 +28,33 @@ class CoGroupOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) extends Serial
 
   def cogroup[RightIn: UDT](rightInput: DataStream[RightIn]) = new Serializable {
 
-    def on[Key, LeftKeySelector: SelectorBuilder[LeftIn, Key]#Selector](leftKeySelector: LeftIn => Key) = new Serializable {
+    def on[Key](leftKeySelector: FieldSelectorCode[LeftIn => Key]) = new Serializable {
 
-      def isEqualTo[RightKeySelector: SelectorBuilder[RightIn, Key]#Selector](rightKeySelector: RightIn => Key) = new Serializable {
+      def isEqualTo(rightKeySelector: FieldSelectorCode[RightIn => Key]) = new Serializable {
 
-        def map[Out: UDT, F: UDF2Builder[Iterator[LeftIn], Iterator[RightIn], Out]#UDF](mapFunction: (Iterator[LeftIn], Iterator[RightIn]) => Out) = createStream(Left(mapFunction))
+        def map[Out: UDT](mapFunction: UDF2Code[(Iterator[LeftIn], Iterator[RightIn]) => Out]) = createStream(Left(mapFunction))
 
-        def flatMap[Out: UDT, F: UDF2Builder[Iterator[LeftIn], Iterator[RightIn], Iterator[Out]]#UDF](mapFunction: (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]) = createStream(Right(mapFunction))
+        def flatMap[Out: UDT](mapFunction: UDF2Code[(Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]) = createStream(Right(mapFunction))
 
-        private def createStream[Out: UDT, R, F: UDF2Builder[Iterator[LeftIn], Iterator[RightIn], R]#UDF](
-          mapFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]): DataStream[Out] = new DataStream[Out] {
+        private def createStream[Out: UDT](mapFunction: Either[UDF2Code[(Iterator[LeftIn], Iterator[RightIn]) => Out], UDF2Code[(Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]]): DataStream[Out] = new DataStream[Out] {
 
           override def createContract = {
 
-            val leftKey = implicitly[FieldSelector[LeftIn => Key]]
-            val rightKey = implicitly[FieldSelector[RightIn => Key]]
-            val leftKeyFields = leftKey.getFields filter { _ >= 0 }
-            val rightKeyFields = rightKey.getFields filter { _ >= 0 }
+            val leftKeyFieldSelector: FieldSelector = leftKeySelector
+            val rightKeyFieldSelector: FieldSelector = rightKeySelector
+            val leftKeyFields = leftKeyFieldSelector.getFields filter { _ >= 0 }
+            val rightKeyFields = rightKeyFieldSelector.getFields filter { _ >= 0 }
             val keyFieldTypes = implicitly[UDT[LeftIn]].getKeySet(leftKeyFields)
 
-            new CoGroupContract(CoGroup4sContract.getStub, keyFieldTypes, leftKeyFields, rightKeyFields, leftInput.getContract, rightInput.getContract) with CoGroup4sContract[Key, LeftIn, RightIn, Out] {
+            new CoGroupContract(CoGroup4sContract.getStub, keyFieldTypes, leftKeyFields, rightKeyFields, leftInput.getContract, rightInput.getContract) with CoGroup4sContract[LeftIn, RightIn, Out] {
 
-              override val leftKeySelector = leftKey
-              override val rightKeySelector = rightKey
+              override val leftKeySelector = leftKeyFieldSelector
+              override val rightKeySelector = rightKeyFieldSelector
               override val leftUDT = implicitly[UDT[LeftIn]]
               override val rightUDT = implicitly[UDT[RightIn]]
               override val outputUDT = implicitly[UDT[Out]]
-              override val coGroupUDF = implicitly[UDF2[(Iterator[LeftIn], Iterator[RightIn]) => R]]
-              override val userFunction = mapFunction
+              override val coGroupUDF = mapFunction.fold(fun => fun: UDF2, fun => fun: UDF2)
+              override val userFunction = mapFunction.fold(fun => Left(fun.userFunction), fun => Right(fun.userFunction))
             }
           }
         }

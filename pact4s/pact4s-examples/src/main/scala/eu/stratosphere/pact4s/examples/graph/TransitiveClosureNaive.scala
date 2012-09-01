@@ -44,7 +44,7 @@ class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOut
 
   def createClosure = (paths: DataStream[Path]) => {
 
-    val allNewPaths = paths.join(edges).on(getTo)(selTo).isEqualTo(getFrom)(selFrom) map joinPaths
+    val allNewPaths = paths join edges on selTo(getTo) isEqualTo selFrom(getFrom) map joinPaths
     val shortestPaths = allNewPaths groupBy getEdge combine { _ minBy { _.dist } }
 
     val delta = paths cogroup shortestPaths on getEdge isEqualTo getEdge flatMap { (oldPaths, newPaths) =>
@@ -165,12 +165,15 @@ trait TransitiveClosureNaiveGeneratedImplicits { this: TransitiveClosureNaive =>
     }
   }
 
-  implicit def udf1: UDF1[Function1[Iterator[Path], Path]] = defaultUDF1IterT[Path, Path]
-  implicit def udf2: UDF2[Function2[Path, Path, Path]] = defaultUDF2[Path, Path, Path]
-  implicit def udf3: UDF2[Function2[Iterator[Path], Iterator[Path], Iterator[Path]]] = defaultUDF2IterTR[Path, Path, Path]
+  /*
+  implicit def udf1(fun: Function1[Iterator[Path], Path]): UDF1Code[Function1[Iterator[Path], Path]] = AnalyzedUDF1.defaultIterT(fun)
+  implicit def udf2(fun: Function2[Path, Path, Path]): UDF2Code[Function2[Path, Path, Path]] = AnalyzedUDF2.default(fun)
+  implicit def udf3(fun: Function2[Iterator[Path], Iterator[Path], Iterator[Path]]): UDF2Code[Function2[Iterator[Path], Iterator[Path], Iterator[Path]]] = AnalyzedUDF2.defaultIterTR(fun)
+  implicit def udfOut(fun: Function1[Path, String]): UDF1Code[Function1[Path, String]] = AnalyzedUDF1.default(fun)
+  */
 
-  implicit def selOutput: FieldSelector[Function1[Path, Unit]] = defaultFieldSelectorT[Path, Unit]
-  implicit def selEdge: FieldSelector[Function1[Path, (Int, Int)]] = getFieldSelector[Path, (Int, Int)](0, 1)
-  def selFrom: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](0)
-  def selTo: FieldSelector[Function1[Path, Int]] = getFieldSelector[Path, Int](1)
+  implicit def selEdge(fun: Function1[Path, (Int, Int)]): FieldSelectorCode[Function1[Path, (Int, Int)]] = AnalyzedFieldSelector(fun, Set(0, 1))
+  def selFrom(fun: Function1[Path, Int]): FieldSelectorCode[Function1[Path, Int]] = AnalyzedFieldSelector(fun, Set(0))
+  def selTo(fun: Function1[Path, Int]): FieldSelectorCode[Function1[Path, Int]] = AnalyzedFieldSelector(fun, Set(1))
 }
+
