@@ -23,52 +23,39 @@ trait UDTGenSiteSelectors { this: Pact4sPlugin =>
 
   import global._
 
-  trait UDTGenSiteSelector extends Pact4sTransform with UDTGenSiteParticipant {
+  trait UDTGenSiteSelector extends Pact4sComponent with UDTGenSiteParticipant {
 
-    override def newTransformer(unit: CompilationUnit) = new TypingTraverser(unit) with ScopingTransformer with LoggingTransformer with UDTAnalyzer {
+    override def newTransformer(unit: CompilationUnit) = new TypingTraverser(unit) with Logger with UDTAnalyzer {
 
       private val genSites = getSites(unit)
       private val genSitePaths = new MutableMultiMap[UDTDescriptor, Seq[Tree]]()
 
-      override def isPathComponent(tree: Tree) = tree match {
-        case _: Block    => true
-        case _: Function => true
-        case _: DefDef   => true
-        case _: ClassDef => true
-        case _           => false
-      }
+      override def apply(tree: Tree) = {
 
-      override def traverse(tree: Tree) = {
+        tree match {
 
-        withImplicits(tree) { // Add local implicits to the typer's context
+          // Analyze unanalyzed Udts
+          case TypeApply(s: Select, List(t)) if s.symbol == defs.unanalyzedUdt => analyze(t.tpe)
 
-          def analyze(tpe: Type): Unit = getUDTDescriptor(tpe, tree) match {
-            case UnsupportedDescriptor(_, _, errs) => errs foreach { err => Error.report("Could not generate UDT[" + tpe + "]: " + err + " @ " + posString(tree.pos)) }
-            case d @ OpaqueDescriptor(_, _, _)     => collectInferences(d) foreach { traverse(_) }
-            case desc                              => if (updateGenSite(desc)) collectInferences(desc) foreach { traverse(_) }
-          }
+          // Analyze UDF type parameters
+          case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF1 => analyze(tps)
+          case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF1Code => analyze(tps)
+          case Apply(TypeApply(unanalyzed, tps @ List(t1, t2, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF2 => analyze(tps)
+          case Apply(TypeApply(unanalyzed, tps @ List(t1, t2, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF2Code => analyze(tps)
 
-          def analyzeUDF(tparams: List[Tree]): Unit = tparams foreach { t => analyze(defs.unwrapIter(t.tpe)) }
-
-          tree match {
-
-            // Analyze unanalyzed Udts
-            case TypeApply(s: Select, List(t)) if s.symbol == defs.unanalyzedUdt => {
-
-              analyze(t.tpe)
-              super.traverse(tree); tree
-            }
-
-            // Analyze UDF type parameters
-            case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF1 => analyzeUDF(tps)
-            case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF1Code => analyzeUDF(tps)
-            case Apply(TypeApply(unanalyzed, tps @ List(t1, t2, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF2 => analyzeUDF(tps)
-            case Apply(TypeApply(unanalyzed, tps @ List(t1, t2, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF2Code => analyzeUDF(tps)
-
-            case _ => super.traverse(tree); tree
-          }
+          case _ =>
         }
+
+        super.apply(tree)
       }
+
+      private def analyze(tpe: Type): Unit = getUDTDescriptor(tpe) match {
+        case UnsupportedDescriptor(_, _, errs) => errs foreach { err => Error.report("Could not generate UDT[" + tpe + "]: " + err) }
+        case d @ OpaqueDescriptor(_, _, _)     => collectInferences(d) foreach { apply(_) }
+        case desc                              => if (updateGenSite(desc)) collectInferences(desc) foreach { apply(_) }
+      }
+
+      private def analyze(tparams: List[Tree]): Unit = tparams foreach { t => analyze(defs.unwrapIter(t.tpe)) }
 
       private def collectInferences(desc: UDTDescriptor): Seq[Tree] = desc match {
         case OpaqueDescriptor(_, _, ref)              => Seq(ref())
@@ -78,9 +65,17 @@ trait UDTGenSiteSelectors { this: Pact4sPlugin =>
         case _                                        => Seq()
       }
 
+      private def curSitePath = curPath filter {
+        case _: Block    => true
+        case _: Function => true
+        case _: DefDef   => true
+        case _: ClassDef => true
+        case _           => false
+      }
+
       private def updateGenSite(desc: UDTDescriptor): Boolean = {
 
-        findCommonLexicalParent(currentPath, genSitePaths(desc).toSeq) match {
+        findCommonLexicalParent(curSitePath, genSitePaths(desc).toSeq) match {
 
           case Some((oldPath, newPath)) if oldPath.head eq newPath.head => false
 
@@ -95,9 +90,9 @@ trait UDTGenSiteSelectors { this: Pact4sPlugin =>
           }
 
           case None => {
-            verbosely[Boolean] { _ => "Added GenSite[" + desc.tpe + "] " + posString(currentPath.head.pos) + " - " + desc.toString } {
-              genSites(currentPath.head) += desc
-              genSitePaths(desc) += currentPath
+            verbosely[Boolean] { _ => "Added GenSite[" + desc.tpe + "] " + posString(curSitePath.head.pos) + " - " + desc.toString } {
+              genSites(curSitePath.head) += desc
+              genSitePaths(desc) += curSitePath
               true
             }
           }

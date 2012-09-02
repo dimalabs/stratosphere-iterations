@@ -24,7 +24,7 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
   import global._
   import defs._
 
-  trait UDTSerializeMethodGenerator { this: UDTSerializerClassGenerator with TreeGenerator with LoggingTransformer =>
+  trait UDTSerializeMethodGenerator { this: UDTSerializerClassGenerator with TypingVisitor with TreeGenerator with Logger =>
 
     protected def mkSerialize(udtSerClassSym: Symbol, desc: UDTDescriptor, listImpls: Map[Int, Type]): List[Tree] = {
 

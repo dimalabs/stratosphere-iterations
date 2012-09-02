@@ -24,11 +24,11 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
   import global._
   import defs._
 
-  trait UDTSerializerClassGenerator extends UDTSerializeMethodGenerator with UDTDeserializeMethodGenerator { this: UDTClassGenerator with TreeGenerator with LoggingTransformer =>
+  trait UDTSerializerClassGenerator extends UDTSerializeMethodGenerator with UDTDeserializeMethodGenerator { this: UDTClassGenerator with TypingVisitor with TreeGenerator with Logger =>
 
     protected def mkUdtSerializerClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 
-      mkClass(owner, freshTypeName("UDTSerializerImpl"), Flags.FINAL, List(mkUdtSerializerOf(desc.tpe), definitions.SerializableClass.tpe)) { classSym =>
+      mkClass(owner, unit.freshTypeName("UDTSerializerImpl"), Flags.FINAL, List(mkUdtSerializerOf(desc.tpe), definitions.SerializableClass.tpe)) { classSym =>
 
         val (listImpls, listImplTypes) = mkListImplClasses(classSym, desc)
 
@@ -48,7 +48,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
 
     private def mkListImplClasses(udtSerClassSym: Symbol, desc: UDTDescriptor): (List[Tree], Map[Int, Type]) = {
 
-      def mkListImplClass(elemTpe: Type): Tree = mkClass(udtSerClassSym, freshTypeName("PactListImpl"), Flags.FINAL, List(mkPactListOf(elemTpe))) { _ => Nil }
+      def mkListImplClass(elemTpe: Type): Tree = mkClass(udtSerClassSym, unit.freshTypeName("PactListImpl"), Flags.FINAL, List(mkPactListOf(elemTpe))) { _ => Nil }
 
       def getListTypes(desc: UDTDescriptor): Seq[(Int, Int, Type)] = desc match {
         case ListDescriptor(id, _, _, _, _, elem: ListDescriptor) => {

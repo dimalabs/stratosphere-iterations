@@ -18,48 +18,72 @@
 package eu.stratosphere.pact4s.compiler
 
 import scala.tools.nsc.Global
+import scala.tools.nsc.SubComponent
 import scala.tools.nsc.plugins.Plugin
 import scala.tools.nsc.plugins.PluginComponent
 import scala.tools.nsc.transform.Transform
-import scala.tools.nsc.transform.TypingTransformers
 
 import eu.stratosphere.pact4s.compiler.util._
 
-class Pact4sPlugin(val global: Global) extends Plugin
-  with TypingTransformers with TypingTraversers with ScopingTransformers
-  with UDTDescriptors with UDTAnalyzers
+class Pact4sPlugin(val global: Global) extends Plugin with Pact4sPluginOptions
+  with TypingTransformers with TreeGenerators with Loggers with Visualizers
+  with Definitions with UDTDescriptors with UDTAnalyzers
   with UDTGenSiteParticipants with UDTGenSiteSelectors with UDTGenSiteTransformers
-  with Unlifters
-  with TreeGenerators with Definitions with Loggers {
+  with Unlifters {
 
   import global._
 
-  abstract class Pact4sTransform extends Pact4sPluginComponent with Transform
-  abstract class Pact4sPluginComponent extends PluginComponent with Logger {
-    val global: Pact4sPlugin.this.global.type = Pact4sPlugin.this.global
-  }
-
-  object udtGenSiteSelector extends UDTGenSiteSelector {
-    override val phaseName = "Pact4s.UDTSite"
-    override val runsAfter = List[String]("refchecks");
-    override val runsRightAfter = Some("refchecks")
-  }
-
-  object udtGenSiteTransformer extends UDTGenSiteTransformer {
-    override val phaseName = "Pact4s.UDTCode"
-    override val runsAfter = List[String]("Pact4s.UDTSite");
-    override val runsRightAfter = Some("Pact4s.UDTSite")
-  }
-
-  object unlifter extends Unlifter {
-    override val phaseName = "Pact4s.Unlift"
-    override val runsAfter = List[String]("Pact4s.UDTCode");
-    override val runsRightAfter = Some("Pact4s.UDTCode")
-  }
-
-  override val logLevel = LogLevel.Inspect
-  override val name = "Pact4s"
+  override val name = "pact4s"
   override val description = "Performs analysis and code generation for Pact4s programs."
-  override val components = List[PluginComponent](udtGenSiteSelector, udtGenSiteTransformer, unlifter)
+  override val components = List[PluginComponent](udtSite, udtCode, unlift)
+  override val optionsHelp = getOptionsHelp
+  override val neverInfer = defs.unanalyzed
+
+  object udtSite extends Pact4sPhase("UDTSite", refchecks) with UDTGenSiteSelector
+  object udtCode extends Pact4sPhase("UDTCode", udtSite) with UDTGenSiteTransformer
+  object unlift extends Pact4sPhase("Unlift", udtCode) with Unlifter
+
+  abstract class Pact4sComponent extends PluginComponent with Transform with Visualize {
+    override val global: Pact4sPlugin.this.global.type = Pact4sPlugin.this.global
+  }
+
+  abstract class Pact4sPhase(name: String, runAfter: SubComponent) extends Pact4sComponent {
+    override def toString = name
+    override val phaseName = "%s:%s".format(Pact4sPlugin.this.name, name)
+    override val runsAfter = List[String](runAfter.phaseName)
+    override val runsBefore = List[String](liftcode.phaseName)
+  }
+}
+
+trait Pact4sPluginOptions { this: Pact4sPlugin =>
+
+  protected def getOptionsHelp: Option[String] = {
+
+    val items = Seq(
+      ("verbosity:<value>", "Set the output verbosity to <value>. (error, warn, debug, inspect) default:warn"),
+      ("inspect:<phase>", "Show trees after <phase>. (none, " + components.mkString(", ") + ") default:none")
+    )
+
+    val optName = "  -P:" + name + ":%s"
+    val optLine = "%-30s%s"
+    val options = items map { case (opt, desc) => optLine.format(optName.format(opt), desc) } mkString ("\n")
+
+    Some(options)
+  }
+
+  override def processOptions(options: List[String], error: String => Unit): Unit = {
+
+    val VerbosityPattern = "verbosity:(.+)".r
+    val InspectPattern = "inspect:(.+)".r
+    object Component { def unapply(name: String): Option[PluginComponent] = components.find(_.toString.toLowerCase == name.toLowerCase) }
+
+    for (opt <- options) {
+      opt match {
+        case VerbosityPattern(LogLevel(level)) => logger.level = level
+        case InspectPattern(Component(phase: Visualize)) => phase.visualize = true
+        case _ => error("Unrecognized option -P:%s:%s".format(name, opt))
+      }
+    }
+  }
 }
 

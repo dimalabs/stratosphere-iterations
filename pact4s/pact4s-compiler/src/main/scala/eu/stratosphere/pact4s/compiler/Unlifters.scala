@@ -22,41 +22,36 @@ trait Unlifters { this: Pact4sPlugin =>
   import global._
   import defs._
 
-  trait Unlifter extends Pact4sTransform {
+  trait Unlifter extends Pact4sComponent {
 
-    override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with LoggingTransformer with ScopingTransformer with TreeGenerator {
+    override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with Logger with TreeGenerator {
 
-      override def transform(tree: Tree) = {
+      override def apply(tree: Tree) = {
 
-        withImplicits(tree) {
-          super.transform {
-            val t1 = tree match {
-              case UnanalyzedCode(unlifted) => localTyper.typed { unlifted }
-              case _                        => tree
-            }
-            val t2 = t1 match {
-              case UnanalyzedUDF(default) => localTyper.typed { default }
-              case _                      => t1
-            }
-            t2 match {
-              case UnanalyzedFunction(kind, tps) => Error.report("Found " + kind + "[" + tps.mkString(", ") + "] @ " + posString(tree.pos), tree.pos)
-              case _                             => ()
-            }
-            t2
+        super.apply {
+          val t1 = tree match {
+            case UnanalyzedCode(unlifted) => localTyper.typed { unlifted }
+            case _                        => tree
           }
+          val t2 = t1 match {
+            case UnanalyzedUDF(default) => localTyper.typed { default }
+            case _                      => t1
+          }
+          t2 match {
+            case UnanalyzedFunction(kind, tps) => Error.report("Found " + kind + "[" + tps.mkString(", ") + "] @ " + posString(tree.pos))
+            case _                             => ()
+          }
+          t2
         }
       }
-
-      private def inferInst(tree: Tree, tpe: Type) = analyzer.inferImplicit(tree, tpe, true, false, localTyper.context).tree
-      private def inferView(tree: Tree, tpe: Type) = analyzer.inferImplicit(tree, tpe, true, true, localTyper.context).tree
 
       object UnanalyzedCode {
 
         def unapply(tree: Tree): Option[Tree] = tree match {
           case Apply(TypeApply(view, tparams), List(Apply(lift, List(fun: Function)))) if lift.symbol == liftMethod => view.symbol match {
-            case LiftedView(unliftedView @ Select(_, kind)) => inferView(tree, mkCodeView(kind.toString, tparams map { _.tpe })) match {
-              case EmptyTree => Some(Apply(TypeApply(unliftedView, tparams), List(fun)) setPos tree.pos)
-              case t         => Some(Apply(t, List(fun)) setPos tree.pos)
+            case LiftedView(unliftedView @ Select(_, kind)) => inferImplicitView(mkCodeView(kind.toString, tparams map { _.tpe })) match {
+              case None    => Some(Apply(TypeApply(unliftedView, tparams), List(fun)) setPos tree.pos)
+              case Some(t) => Some(Apply(t, List(fun)) setPos tree.pos)
             }
             case _ => None
           }
@@ -78,16 +73,16 @@ trait Unlifters { this: Pact4sPlugin =>
       object UnanalyzedUDF {
 
         def unapply(tree: Tree): Option[(Tree)] = tree match {
-          case Apply(TypeApply(unanalyzed, tparams @ List(_, _)), List(fun)) if unanalyzed.symbol == unanalyzedUDF1 => inferDefaultUDF(tree, tparams map { _.tpe }, fun)
-          case Apply(TypeApply(unanalyzed, tparams @ List(_, _, _)), List(fun)) if unanalyzed.symbol == unanalyzedUDF2 => inferDefaultUDF(tree, tparams map { _.tpe }, fun)
-          case UnanalyzedFunction(kind, tparams) if (kind != unanalyzedFieldSelector) => Debug.report("Error matching " + kind + " for UDF[" + mkFunctionType(tparams: _*) + "] @ " + tree.id, tree.pos); None
+          case Apply(TypeApply(unanalyzed, tparams @ List(_, _)), List(fun)) if unanalyzed.symbol == unanalyzedUDF1 => inferDefaultUDF(tparams map { _.tpe }, fun)
+          case Apply(TypeApply(unanalyzed, tparams @ List(_, _, _)), List(fun)) if unanalyzed.symbol == unanalyzedUDF2 => inferDefaultUDF(tparams map { _.tpe }, fun)
+          case UnanalyzedFunction(kind, tparams) if (kind != unanalyzedFieldSelector) => Debug.report("Error matching " + kind + " for UDF[" + mkFunctionType(tparams: _*) + "] @ " + tree.id); None
           case _ => None
         }
 
-        private def inferDefaultUDF(site: Tree, tparams: List[Type], fun: Tree): Option[Tree] = {
+        private def inferDefaultUDF(tparams: List[Type], fun: Tree): Option[Tree] = {
 
           val funTpe = mkFunctionType(tparams: _*)
-          val tpeudts = tparams.zip(tparams map inferUdt(site))
+          val tpeudts = tparams.zip(tparams map { tpe => inferImplicitInst(mkUdtOf(unwrapIter(tpe))) })
 
           val errs = tpeudts filter { !_._2.isDefined } map { _._1 }
           val udts = tpeudts filter { _._2.isDefined } map { _._2.get }
@@ -109,23 +104,13 @@ trait Unlifters { this: Pact4sPlugin =>
           }
 
           errs match {
-            case Nil => Debug.report("Inferred default for UDF[" + funTpe + "] @ " + site.id, site.pos); Some(defaultUdf)
+            case Nil => Debug.report("Inferred default for UDF[" + funTpe + "] @ " + curTree.id); Some(defaultUdf)
             case _ => {
               val availUdts = localTyper.context.implicitss.flatten.filter(_.name.startsWith("udtInst")).map(m => m.tpe.resultType.typeArgs.head.toString).sorted.mkString(", ")
               val implicitCount = localTyper.context.implicitss.flatten.length
-              Debug.report("Could not infer default UDF[" + funTpe + "] @ " + site.id + " Missing UDTs: " + errs.mkString(", ") + ". Total Implicits: " + implicitCount + ". Available UDTs: " + availUdts, site.pos); None
+              Debug.report("Could not infer default UDF[" + funTpe + "] @ " + curTree.id + " Missing UDTs: " + errs.mkString(", ") + ". Total Implicits: " + implicitCount + ". Available UDTs: " + availUdts); None
             }
           }
-        }
-
-        private def inferUdt(site: Tree)(tpe: Type): Option[Tree] = try {
-          inferInst(site, mkUdtOf(unwrapIter(tpe))) match {
-            case EmptyTree                      => None
-            case t if t.symbol == unanalyzedUdt => None
-            case t                              => Some(t)
-          }
-        } catch {
-          case ex => Debug.report("Error inferring UDT[" + unwrapIter(tpe) + "] @" + posString(site.pos) + " : " + ex.getMessage(), site.pos); None
         }
       }
 

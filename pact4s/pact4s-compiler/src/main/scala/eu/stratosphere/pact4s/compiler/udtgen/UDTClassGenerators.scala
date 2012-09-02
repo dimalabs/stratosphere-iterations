@@ -24,11 +24,11 @@ trait UDTClassGenerators extends UDTSerializerClassGenerators { this: Pact4sPlug
   import global._
   import defs._
 
-  trait UDTClassGenerator extends UDTSerializerClassGenerator { this: TreeGenerator with LoggingTransformer =>
+  trait UDTClassGenerator extends UDTSerializerClassGenerator { this: TypingVisitor with TreeGenerator with Logger =>
 
     protected def mkUdtClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 
-      mkClass(owner, freshTypeName("UDTImpl"), Flags.FINAL, List(definitions.ObjectClass.tpe, mkUdtOf(desc.tpe), definitions.SerializableClass.tpe)) { classSym =>
+      mkClass(owner, unit.freshTypeName("UDTImpl"), Flags.FINAL, List(definitions.ObjectClass.tpe, mkUdtOf(desc.tpe), definitions.SerializableClass.tpe)) { classSym =>
 
         val createSerializer = mkMethod(classSym, "createSerializer", Flags.OVERRIDE | Flags.FINAL, List(("indexMap", intArrayTpe)), mkUdtSerializerOf(desc.tpe)) { methodSym =>
           val udtSer = mkUdtSerializerClass(methodSym, desc)

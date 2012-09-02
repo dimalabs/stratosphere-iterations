@@ -17,18 +17,13 @@
 
 package eu.stratosphere.pact4s.compiler.util
 
-import scala.tools.nsc.transform.TypingTransformers
-
 trait TreeGenerators { this: TypingTransformers =>
 
   import global._
 
-  trait TreeGenerator { this: TypingTransformer =>
+  trait TreeGenerator { this: TypingVisitor =>
 
     val Flags = scala.tools.nsc.symtab.Flags
-
-    def freshTypeName(name: String) = localTyper.context.unit.freshTypeName(name)
-    def freshTermName(name: String) = localTyper.context.unit.freshTermName(name)
 
     def mkUnit = Literal(Constant(())) setType definitions.UnitClass.tpe
     def mkNull = Literal(Constant(null)) setType ConstantType(Constant(null))
@@ -103,7 +98,7 @@ trait TreeGenerators { this: TypingTransformers =>
     }
 
     def mkWhile(cond: Tree)(body: Tree): Tree = {
-      val lblName = freshTermName("while")
+      val lblName = unit.freshTermName("while")
       val jump = Apply(Ident(lblName), Nil)
       val block = body match {
         case Block(stats, expr) => new Block(stats :+ expr, jump)

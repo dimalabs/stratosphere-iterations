@@ -40,25 +40,14 @@ trait Definitions { this: Pact4sPlugin =>
     lazy val unanalyzedUDF2 = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.UDF"), "unanalyzedUDF2")
     lazy val unanalyzedUDF2Code = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.UDF"), "unanalyzedUDF2Code")
 
-    lazy val analyzedFieldSelectorClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.AnalyzedFieldSelector")
-    lazy val analyzedUDF1Class = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.AnalyzedUDF1")
-    lazy val analyzedUDF2Class = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.AnalyzedUDF2")
+    lazy val unanalyzed = Set(unanalyzedUdt, unanalyzedFieldSelector, unanalyzedFieldSelectorCode, unanalyzedUDF1, unanalyzedUDF1Code, unanalyzedUDF2, unanalyzedUDF2Code)
 
-    lazy val defaultUDF1 = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.AnalyzedUDF1"), "default")
-    lazy val defaultIterTUDF1 = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.AnalyzedUDF1"), "defaultIterT")
-    lazy val defaultIterRUDF1 = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.AnalyzedUDF1"), "defaultIterR")
-    lazy val defaultUDF2 = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.AnalyzedUDF2"), "default")
-    lazy val defaultIterTUDF2 = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.AnalyzedUDF2"), "defaultIterT")
-    lazy val defaultIterRUDF2 = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.AnalyzedUDF2"), "defaultIterR")
-    lazy val defaultIterTRUDF2 = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.AnalyzedUDF2"), "defaultIterTR")
-    lazy val defaultUDFs = Seq(defaultUDF1, defaultIterTUDF1, defaultIterRUDF1, defaultUDF2, defaultIterTUDF2, defaultIterRUDF2, defaultIterTRUDF2)
-
+    lazy val udtClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDT")
+    lazy val udtSerializerClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDTSerializer")
     lazy val fieldSelectorCodeClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.FieldSelectorCode")
     lazy val udf1CodeClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDF1Code")
     lazy val udf2CodeClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDF2Code")
 
-    lazy val udtClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDT")
-    lazy val udtSerializerClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDTSerializer")
     lazy val pactRecordClass = definitions.getClass("eu.stratosphere.pact.common.type.PactRecord")
     lazy val pactValueClass = definitions.getClass("eu.stratosphere.pact.common.type.Value")
     lazy val pactListBaseClass = definitions.getClass("eu.stratosphere.pact.common.type.base.PactList")

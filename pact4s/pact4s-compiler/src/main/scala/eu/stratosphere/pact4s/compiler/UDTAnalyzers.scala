@@ -26,22 +26,23 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
   import global._
   import defs._
 
-  trait UDTAnalyzer { this: TypingTransformer with LoggingTransformer =>
+  trait UDTAnalyzer { this: TypingVisitor with Logger =>
 
-    private val seenTpe = new SetGate[Type]
-    private val seen = new MapGate[Type, UDTDescriptor]
+    private val seen = collection.mutable.Set[(Type, Boolean)]()
 
-    def getUDTDescriptor(tpe: Type, site: Tree): UDTDescriptor = {
+    def getUDTDescriptor(tpe: Type): UDTDescriptor = {
+      if (seen.add(normTpe(tpe), false))
+        Debug.report("Analyzing UDT[" + tpe + "]")
 
-      val currentThis = ThisType(localTyper.context.enclClass.owner)
-      val norm = { tpe: Type => currentThis.baseClasses.foldLeft(tpe map { _.dealias }) { (tpe, base) => tpe.substThis(base, currentThis) } }
-      val infer = { tpe: Type => analyzer.inferImplicit(site, tpe, true, false, localTyper.context).tree }
-
-      maybeVerbosely(seenTpe) { t => "Analyzing UDT[" + t + "]" } { norm(tpe) }
-      new UDTAnalyzerInstance(norm, infer).analyze(tpe)
+      (new UDTAnalyzerInstance).analyze(tpe)
     }
 
-    private class UDTAnalyzerInstance(normTpe: Type => Type, infer: Type => Tree) {
+    private def normTpe(tpe: Type): Type = {
+      val currentThis = ThisType(localTyper.context.enclClass.owner)
+      currentThis.baseClasses.foldLeft(tpe map { _.dealias }) { (tpe, base) => tpe.substThis(base, currentThis) }
+    }
+
+    private class UDTAnalyzerInstance {
 
       private val cache = new UDTAnalyzerCache()
 
@@ -52,7 +53,7 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
         // TODO (Joe): Fix issues with Nothing type
 
         cache.getOrElseUpdate(normed) { id =>
-          maybeVerbosely(seen(normed)) { d => "Analyzed UDT[" + tpe + " ~> " + normed + "] - " + d.getClass.getName } {
+          maybeVerbosely[UDTDescriptor](_ => seen.add(normed, true)) { d => "Analyzed UDT[" + tpe + " ~> " + normed + "] - " + d.getClass.getName } {
             normed match {
               case OpaqueType(ref) => OpaqueDescriptor(id, normed, ref)
               case PrimitiveType(default, wrapper) => PrimitiveDescriptor(id, normed, default, wrapper)
@@ -193,16 +194,8 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
       }
 
       private object OpaqueType {
-
-        private val treeCopy = new Transformer {
-          override val treeCopy = new StrictTreeCopier
-        }
-
-        def unapply(tpe: Type): Option[() => Tree] = infer(mkUdtOf(tpe)) match {
-          case EmptyTree                          => None
-          case ref if ref.symbol == unanalyzedUdt => None
-          case ref                                => Some(() => treeCopy.transform(ref))
-        }
+        private val treeCopy = new Transformer { override val treeCopy = new StrictTreeCopier }
+        def unapply(tpe: Type): Option[() => Tree] = inferImplicitInst(mkUdtOf(tpe)) map { ref => () => treeCopy.transform(ref) }
       }
 
       private object PrimitiveType {
@@ -243,10 +236,7 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
 
         private def withCanBuildFrom(tpe: Type, elemTpe: Type, iter: Tree => Tree): Option[(Type, () => Tree, Tree => Tree)] = {
           val cbfTpe = appliedType(canBuildFromClass.tpe, List(tpe, elemTpe, tpe))
-          infer(cbfTpe) match {
-            case EmptyTree => None
-            case cbf       => Some((elemTpe, () => treeCopy.transform(cbf), iter))
-          }
+          inferImplicitInst(cbfTpe) map { cbf => (elemTpe, () => treeCopy.transform(cbf), iter) }
         }
 
         private object ArrayType {
@@ -299,7 +289,6 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
         }
       }
     }
-
   }
 }
 
