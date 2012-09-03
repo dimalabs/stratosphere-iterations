@@ -40,6 +40,8 @@ trait TreeGenerators { this: TypingTransformers =>
     }
 
     def mkIdent(target: Symbol): Tree = Ident(target) setType target.tpe
+    def mkSelect(rootModule: String, path: String*): Tree = mkSelect(Ident(rootModule) setSymbol definitions.getModule(rootModule), path: _*)
+    def mkSelect(source: Tree, path: String*): Tree = path.foldLeft(source) { (ret, item) => Select(ret, item) }
 
     def mkVal(owner: Symbol, name: String, flags: Long, transient: Boolean, valTpe: Type)(value: Symbol => Tree): Tree = {
       val valSym = owner.newValue(name) setFlag flags setInfo valTpe

@@ -15,6 +15,7 @@ trait TypingTransformers {
   val neverInfer = Set[Symbol]()
 
   trait TypingVisitor {
+
     protected def unit: CompilationUnit
     protected def localTyper: analyzer.Typer
     protected var curTree: Tree
@@ -24,16 +25,18 @@ trait TypingTransformers {
     protected def curPath: Seq[Tree] = envs.unzip._1
     protected def curPos: Position = curPath find { _.pos != NoPosition } map { _.pos } getOrElse NoPosition
 
-    private def nonEmptyTree(tree: Tree): Option[Tree] = tree match {
-      case EmptyTree                          => None
-      case t if neverInfer.contains(t.symbol) => None
-      case t                                  => Some(t)
+    private def treeFromImplicitResult(result: analyzer.SearchResult, dontInfer: Set[Symbol]): Option[Tree] = result.tree match {
+      case EmptyTree                         => None
+      case t if dontInfer.contains(t.symbol) => None
+      case t                                 => Some(t)
     }
 
     // It doesn't matter what we pass here for the tree parameter - we're not interested in determining types based on implicit resolution
-    protected def inferImplicitInst(tpe: Type): Option[Tree] = nonEmptyTree(analyzer.inferImplicit(EmptyTree, tpe, true, false, localTyper.context).tree)
-    protected def inferImplicitView(tpe: Type): Option[Tree] = nonEmptyTree(analyzer.inferImplicit(EmptyTree, tpe, true, true, localTyper.context).tree)
-    protected def inferImplicitView(from: Type, to: Type): Option[Tree] = inferImplicitView(definitions.functionType(List(from), to))
+    protected def inferImplicitInst(tpe: Type, dontInfer: Set[Symbol] = neverInfer): Option[Tree] = treeFromImplicitResult(analyzer.inferImplicit(EmptyTree, tpe, true, false, localTyper.context), dontInfer)
+    protected def inferImplicitView(tpe: Type, dontInfer: Set[Symbol] = neverInfer): Option[Tree] = treeFromImplicitResult(analyzer.inferImplicit(EmptyTree, tpe, true, true, localTyper.context), dontInfer)
+
+    protected def inferImplicitView(from: Type, to: Type): Option[Tree] = inferImplicitView(from, to, neverInfer)
+    protected def inferImplicitView(from: Type, to: Type, dontInfer: Set[Symbol]): Option[Tree] = inferImplicitView(definitions.functionType(List(from), to), dontInfer)
 
     protected def pre(tree: Tree) = {
       curTree = tree

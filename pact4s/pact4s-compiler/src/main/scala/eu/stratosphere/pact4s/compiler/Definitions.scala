@@ -42,6 +42,16 @@ trait Definitions { this: Pact4sPlugin =>
 
     lazy val unanalyzed = Set(unanalyzedUdt, unanalyzedFieldSelector, unanalyzedFieldSelectorCode, unanalyzedUDF1, unanalyzedUDF1Code, unanalyzedUDF2, unanalyzedUDF2Code)
 
+    object Unlifted {
+      def unapply(tree: Tree): Option[Symbol] = unapply(tree.symbol)
+      def unapply(sym: Symbol): Option[Symbol] = sym match {
+        case `unanalyzedFieldSelectorCode` => Some(unanalyzedFieldSelector)
+        case `unanalyzedUDF1Code`          => Some(unanalyzedUDF1)
+        case `unanalyzedUDF2Code`          => Some(unanalyzedUDF2)
+        case _                             => None
+      }
+    }
+
     lazy val udtClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDT")
     lazy val udtSerializerClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDTSerializer")
     lazy val fieldSelectorCodeClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.FieldSelectorCode")
@@ -94,10 +104,11 @@ trait Definitions { this: Pact4sPlugin =>
     def mkUDF1CodeOf(tpeT1: Type, tpeR: Type) = appliedType(udf1CodeClass.tpe, List(definitions.functionType(List(tpeT1), tpeR)))
     def mkUDF2CodeOf(tpeT1: Type, tpeT2: Type, tpeR: Type) = appliedType(udf2CodeClass.tpe, List(definitions.functionType(List(tpeT1, tpeT2), tpeR)))
 
-    def mkCodeView(kind: String, tparams: List[Type]): Type = kind match {
-      case "unanalyzedFieldSelector" => { val List(t1, r) = tparams; definitions.functionType(List(mkFunctionType(t1, r)), mkFieldSelectorCodeOf(t1, r)) }
-      case "unanalyzedUDF1"          => { val List(t1, r) = tparams; definitions.functionType(List(mkFunctionType(t1, r)), mkUDF1CodeOf(t1, r)) }
-      case "unanalyzedUDF2"          => { val List(t1, t2, r) = tparams; mkFunctionType(mkFunctionType(t1, t2, r), mkUDF2CodeOf(t1, t2, r)) }
+    def mkCodeView(kind: Symbol, tparams: List[Type]): Type = (kind, tparams) match {
+      case (`unanalyzedFieldSelector`, List(t1, r)) => definitions.functionType(List(mkFunctionType(t1, r)), mkFieldSelectorCodeOf(t1, r))
+      case (`unanalyzedUDF1`, List(t1, r))          => definitions.functionType(List(mkFunctionType(t1, r)), mkUDF1CodeOf(t1, r))
+      case (`unanalyzedUDF2`, List(t1, t2, r))      => mkFunctionType(mkFunctionType(t1, t2, r), mkUDF2CodeOf(t1, t2, r))
+      case _                                        => NoType
     }
 
     def mkIteratorOf(tpe: Type) = appliedType(definitions.IteratorClass.tpe, List(tpe))
@@ -126,3 +137,4 @@ trait Definitions { this: Pact4sPlugin =>
     }
   }
 }
+

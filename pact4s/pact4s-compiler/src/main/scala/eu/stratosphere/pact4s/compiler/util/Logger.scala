@@ -96,6 +96,11 @@ trait Loggers { this: TypingTransformers =>
           lock.acquire
         }
       }
+
+      def report(msg: String, units: Seq[CompilationUnit]) = {
+        if (isEnabled)
+          treeBrowser.browse(formatMsg(msg), units.toIterator)
+      }
     }
 
     def getMsgAndStackLine(e: Throwable) = {
