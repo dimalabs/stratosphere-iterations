@@ -1,3 +1,20 @@
+/**
+ * *********************************************************************************************************************
+ *
+ * Copyright (C) 2010 by the Stratosphere project (http://stratosphere.eu)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ *
+ * ********************************************************************************************************************
+ */
+
 package eu.stratosphere.pact4s.compiler.udf
 
 import eu.stratosphere.pact4s.compiler.Pact4sPlugin
@@ -29,22 +46,22 @@ trait Unlifters { this: Pact4sPlugin =>
 
     private object LiftedView {
 
-      def unapply(tree: Tree): Option[(Symbol, List[Type], Function)] = tree match {
+      def unapply(tree: Tree): Option[(Symbol, List[Type], Tree)] = tree match {
 
         /*
            * Extract: unanalyzedFieldSelectorCode[A, B](Code.lift(fun: A => B)) => (unanalyzedFieldSelector, List(A, B), fun)
            *          unanalyzedUDF1Code[A, B](Code.lift(fun: A => B))          => (unanalyzedUDF1, List(A, B), fun)
            *          unanalyzedUDF2Code[A, B, C](Code.lift(fun: (A, B) => C))  => (unanalyzedUDF2, List(A, B, C), fun)
            */
-        case Apply(TypeApply(Unlifted(kind), tparams), List(CodeLift(fun: Function))) => Some((kind, tparams map { _.tpe }, fun))
+        case Apply(TypeApply(Unlifted(kind), tpeTrees), List(CodeLift(fun))) => Some((kind, tpeTrees map { _.tpe }, fun))
         case _ => None
       }
 
       private object CodeLift {
 
         // Extract: scala.reflect.Code.lift[T](fun: T) => fun
-        def unapply(tree: Tree): Option[Function] = tree match {
-          case Apply(lift, List(fun: Function)) if lift.symbol == liftMethod => Some(fun)
+        def unapply(tree: Tree): Option[Tree] = tree match {
+          case Apply(lift, List(fun)) if lift.symbol == liftMethod => Some(fun)
           case _ => None
         }
       }
@@ -65,3 +82,4 @@ trait Unlifters { this: Pact4sPlugin =>
     }
   }
 }
+

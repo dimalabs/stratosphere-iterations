@@ -19,19 +19,26 @@ package eu.stratosphere.pact4s.compiler.udf
 
 import eu.stratosphere.pact4s.compiler.Pact4sPlugin
 
-trait UDFAnalyzers extends Unlifters with SelectorAnalyzers with FlowAnalyzers with FallbackBinders { this: Pact4sPlugin =>
+trait FlowAnalyzers { this: Pact4sPlugin =>
 
   import global._
   import defs._
 
-  trait UDFAnalyzer extends Pact4sComponent {
+  trait FlowAnalyzer { this: TypingTransformer with TreeGenerator with Logger =>
 
-    override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with TreeGenerator with Logger with Unlifter with SelectorAnalyzer with FlowAnalyzer with FallbackBinder {
+    def analyzeFlow(tree: Tree): Tree = tree match {
+      case UDF(result) => localTyper.typed { result }
+      case _           => tree
+    }
 
-      val trans = (unlift _) andThen analyzeSelector andThen analyzeFlow andThen bindDefaultUDF
+    private object UDF {
 
-      override def apply(tree: Tree) = super.apply { trans(tree) }
+      def unapply(tree: Tree): Option[Tree] = tree match {
 
+        case Apply(TypeApply(view, tpeTrees), List(fun)) if view.symbol == unanalyzedUDF1 => Some(tree)
+        case Apply(TypeApply(view, tpeTrees), List(fun)) if view.symbol == unanalyzedUDF2 => Some(tree)
+        case _ => None
+      }
     }
   }
 }
