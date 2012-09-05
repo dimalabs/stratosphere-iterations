@@ -59,7 +59,7 @@ trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { thi
 
 object Cross4sContract {
 
-  def getStub[LeftIn, RightIn, Out] = classOf[Cross4sStub[LeftIn, RightIn, Out]]
+  def newBuilder[LeftIn, RightIn, Out] = CrossContract.builder(classOf[Cross4sStub[LeftIn, RightIn, Out]])
 
   def unapply(c: Cross4sContract[_, _, _]) = Some((c.leftInput, c.rightInput, c.leftUDT, c.rightUDT, c.outputUDT, c.crossUDF))
 }

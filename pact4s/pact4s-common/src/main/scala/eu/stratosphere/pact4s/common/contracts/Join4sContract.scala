@@ -61,7 +61,7 @@ trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContract {
 
 object Join4sContract {
 
-  def getStub[LeftIn, RightIn, Out] = classOf[Join4sStub[LeftIn, RightIn, Out]]
+  def newBuilder[LeftIn, RightIn, Out] = MatchContract.builder(classOf[Join4sStub[LeftIn, RightIn, Out]])
 
   def unapply(c: Join4sContract[_, _, _, _]) = Some((c.leftInput, c.rightInput, c.leftKeySelector, c.rightKeySelector, c.leftUDT, c.rightUDT, c.outputUDT, c.joinUDF))
 }

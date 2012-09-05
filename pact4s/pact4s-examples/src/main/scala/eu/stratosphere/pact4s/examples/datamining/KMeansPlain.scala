@@ -56,13 +56,13 @@ class KMeansPlain extends PlanAssembler with PlanAssemblerDescription {
     clusterPoints.setParameter(DelimitedInputFormat.RECORD_DELIMITER, delimeter);
     clusterPoints.setDegreeOfParallelism(1);
 
-    val computeDistance = new CrossContract(classOf[ComputeDistance], dataPoints, clusterPoints, "Compute Distances")
+    val computeDistance = CrossContract.builder(classOf[ComputeDistance]).input1(dataPoints).input2(clusterPoints).name("Compute Distances").build();
     computeDistance.getCompilerHints().setAvgBytesPerRecord(48);
 
-    val findNearestClusterCenters = new ReduceContract(classOf[FindNearestCenter], classOf[PactInteger], 0, computeDistance, "Find Nearest Centers")
+    val findNearestClusterCenters = ReduceContract.builder(classOf[FindNearestCenter], classOf[PactInteger], 0).input(computeDistance).name("Find Nearest Centers").build();
     findNearestClusterCenters.getCompilerHints().setAvgBytesPerRecord(48);
 
-    val recomputeClusterCenter = new ReduceContract(classOf[RecomputeClusterCenter], classOf[PactInteger], 0, findNearestClusterCenters, "Recompute Center Positions")
+    val recomputeClusterCenter = ReduceContract.builder(classOf[RecomputeClusterCenter], classOf[PactInteger], 0).input(findNearestClusterCenters).name("Recompute Center Positions").build();
     recomputeClusterCenter.getCompilerHints().setAvgBytesPerRecord(36);
 
     val newClusterPoints = new FileDataSink(classOf[PointOutFormat], output, recomputeClusterCenter, "New Center Positions")

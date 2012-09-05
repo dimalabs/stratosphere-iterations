@@ -58,7 +58,9 @@ class MapOperator[In: UDT](input: DataStream[In]) extends Serializable {
 
     override def createContract = {
 
-      new MapContract(Map4sContract.getStub, input.getContract) with Map4sContract[In, Out] {
+      val builder = Map4sContract.newBuilder.input(input.getContract)
+      
+      new MapContract(builder) with Map4sContract[In, Out] {
 
         override val inputUDT = implicitly[UDT[In]]
         override val outputUDT = implicitly[UDT[Out]]

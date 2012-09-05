@@ -87,9 +87,12 @@ case class KeyCardinality[T: UDT, Key, KeySelector >: T => Key <% FieldSelector]
   }
 }
 
+// TODO: Ask Fabian why CompilerHints.setInputDistributionClass was deprecated (has it been replaced by something else?)
+/*
 case class InputDistribution(dataDistribution: Class[_ <: InputDataDistribution[_]]) extends CompilerHint[Nothing] {
   override def applyToContract(contract: Contract) = contract.getCompilerHints().setInputDistributionClass(dataDistribution)
 }
+*/
 
 abstract class InputDataDistribution[Key: UDT] extends DataDistribution {
 
@@ -107,3 +110,4 @@ abstract class InputDataDistribution[Key: UDT] extends DataDistribution {
     record
   }
 }
+

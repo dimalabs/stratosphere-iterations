@@ -63,7 +63,7 @@ trait Reduce4sContract[In, Out] extends Pact4sOneInputContract { this: ReduceCon
 
 object Reduce4sContract {
 
-  def getStub[In, Out] = classOf[Reduce4sStub[In, Out]]
+  def newBuilder[In, Out] = ReduceContract.builder(classOf[Reduce4sStub[In, Out]])
 
   def unapply(c: Reduce4sContract[_, _]) = Some((c.singleInput, c.keySelector, c.inputUDT, c.outputUDT, c.combineUDF, c.reduceUDF))
 }

@@ -47,7 +47,13 @@ class JoinOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) extends Serializa
             val rightKeyFields = rightKeyFieldSelector.getFields filter { _ >= 0 }
             val keyFieldTypes = implicitly[UDT[LeftIn]].getKeySet(leftKeyFields)
 
-            new MatchContract(Join4sContract.getStub, keyFieldTypes, leftKeyFields, rightKeyFields, leftInput.getContract, rightInput.getContract) with Join4sContract[Key, LeftIn, RightIn, Out] {
+            val builder = Join4sContract.newBuilder.input1(leftInput.getContract).input2(rightInput.getContract)
+            
+            for ((keyType, leftKey, rightKey) <- (keyFieldTypes, leftKeyFields, rightKeyFields).zipped.toList) {
+              builder.keyField(keyType, leftKey, rightKey)
+            }
+            
+            new MatchContract(builder) with Join4sContract[Key, LeftIn, RightIn, Out] {
 
               override val leftKeySelector = leftKeyFieldSelector
               override val rightKeySelector = rightKeyFieldSelector

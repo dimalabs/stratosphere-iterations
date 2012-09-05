@@ -46,7 +46,13 @@ class CoGroupOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) extends Serial
             val rightKeyFields = rightKeyFieldSelector.getFields filter { _ >= 0 }
             val keyFieldTypes = implicitly[UDT[LeftIn]].getKeySet(leftKeyFields)
 
-            new CoGroupContract(CoGroup4sContract.getStub, keyFieldTypes, leftKeyFields, rightKeyFields, leftInput.getContract, rightInput.getContract) with CoGroup4sContract[LeftIn, RightIn, Out] {
+            val builder = CoGroup4sContract.newBuilder.input1(leftInput.getContract).input2(rightInput.getContract)
+            
+            for ((keyType, leftKey, rightKey) <- (keyFieldTypes, leftKeyFields, rightKeyFields).zipped.toList) {
+              builder.keyField(keyType, leftKey, rightKey)
+            }
+            
+            new CoGroupContract(builder) with CoGroup4sContract[LeftIn, RightIn, Out] {
 
               override val leftKeySelector = leftKeyFieldSelector
               override val rightKeySelector = rightKeyFieldSelector

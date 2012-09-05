@@ -62,7 +62,13 @@ class ReduceOperator[In: UDT](input: DataStream[In]) extends Serializable {
           (combineUDF, reduceUDF)
       }
 
-      new ReduceContract(Reduce4sContract.getStub, keyFieldTypes, keyFields, input.getContract) with Reduce4sContract[In, Out] {
+      val builder = Reduce4sContract.newBuilder.input(input.getContract)
+
+      for ((keyType, keyField) <- (keyFieldTypes, keyFields).zipped.toList) {
+        builder.keyField(keyType, keyField)
+      }
+
+      new ReduceContract(builder) with Reduce4sContract[In, Out] {
 
         override val keySelector = ReduceStream.this.keySelector
         override val inputUDT = implicitly[UDT[In]]

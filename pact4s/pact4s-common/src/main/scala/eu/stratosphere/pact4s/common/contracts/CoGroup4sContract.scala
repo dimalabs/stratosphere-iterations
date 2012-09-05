@@ -61,7 +61,7 @@ trait CoGroup4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { t
 
 object CoGroup4sContract {
 
-  def getStub[LeftIn, RightIn, Out] = classOf[CoGroup4sStub[LeftIn, RightIn, Out]]
+  def newBuilder[LeftIn, RightIn, Out] = CoGroupContract.builder(classOf[CoGroup4sStub[LeftIn, RightIn, Out]])
 
   def unapply(c: CoGroup4sContract[_, _, _]) = Some((c.leftInput, c.rightInput, c.leftKeySelector, c.rightKeySelector, c.leftUDT, c.rightUDT, c.outputUDT, c.coGroupUDF))
 }

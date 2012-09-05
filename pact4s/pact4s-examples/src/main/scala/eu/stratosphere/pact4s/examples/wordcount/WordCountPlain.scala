@@ -47,8 +47,8 @@ class WordCountPlain extends PlanAssembler with PlanAssemblerDescription {
     val output = if (args.length > 2) args(2) else ""
 
     val data = new FileDataSource(classOf[LineInFormat], dataInput, "Input Lines")
-    val mapper = new MapContract(classOf[TokenizeLine], data, "Tokenize Lines");
-    val reducer = new ReduceContract(classOf[CountWords], classOf[PactString], 0, mapper, "Count Words");
+    val mapper = MapContract.builder(classOf[TokenizeLine]).input(data).name("Tokenize Lines").build();
+    val reducer = ReduceContract.builder(classOf[CountWords], classOf[PactString], 0).input(mapper).name("Count Words").build();
     val out = new FileDataSink(classOf[WordCountOutFormat], output, reducer, "Word Counts");
 
     val plan = new Plan(out, "WordCount Example")

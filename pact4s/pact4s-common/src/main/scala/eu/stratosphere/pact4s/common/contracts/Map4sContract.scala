@@ -57,7 +57,7 @@ trait Map4sContract[In, Out] extends Pact4sOneInputContract { this: MapContract 
 
 object Map4sContract {
 
-  def getStub[In, Out] = classOf[Map4sStub[In, Out]]
+  def newBuilder[In, Out] = MapContract.builder(classOf[Map4sStub[In, Out]])
 
   def unapply(c: Map4sContract[_, _]) = Some((c.singleInput, c.inputUDT, c.outputUDT, c.mapUDF))
 }
