@@ -59,8 +59,6 @@ constructTaskManagerClassPath() {
 			add=1
 		elif [[ "$jarfile" =~ 'scala-library' ]]; then
 			add=1
-		elif [[ "$jarfile" =~ 'jackson' ]]; then
-			add=1
 		elif [[ "$jarfile" =~ 'commons-cli' ]]; then
 			add=1
 		elif [[ "$jarfile" =~ 'commons-logging' ]]; then
@@ -71,8 +69,6 @@ constructTaskManagerClassPath() {
 			add=1
 		elif [[ "$jarfile" =~ 'httpcore' ]]; then
 			add=1
-		elif [[ "$jarfile" =~ 'guava' ]]; then
-			add=1
 		elif [[ "$jarfile" =~ 'httpclient' ]]; then
 			add=1
 		elif [[ "$jarfile" =~ 'commons-codec' ]]; then
@@ -81,6 +77,12 @@ constructTaskManagerClassPath() {
 			add=1
 		elif [[ "$jarfile" =~ 'guava' ]]; then
 			add=1
+		elif [[ "$jarfile" =~ 'sopremo-common' ]]; then
+			add=1
+		elif [[ "$jarfile" =~ 'fastutil' ]]; then
+			add=1
+		 elif [[ "$jarfile" =~ 'commons' ]]; then
+                        add=1
 		fi
 
 		if [[ "$add" = "1" ]]; then

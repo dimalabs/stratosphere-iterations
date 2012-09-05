@@ -35,7 +35,7 @@ import eu.stratosphere.pact.common.generic.types.TypeSerializerFactory;
 import eu.stratosphere.pact.common.stubs.Stub;
 import eu.stratosphere.pact.common.util.InstantiationUtil;
 import eu.stratosphere.pact.runtime.iterative.convergence.ConvergenceCriterion;
-import eu.stratosphere.pact.runtime.shipping.ShipStrategy;
+import eu.stratosphere.pact.runtime.shipping.ShipStrategy.ShipStrategyType;
 import eu.stratosphere.pact.runtime.task.PactDriver;
 import eu.stratosphere.pact.runtime.task.chaining.ChainedDriver;
 
@@ -338,16 +338,16 @@ public class TaskConfig
 			}
 		}
 	
-	public String getPrefixForInputParameters(int inputNum)
+	public Configuration getConfigForInputParameters(int inputNum)
 	{
-		return INPUT_PARAMETERS_PREFIX + inputNum + '.';
+		return new DelegatingConfiguration(this.config, INPUT_PARAMETERS_PREFIX + inputNum + '.');
 	}
 	
 	// --------------------------------------------------------------------------------------------
 	//                          Parameters for the output shipping
 	// --------------------------------------------------------------------------------------------
 
-	public void addOutputShipStrategy(ShipStrategy strategy)
+	public void addOutputShipStrategy(ShipStrategyType strategy)
 	{
 		final int outputCnt = this.config.getInteger(NUM_OUTPUTS, 0);
 		this.config.setInteger(OUTPUT_SHIP_STRATEGY_PREFIX + outputCnt, strategy.ordinal());
@@ -359,7 +359,7 @@ public class TaskConfig
 		return this.config.getInteger(NUM_OUTPUTS, -1);
 	}
 
-	public ShipStrategy getOutputShipStrategy(int outputId)
+	public ShipStrategyType getOutputShipStrategy(int outputId)
 	{
 		// check how many outputs are encoded in the config
 		final int outputCnt = this.config.getInteger(NUM_OUTPUTS, -1);
@@ -376,11 +376,11 @@ public class TaskConfig
 		if (strategy == -1) {
 			throw new CorruptConfigurationException("No output shipping strategy in configuration for output "
 																			+ outputId);
-		} else if (strategy < 0 || strategy >= ShipStrategy.values().length) {
+		} else if (strategy < 0 || strategy >= ShipStrategyType.values().length) {
 			throw new CorruptConfigurationException("Illegal output shipping strategy in configuration for output "
 																			+ outputId + ": " + strategy);
 		} else {
-			return ShipStrategy.values()[strategy];
+			return ShipStrategyType.values()[strategy];
 		}
 	}
 	
@@ -430,6 +430,11 @@ public class TaskConfig
 		}
 	}
 	
+	public Configuration getConfigForOutputParameters(int outputNum)
+	{
+		return new DelegatingConfiguration(this.config, OUTPUT_PARAMETERS_PREFIX + outputNum + '.');
+	}
+	
 	public String getPrefixForOutputParameters(int outputNum)
 	{
 		return OUTPUT_PARAMETERS_PREFIX + outputNum + '.';
@@ -446,8 +451,8 @@ public class TaskConfig
 		} catch (IOException e) {
 			throw new RuntimeException("Error serializing the DataDistribution: " + e.getMessage(), e);
 		}
-		final String stateEncoded = baos.toString();
-		this.config.setString(OUTPUT_DATA_DISTRIBUTION_STATE, stateEncoded);
+
+		this.config.setBytes(OUTPUT_DATA_DISTRIBUTION_STATE, baos.toByteArray());
 	}
 	
 	public DataDistribution getOutputDataDistribution(final ClassLoader cl) throws ClassNotFoundException
@@ -467,13 +472,13 @@ public class TaskConfig
 		
 		final DataDistribution distribution = InstantiationUtil.instantiate(clazz, DataDistribution.class);
 		
-		final String stateEncoded = this.config.getString(OUTPUT_DATA_DISTRIBUTION_STATE, null);
+		final byte[] stateEncoded = this.config.getBytes(OUTPUT_DATA_DISTRIBUTION_STATE, null);
 		if (stateEncoded == null) {
 			throw new CorruptConfigurationException(
 						"The configuration contained the data distribution type, but no serialized state.");
 		}
 		
-		final ByteArrayInputStream bais = new ByteArrayInputStream(stateEncoded.getBytes());
+		final ByteArrayInputStream bais = new ByteArrayInputStream(stateEncoded);
 		final DataInputStream in = new DataInputStream(bais);
 		
 		try {
