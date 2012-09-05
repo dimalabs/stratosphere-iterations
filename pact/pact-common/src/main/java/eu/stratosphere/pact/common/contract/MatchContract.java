@@ -43,6 +43,15 @@ public class MatchContract extends DualInputContract<MatchStub>
 	 * Creates a Builder with the provided {@link MatchStub} implementation
 	 * 
 	 * @param udf The {@link MatchStub} implementation for this Match contract.
+	 */
+	public static Builder builder(Class<? extends MatchStub> udf) {
+		return new Builder(udf);
+	}
+	
+	/**
+	 * Creates a Builder with the provided {@link MatchStub} implementation
+	 * 
+	 * @param udf The {@link MatchStub} implementation for this Match contract.
 	 * @param keyClass The class of the key data type.
 	 * @param keyColumn1 The position of the key in the first input's records.
 	 * @param keyColumn2 The position of the key in the second input's records.
@@ -55,7 +64,7 @@ public class MatchContract extends DualInputContract<MatchStub>
 	 * The private constructor that only gets invoked from the Builder.
 	 * @param builder
 	 */
-	private MatchContract(Builder builder) {
+	protected MatchContract(Builder builder) {
 		super(builder.udf, builder.getKeyClassesArray(), builder.getKeyColumnsArray1(),
 				builder.getKeyColumnsArray2(), builder.name);
 		setFirstInputs(builder.inputs1);
@@ -82,6 +91,20 @@ public class MatchContract extends DualInputContract<MatchStub>
 		private List<Contract> inputs2;
 		private String name = DEFAULT_NAME;
 		
+		
+		/**
+		 * Creates a Builder with the provided {@link MatchStub} implementation
+		 * 
+		 * @param udf The {@link MatchStub} implementation for this Match contract.
+		 */
+		private Builder(Class<? extends MatchStub> udf) {
+			this.udf = udf;
+			this.keyClasses = new ArrayList<Class<? extends Key>>();
+			this.keyColumns1 = new ArrayList<Integer>();
+			this.keyColumns2 = new ArrayList<Integer>();
+			this.inputs1 = new ArrayList<Contract>();
+			this.inputs2 = new ArrayList<Contract>();
+		}
 		
 		/**
 		 * Creates a Builder with the provided {@link MatchStub} implementation

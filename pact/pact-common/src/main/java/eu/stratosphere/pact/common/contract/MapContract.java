@@ -52,7 +52,7 @@ public class MapContract extends SingleInputContract<MapStub>
 	 * The private constructor that only gets invoked from the Builder.
 	 * @param builder
 	 */
-	private MapContract(Builder builder) {
+	protected MapContract(Builder builder) {
 		super(builder.udf, builder.name);
 		setInputs(builder.inputs);
 	}

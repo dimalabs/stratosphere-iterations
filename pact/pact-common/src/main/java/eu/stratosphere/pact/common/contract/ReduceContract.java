@@ -71,7 +71,7 @@ public class ReduceContract extends SingleInputContract<ReduceStub>
 	 * The private constructor that only gets invoked from the Builder.
 	 * @param builder
 	 */
-	private ReduceContract(Builder builder) {
+	protected ReduceContract(Builder builder) {
 		super(builder.udf, builder.getKeyClassesArray(), builder.getKeyColumnsArray(), builder.name);
 		setInputs(builder.inputs);
 		setGroupOrder(builder.secondaryOrder);
