@@ -20,7 +20,7 @@ trait SanityCheckers { this: Pact4sPlugin =>
 
       private object Unanalyzed {
         def unapply(tree: Tree): Option[Type] = tree match {
-          case Apply(fun: TypeApply, _) if unanalyzed.contains(fun.symbol) => Some(fun.tpe)
+          case Apply(fun, _) if unanalyzed.contains(fun.symbol) => Some(fun.tpe)
           case _ => None
         }
       }

@@ -20,7 +20,7 @@ trait FlowAnalysisFallbackBinders { this: Pact4sPlugin =>
 
       def unapply(tree: Tree): Option[Tree] = tree match {
 
-        case Apply(TypeApply(view, tpeTrees), List(fun: Function)) if unanalyzedUDFs.contains(view.symbol) => {
+        case Apply(TypeApply(view, tpeTrees), List(fun)) if unanalyzedUDFs.contains(view.symbol) => {
 
           val tparams = tpeTrees map { _.tpe }
 

@@ -39,7 +39,7 @@ import eu.stratosphere.pact4s.common.operators._
  *   GROUP BY l_orderkey, o_shippriority;
  */
 class TPCHQuery3Descriptor extends PactDescriptor[TPCHQuery3] {
-  override val name = "TCPH Query 3"
+  override val name = "TPCH Query 3"
   override val description = "Parameters: [numSubTasks] [orders] [lineItems] [output]"
   override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
 
