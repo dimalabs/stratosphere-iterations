@@ -9,12 +9,12 @@
         <version>0.2</version>
     </parent>
 
-    <groupId>eu.stratosphere</groupId>
+    <!--<groupId>eu.stratosphere</groupId>-->
     <artifactId>meteor</artifactId>
 
     <packaging>pom</packaging>
 
-    <version>0.2</version>
+    <!--<version>0.2</version>-->
     <name>meteor</name>
 
     <inceptionYear>2011</inceptionYear>
