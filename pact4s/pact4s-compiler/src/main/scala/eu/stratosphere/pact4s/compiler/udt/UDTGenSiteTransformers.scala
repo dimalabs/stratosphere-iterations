@@ -15,9 +15,10 @@
  * ********************************************************************************************************************
  */
 
-package eu.stratosphere.pact4s.compiler
+package eu.stratosphere.pact4s.compiler.udt
 
-import eu.stratosphere.pact4s.compiler.udtgen.UDTClassGenerators
+import eu.stratosphere.pact4s.compiler.Pact4sPlugin
+import eu.stratosphere.pact4s.compiler.udt.gen.UDTClassGenerators
 
 trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
 

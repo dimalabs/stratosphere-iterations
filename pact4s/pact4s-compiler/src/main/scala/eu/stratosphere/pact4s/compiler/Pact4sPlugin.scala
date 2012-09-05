@@ -22,26 +22,28 @@ import scala.tools.nsc.SubComponent
 import scala.tools.nsc.plugins.Plugin
 import scala.tools.nsc.plugins.PluginComponent
 
+import eu.stratosphere.pact4s.compiler.udt._
+import eu.stratosphere.pact4s.compiler.udf._
 import eu.stratosphere.pact4s.compiler.util._
 
 class Pact4sPlugin(val global: Global) extends Plugin with Pact4sPluginOptions
   with TypingTransformers with TreeGenerators with Loggers with Visualizers
   with Definitions with UDTDescriptors with UDTAnalyzers
   with UDTGenSiteParticipants with UDTGenSiteSelectors with UDTGenSiteTransformers
-  with Unlifters with SanityCheckers {
+  with UDFAnalyzers with SanityCheckers {
 
   import global._
 
   override val name = "pact4s"
   override val description = "Performs analysis and code generation for Pact4s programs."
-  override val components = List[PluginComponent](udtSite, udtCode, unlift, sanity)
+  override val components = List[PluginComponent](udtSite, udtCode, udfAna, sanity)
   override val optionsHelp = getOptionsHelp
   override val neverInfer = defs.unanalyzed
 
   object udtSite extends Pact4sPhase("UDTSite", refchecks) with UDTGenSiteSelector
   object udtCode extends Pact4sPhase("UDTCode", udtSite) with UDTGenSiteTransformer
-  object unlift extends Pact4sPhase("Unlift", udtCode) with Unlifter
-  object sanity extends Pact4sPhase("Sanity", unlift) with SanityChecker
+  object udfAna extends Pact4sPhase("UDFAna", udtCode) with UDFAnalyzer
+  object sanity extends Pact4sPhase("Sanity", udfAna) with SanityChecker
 
   abstract class Pact4sComponent extends PluginComponent with Transform with Visualize {
     override val global: Pact4sPlugin.this.global.type = Pact4sPlugin.this.global

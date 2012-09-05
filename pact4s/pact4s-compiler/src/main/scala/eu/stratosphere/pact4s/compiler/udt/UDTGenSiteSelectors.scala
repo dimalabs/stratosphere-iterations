@@ -15,8 +15,9 @@
  * ********************************************************************************************************************
  */
 
-package eu.stratosphere.pact4s.compiler
+package eu.stratosphere.pact4s.compiler.udt
 
+import eu.stratosphere.pact4s.compiler.Pact4sPlugin
 import eu.stratosphere.pact4s.compiler.util.MutableMultiMap
 
 trait UDTGenSiteSelectors { this: Pact4sPlugin =>

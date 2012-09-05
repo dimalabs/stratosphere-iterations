@@ -44,6 +44,7 @@ trait TypingTransformers {
     }
 
     protected def post(tree: Tree) = {
+      if (tree.pos eq NoPosition) tree setPos curTree.pos
       setScope(envs.head._2)
       envs = envs.tail
     }
@@ -81,7 +82,7 @@ trait TypingTransformers {
 
     final override def transform(tree: Tree): Tree = {
       pre(tree)
-      val ret = apply(tree)
+      val ret = apply(tree) setPos tree.pos
       post(ret)
       ret
     }

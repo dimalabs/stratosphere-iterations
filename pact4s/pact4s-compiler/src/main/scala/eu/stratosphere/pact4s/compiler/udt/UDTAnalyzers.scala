@@ -15,10 +15,11 @@
  * ********************************************************************************************************************
  */
 
-package eu.stratosphere.pact4s.compiler
+package eu.stratosphere.pact4s.compiler.udt
 
 import scala.util.DynamicVariable
 
+import eu.stratosphere.pact4s.compiler.Pact4sPlugin
 import eu.stratosphere.pact4s.compiler.util.Counter
 
 trait UDTAnalyzers { this: Pact4sPlugin =>

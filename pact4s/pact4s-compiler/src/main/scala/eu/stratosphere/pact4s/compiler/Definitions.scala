@@ -104,13 +104,6 @@ trait Definitions { this: Pact4sPlugin =>
     def mkUDF1CodeOf(tpeT1: Type, tpeR: Type) = appliedType(udf1CodeClass.tpe, List(definitions.functionType(List(tpeT1), tpeR)))
     def mkUDF2CodeOf(tpeT1: Type, tpeT2: Type, tpeR: Type) = appliedType(udf2CodeClass.tpe, List(definitions.functionType(List(tpeT1, tpeT2), tpeR)))
 
-    def mkCodeView(kind: Symbol, tparams: List[Type]): Type = (kind, tparams) match {
-      case (`unanalyzedFieldSelector`, List(t1, r)) => definitions.functionType(List(mkFunctionType(t1, r)), mkFieldSelectorCodeOf(t1, r))
-      case (`unanalyzedUDF1`, List(t1, r))          => definitions.functionType(List(mkFunctionType(t1, r)), mkUDF1CodeOf(t1, r))
-      case (`unanalyzedUDF2`, List(t1, t2, r))      => mkFunctionType(mkFunctionType(t1, t2, r), mkUDF2CodeOf(t1, t2, r))
-      case _                                        => NoType
-    }
-
     def mkIteratorOf(tpe: Type) = appliedType(definitions.IteratorClass.tpe, List(tpe))
     def mkClassOf(tpe: Type) = gen.mkClassOf(tpe)
     def mkFunctionType(tpes: Type*): Type = definitions.functionType(tpes.init.toList, tpes.last)

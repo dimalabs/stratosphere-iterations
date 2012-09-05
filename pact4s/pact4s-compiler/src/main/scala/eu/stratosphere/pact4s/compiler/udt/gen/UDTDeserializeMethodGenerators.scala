@@ -15,7 +15,7 @@
  * ********************************************************************************************************************
  */
 
-package eu.stratosphere.pact4s.compiler.udtgen
+package eu.stratosphere.pact4s.compiler.udt.gen
 
 import eu.stratosphere.pact4s.compiler.Pact4sPlugin
 
