@@ -24,6 +24,8 @@ trait Transform extends PluginComponent {
 
   import global._
 
+  protected def beforeRun() = {}
+  
   protected def newTransformer(unit: global.CompilationUnit): global.Transformer
 
   protected def afterRun() = {}
@@ -31,6 +33,7 @@ trait Transform extends PluginComponent {
   def newPhase(prev: Phase): StdPhase = new StdPhase(prev) {
 
     override def run() = {
+      beforeRun()
       super.run()
       afterRun()
     }

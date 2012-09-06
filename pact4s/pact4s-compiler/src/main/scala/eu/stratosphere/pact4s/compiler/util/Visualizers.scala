@@ -32,7 +32,10 @@ trait Visualizers {
 
     override def afterRun() = {
       super.afterRun()
-      if (visualize) treeBrowser.browse(phaseName, currentRun.units)
+      if (visualize) {
+        reporter.flush()
+        treeBrowser.browse(phaseName, currentRun.units)
+      }
     }
   }
 }

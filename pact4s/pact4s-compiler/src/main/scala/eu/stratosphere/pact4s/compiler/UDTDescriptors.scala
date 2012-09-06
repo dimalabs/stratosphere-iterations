@@ -24,10 +24,14 @@ trait UDTDescriptors { this: Pact4sPlugin =>
   abstract sealed class UDTDescriptor {
     val id: Int
     val tpe: Type
+    val isPrimitiveProduct: Boolean = false
 
     def mkRoot: UDTDescriptor = this
 
     def flatten: Seq[UDTDescriptor]
+    def getters: Seq[FieldAccessor] = Seq()
+
+    def select(member: String): Option[UDTDescriptor] = getters find { _.sym.name.toString == member } map { _.desc }
 
     def findById(id: Int): Option[UDTDescriptor] = flatten.find { _.id == id }
 
@@ -44,11 +48,13 @@ trait UDTDescriptors { this: Pact4sPlugin =>
   }
 
   case class PrimitiveDescriptor(id: Int, tpe: Type, default: Literal, wrapper: Symbol) extends UDTDescriptor {
+    override val isPrimitiveProduct = true
     override def flatten = Seq(this)
   }
 
   case class BoxedPrimitiveDescriptor(id: Int, tpe: Type, default: Literal, wrapper: Symbol, box: Tree => Tree, unbox: Tree => Tree) extends UDTDescriptor {
 
+    override val isPrimitiveProduct = true
     override def flatten = Seq(this)
 
     override def hashCode() = (id, tpe, default, wrapper, "BoxedPrimitiveDescriptor").hashCode()
@@ -76,15 +82,16 @@ trait UDTDescriptors { this: Pact4sPlugin =>
     }
   }
 
-  case class BaseClassDescriptor(id: Int, tpe: Type, getters: Seq[FieldAccessor], subTypes: Seq[UDTDescriptor]) extends UDTDescriptor {
+  case class BaseClassDescriptor(id: Int, tpe: Type, override val getters: Seq[FieldAccessor], subTypes: Seq[UDTDescriptor]) extends UDTDescriptor {
 
     override def flatten = this +: ((getters flatMap { _.desc.flatten }) ++ (subTypes flatMap { _.flatten }))
   }
 
-  case class CaseClassDescriptor(id: Int, tpe: Type, ctor: Symbol, ctorTpe: Type, getters: Seq[FieldAccessor]) extends UDTDescriptor {
+  case class CaseClassDescriptor(id: Int, tpe: Type, ctor: Symbol, ctorTpe: Type, override val getters: Seq[FieldAccessor]) extends UDTDescriptor {
+
+    override val isPrimitiveProduct = !getters.isEmpty && getters.forall(_.desc.isPrimitiveProduct)
 
     override def mkRoot = this.copy(getters = getters map { _.copy(isBaseField = false) })
-
     override def flatten = this +: (getters flatMap { _.desc.flatten })
 
     // Hack: ignore the ctorTpe, since two Type instances representing
@@ -102,7 +109,7 @@ trait UDTDescriptors { this: Pact4sPlugin =>
   case class OpaqueDescriptor(id: Int, tpe: Type, ref: () => Tree) extends UDTDescriptor {
 
     private val refString = ref().toString
-
+    
     override def flatten = Seq(this)
 
     // Use string representation of Trees to approximate structural hashing and

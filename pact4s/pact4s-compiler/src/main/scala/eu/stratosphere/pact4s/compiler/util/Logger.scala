@@ -89,6 +89,7 @@ trait Loggers { this: TypingTransformers =>
 
       def report(msg: String, tree: Tree) = {
         if (isEnabled) {
+          reporter.flush()
           val lock = new Lock()
           val frame = new BrowserFrame(formatMsg(msg))
           frame.setTreeModel(new ASTTreeModel(tree))

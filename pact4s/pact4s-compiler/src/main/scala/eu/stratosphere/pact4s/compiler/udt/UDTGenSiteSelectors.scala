@@ -39,6 +39,8 @@ trait UDTGenSiteSelectors { this: Pact4sPlugin =>
           case TypeApply(s: Select, List(t)) if s.symbol == defs.unanalyzedUdt => analyze(t.tpe)
 
           // Analyze UDF type parameters
+          case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedFieldSelector => analyze(t1.tpe)
+          case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedFieldSelectorCode => analyze(t1.tpe)
           case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF1 => analyze(tps)
           case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF1Code => analyze(tps)
           case Apply(TypeApply(unanalyzed, tps @ List(t1, t2, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF2 => analyze(tps)

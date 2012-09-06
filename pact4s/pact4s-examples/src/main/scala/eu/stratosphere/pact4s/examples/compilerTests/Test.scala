@@ -15,7 +15,7 @@
  * ********************************************************************************************************************
  */
 
-package eu.stratosphere.pact4s.examples
+package eu.stratosphere.pact4s.examples.compilerTests
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.analyzer._

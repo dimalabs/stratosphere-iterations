@@ -92,7 +92,7 @@ trait TypingTransformers {
 
       val stats = tree match {
         case Block(stats, _)               => stats
-        case Function(vparams, _)          => vparams
+        case Function(params, _)           => params
         case DefDef(_, _, _, params, _, _) => params.flatten
         case _                             => Nil
       }
