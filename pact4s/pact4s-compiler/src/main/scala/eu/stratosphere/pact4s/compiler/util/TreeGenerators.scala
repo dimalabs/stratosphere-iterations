@@ -67,14 +67,15 @@ trait TreeGenerators { this: TypingTransformers =>
       List(valDef, defDef)
     }
 
-    def mkVarAndLazyGetter(owner: Symbol, name: String, flags: Long, valTpe: Type)(value: Symbol => Tree): List[Tree] = {
+    def mkVarAndLazyGetter(owner: Symbol, name: String, flags: Long, valTpe: Type)(value: Symbol => Tree): (Tree, Tree) = {
 
       // Class-member vars without setters must have the local flag, but
       // this flag causes an error when type checking the field and getter
       // individually. This method is extremely anal about setting symbols
       // and types on the generated trees so that they don't have to be
       // explicitly run through the type checker. For some reason, the type 
-      // checker doesn't look at these trees when processing the parent ClassDef. 
+      // checker doesn't set type info on these trees when processing the 
+      // parent ClassDef. 
 
       val varFlags = if (owner.isClass) Flags.PRIVATE | Flags.LOCAL else 0
       val field = mkVar(owner, name + " ", varFlags, false, valTpe) { _ => mkNull }
@@ -96,7 +97,7 @@ trait TreeGenerators { this: TypingTransformers =>
         Block(If(chk, init, EmptyTree) setType definitions.UnitClass.tpe, selField) setType valTpe
       }
 
-      List(field setType NoType, getter setType NoType)
+      (field setType NoType, getter setType NoType)
     }
 
     def mkWhile(cond: Tree)(body: Tree): Tree = {

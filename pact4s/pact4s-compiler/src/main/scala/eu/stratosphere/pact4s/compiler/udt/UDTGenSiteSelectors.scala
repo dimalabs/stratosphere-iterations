@@ -28,7 +28,7 @@ trait UDTGenSiteSelectors { this: Pact4sPlugin =>
 
     override def newTransformer(unit: CompilationUnit) = new TypingTraverser(unit) with Logger with UDTAnalyzer {
 
-      private val genSites = getSites(unit)
+      private val genSites = getUDTGenSites(unit)
       private val genSitePaths = new MutableMultiMap[UDTDescriptor, Seq[Tree]]()
 
       override def apply(tree: Tree) = {

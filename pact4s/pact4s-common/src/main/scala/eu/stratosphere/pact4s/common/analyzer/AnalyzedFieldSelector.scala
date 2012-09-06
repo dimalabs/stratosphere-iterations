@@ -75,6 +75,6 @@ object AnalyzedFieldSelector {
 
   def apply[T1, R](udt: UDT[T1]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R)(udt)
   def apply[T1, R](udt: UDT[T1], selFields: Set[Int]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, selFields)(udt)
-  def apply[T1, R](udt: UDT[T1], selections: Seq[Seq[String]]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, (selections map udt.getFieldIndex).toSet)(udt)
+  def apply[T1, R](udt: UDT[T1], selections: Seq[Seq[String]]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, selections.toSet flatMap udt.getFieldIndex)(udt)
 }
 

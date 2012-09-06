@@ -26,17 +26,12 @@ trait FlowAnalyzers { this: Pact4sPlugin =>
 
   trait FlowAnalyzer { this: TypingTransformer with TreeGenerator with Logger =>
 
-    def analyzeFlow(tree: Tree): Tree = tree match {
-      case UDF(result) => localTyper.typed { result }
-      case _           => tree
-    }
-
-    private object UDF {
+    protected object AnalyzedUDF {
 
       def unapply(tree: Tree): Option[Tree] = tree match {
 
-        case Apply(TypeApply(view, tpeTrees), List(fun)) if view.symbol == unanalyzedUDF1 => Some(tree)
-        case Apply(TypeApply(view, tpeTrees), List(fun)) if view.symbol == unanalyzedUDF2 => Some(tree)
+        case Apply(TypeApply(view, tpeTrees), List(fun)) if view.symbol == unanalyzedUDF1 => None
+        case Apply(TypeApply(view, tpeTrees), List(fun)) if view.symbol == unanalyzedUDF2 => None
         case _ => None
       }
     }

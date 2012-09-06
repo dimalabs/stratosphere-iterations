@@ -25,7 +25,7 @@ trait UDTGenSiteParticipants { this: Pact4sPlugin =>
 
   import global._
 
-  private val genSites = {
+  private val udtGenSites = {
     val initial = mutable.Map[CompilationUnit, MutableMultiMap[Tree, UDTDescriptor]]()
     initial withDefault { unit =>
       val unitGenSites = new MutableMultiMap[Tree, UDTDescriptor]()
@@ -33,8 +33,18 @@ trait UDTGenSiteParticipants { this: Pact4sPlugin =>
       unitGenSites
     }
   }
+  
+  private val udtDescriptors = {
+    val initial = mutable.Map[CompilationUnit, mutable.Map[Symbol, UDTDescriptor]]()
+    initial withDefault { unit =>
+      val unitDescriptors = mutable.Map[Symbol, UDTDescriptor]()
+      initial(unit) = unitDescriptors
+      unitDescriptors
+    }
+  }
 
   trait UDTGenSiteParticipant {
-    def getSites(unit: CompilationUnit) = genSites(unit)
+    def getUDTGenSites(unit: CompilationUnit) = udtGenSites(unit)
+    def getUDTDescriptors(unit: CompilationUnit) = udtDescriptors(unit)
   }
 }

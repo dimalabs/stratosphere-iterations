@@ -19,19 +19,46 @@ package eu.stratosphere.pact4s.compiler.udf
 
 import eu.stratosphere.pact4s.compiler.Pact4sPlugin
 
-trait UDFAnalyzers extends Unlifters with SelectorAnalyzers with FlowAnalyzers with FallbackBinders { this: Pact4sPlugin =>
+trait UDFAnalyzers extends SelectorAnalyzers with FlowAnalyzers with FallbackBinders { this: Pact4sPlugin =>
 
   import global._
   import defs._
 
   trait UDFAnalyzer extends Pact4sComponent {
 
-    override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with TreeGenerator with Logger with Unlifter with SelectorAnalyzer with FlowAnalyzer with FallbackBinder {
+    override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with TreeGenerator with Logger with SelectorAnalyzer with FlowAnalyzer with FallbackBinder {
 
-      val trans = (unlift _) andThen analyzeSelector andThen analyzeFlow andThen bindDefaultUDF
+      override def apply(tree: Tree) = super.apply {
+        unlift(tree) match {
+          case FieldSelector(result) => localTyper.typed { result }
+          case AnalyzedUDF(result)   => localTyper.typed { result }
+          case DefaultUDF(result)    => localTyper.typed { result }
+          case tree                  => tree
+        }
+      }
 
-      override def apply(tree: Tree) = super.apply { trans(tree) }
+      protected def unlift(tree: Tree): Tree = tree match {
 
+        /*
+         * Convert: unanalyzedFieldSelectorCode(Code.lift(fun)) => unanalyzedFieldSelector(fun)
+         *          unanalyzedUDF1Code(Code.lift(fun))          => unanalyzedUDF1(fun)
+         *          unanalyzedUDF2Code(Code.lift(fun))          => unanalyzedUDF2(fun)
+         */
+        case Apply(TypeApply(Unlifted(kind), tpes), List(Apply(lift, List(fun)))) if lift.symbol == liftMethod => {
+
+          val viewTpe = ((kind, tpes map { _.tpe }): @unchecked) match {
+            case (`unanalyzedFieldSelector`, List(t1, r)) => mkFunctionType(mkFunctionType(t1, r), mkFieldSelectorCodeOf(t1, r))
+            case (`unanalyzedUDF1`, List(t1, r))          => mkFunctionType(mkFunctionType(t1, r), mkUDF1CodeOf(t1, r))
+            case (`unanalyzedUDF2`, List(t1, t2, r))      => mkFunctionType(mkFunctionType(t1, t2, r), mkUDF2CodeOf(t1, t2, r))
+          }
+          
+          // ref is unanalyzedFieldSelector, unanalyzedUDF1, unanalyzedUDF2, or a user-supplied view
+          val ref = inferImplicitView(viewTpe, dontInfer = Set())
+          localTyper.typed { Apply(ref.get, List(fun)) }
+        }
+
+        case _ => tree
+      }
     }
   }
 }

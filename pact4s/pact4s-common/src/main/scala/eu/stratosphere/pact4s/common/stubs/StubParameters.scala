@@ -34,12 +34,9 @@ object StubParameters {
   def getValue[T <: StubParameters](config: Configuration): T = {
 
     val classLoader = config.getClassLoader()
-    val data = config.getString(parameterName, null)
+    val data = config.getBytes(parameterName, null)
 
-    val decoder = new sun.misc.BASE64Decoder
-    val byteData = decoder.decodeBuffer(data)
-
-    val bais = new ByteArrayInputStream(byteData)
+    val bais = new ByteArrayInputStream(data)
 
     val ois = new ObjectInputStream(bais) {
 
@@ -68,11 +65,9 @@ object StubParameters {
 
     try {
       oos.writeObject(parameters)
+      val data = baos.toByteArray
 
-      val encoder = new sun.misc.BASE64Encoder
-      val data = encoder.encode(baos.toByteArray)
-
-      config.setString(parameterName, data)
+      config.setBytes(parameterName, data)
 
     } finally {
       oos.close

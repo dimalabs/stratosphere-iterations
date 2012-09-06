@@ -55,6 +55,21 @@ trait TypingTransformers {
     protected def inferImplicitView(from: Type, to: Type): Option[Tree] = inferImplicitView(from, to, neverInfer)
     protected def inferImplicitView(from: Type, to: Type, dontInfer: Set[Symbol]): Option[Tree] = inferImplicitView(definitions.functionType(List(from), to), dontInfer)
 
+    protected def inferImplicitInsts(tpes: List[Type], dontInfer: Set[Symbol] = neverInfer): Either[List[Type], List[Tree]] = {
+
+      val (errs, insts) = tpes.foldRight((Nil: List[Type], Nil: List[Tree])) { (tpe, ret) =>
+        inferImplicitInst(tpe) match {
+          case None      => ret.copy(_1 = tpe :: ret._1)
+          case Some(ref) => ret.copy(_2 = ref :: ret._2)
+        }
+      }
+
+      errs match {
+        case Nil => Right(insts)
+        case _   => Left(errs)
+      }
+    }
+
     protected def pre(tree: Tree) = {
       curTree = tree
       envs = (tree, localTyper.context.scope) +: envs

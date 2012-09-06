@@ -28,7 +28,8 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
 
     override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with Logger with TreeGenerator with UDTClassGenerator {
 
-      private val genSites = getSites(unit)
+      private val genSites = getUDTGenSites(unit)
+      private val descriptors = getUDTDescriptors(unit)
 
       override def apply(tree: Tree): Tree = {
 
@@ -116,7 +117,7 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
 
           val privateFlag = if (owner.isClass) Flags.PRIVATE else 0
 
-          val stats = mkVarAndLazyGetter(owner, unit.freshTermName("udtInst(") + ")", privateFlag | Flags.IMPLICIT, defs.mkUdtOf(desc.tpe)) { defSym =>
+          val (field, getter) = mkVarAndLazyGetter(owner, unit.freshTermName("udtInst(") + ")", privateFlag | Flags.IMPLICIT, defs.mkUdtOf(desc.tpe)) { defSym =>
 
             val udtClassDef = mkUdtClass(defSym, desc)
             val udtInst = New(TypeTree(udtClassDef.symbol.tpe), List(List()))
@@ -128,10 +129,13 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
           }
 
           if (owner.isClass) {
-            stats foreach { stat => owner.info.decls enter stat.symbol }
+            owner.info.decls enter field.symbol
+            owner.info.decls enter getter.symbol
           }
+          
+          descriptors(getter.symbol) = desc
 
-          stats
+          List(field, getter)
         }
       }
     }
