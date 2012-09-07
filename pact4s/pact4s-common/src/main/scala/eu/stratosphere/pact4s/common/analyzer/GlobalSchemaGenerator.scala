@@ -287,7 +287,7 @@ trait GlobalSchemaGenerator {
 
     for ((key, inputNum) <- keys.zipWithIndex) {
       val oldKeyColumns = contract.asInstanceOf[AbstractPact[_]].getKeyColumnNumbers(inputNum)
-      val newKeyColumns = key.getFields.filter(_ >= 0).toArray
+      val newKeyColumns = key.getFields.map(_._2).toArray
       System.arraycopy(newKeyColumns, 0, oldKeyColumns, 0, newKeyColumns.length)
     }
   }
@@ -309,11 +309,11 @@ trait GlobalSchemaGenerator {
         contract match {
 
           case DataSink4sContract(input, udt, fieldSelector) => {
-            println(contract.getName() + " (Sink): [" + fieldSelector.getFields.mkString(", ") + "] -> Format")
+            println(contract.getName() + " (Sink): [" + fieldSelector.getFields.map(_._2).mkString(", ") + "] -> Format")
           }
 
           case DataSource4sContract(udt, fieldSelector) => {
-            println(contract.getName() + " (Source): Parse -> [" + fieldSelector.getFields.mkString(", ") + "]")
+            println(contract.getName() + " (Source): Parse -> [" + fieldSelector.getFields.map(_._2).mkString(", ") + "]")
           }
 
           case Iterate4sContract(s0, step, term, placeholder) => {
@@ -325,7 +325,7 @@ trait GlobalSchemaGenerator {
           }
 
           case CoGroup4sContract(left, right, leftKey, rightKey, leftUdt, rightUdt, udt, udf) => {
-            val keyFields = leftKey.getFields.filter(_ >= 0).map("L" + _) ++ rightKey.getFields.filter(_ >= 0).map("R" + _)
+            val keyFields = leftKey.getFields.map("L" + _._2) ++ rightKey.getFields.map("R" + _._2)
             val readFields = udf.getReadFields._1.map("L" + _) ++ udf.getReadFields._2.map("R" + _)
             val forwardedFields = (udf.getForwardedFields._1.map("L" + _) ++ udf.getForwardedFields._2.map("R" + _)).sorted
             val writeFields = udf.getWriteFields.filter(_ >= 0)
@@ -340,7 +340,7 @@ trait GlobalSchemaGenerator {
           }
 
           case Join4sContract(left, right, leftKey, rightKey, leftUdt, rightUdt, udt, udf) => {
-            val keyFields = leftKey.getFields.filter(_ >= 0).map("L" + _) ++ rightKey.getFields.filter(_ >= 0).map("R" + _)
+            val keyFields = leftKey.getFields.map("L" + _._2) ++ rightKey.getFields.map("R" + _._2)
             val readFields = udf.getReadFields._1.map("L" + _) ++ udf.getReadFields._2.map("R" + _)
             val forwardedFields = (udf.getForwardedFields._1.map("L" + _) ++ udf.getForwardedFields._2.map("R" + _)).sorted
             val writeFields = udf.getWriteFields.filter(_ >= 0)
@@ -355,8 +355,8 @@ trait GlobalSchemaGenerator {
           case Reduce4sContract(input, key, inputUdt, udt, cUDF, rUDF) => {
             val cWriteFields = cUDF.getWriteFields.filter(_ >= 0)
             val rWriteFields = rUDF.getWriteFields.filter(_ >= 0)
-            println(contract.getName() + " (Combine) {" + key.getFields.filter(_ >= 0).mkString(", ") + "}: [" + cUDF.getReadFields.mkString(", ") + "] -> [" + cWriteFields.mkString(", ") + "]")
-            println((" " * contract.getName().length) + " (Reduce) {" + key.getFields.filter(_ >= 0).mkString(", ") + "}: [" + rUDF.getReadFields.mkString(", ") + "] -> [" + rUDF.getForwardedFields.sorted.mkString(", ") + "] ++ [" + rWriteFields.mkString(", ") + "]")
+            println(contract.getName() + " (Combine) {" + key.getFields.map(_._2).mkString(", ") + "}: [" + cUDF.getReadFields.mkString(", ") + "] -> [" + cWriteFields.mkString(", ") + "]")
+            println((" " * contract.getName().length) + " (Reduce) {" + key.getFields.map(_._2).mkString(", ") + "}: [" + rUDF.getReadFields.mkString(", ") + "] -> [" + rUDF.getForwardedFields.sorted.mkString(", ") + "] ++ [" + rWriteFields.mkString(", ") + "]")
           }
 
           case proxy => {

@@ -22,10 +22,8 @@ import scala.reflect.Code
 trait FieldSelector extends Serializable {
 
   def isGlobalized: Boolean
-  def getFields: Array[Int]
-  def getGlobalFields: Map[Int, Int] = getFields.zipWithIndex.map(_.swap).filter(_._2 >= 0).toMap
-
-  def markFieldUnused(inputFieldNum: Int)
+  def getFields: Seq[(Int, Int)]
+  def getGlobalFields: Map[Int, Int] = getFields.toMap
 
   def globalize(locations: Map[Int, Int])
   def relocateField(oldPosition: Int, newPosition: Int)

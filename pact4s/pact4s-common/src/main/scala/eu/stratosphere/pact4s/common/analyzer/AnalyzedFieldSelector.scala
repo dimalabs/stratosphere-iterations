@@ -20,9 +20,9 @@ package eu.stratosphere.pact4s.common.analyzer
 trait AnalyzedFieldSelector extends FieldSelector {
 
   private var globalized = false
-  protected val fields: Array[Int]
-
-  protected def getInitialFields(fieldCount: Int): Array[Int] = (0 until fieldCount).toArray
+  private var fields: Seq[(Int, Int)] = _
+  
+  protected def setInitialFields(selFields: Seq[(Int, Int)]) = fields = selFields
 
   override def isGlobalized = globalized
   override def getFields = fields
@@ -32,19 +32,10 @@ trait AnalyzedFieldSelector extends FieldSelector {
       throw new IllegalStateException()
   }
 
-  override def markFieldUnused(inputFieldNum: Int) = {
-    assertGlobalized(false)
-    fields(inputFieldNum) = -1
-  }
-
   override def globalize(locations: Map[Int, Int]) = {
-
+    
     if (!globalized) {
-
-      for (fieldNum <- 0 until fields.length if fields(fieldNum) >= 0) {
-        fields(fieldNum) = locations(fieldNum)
-      }
-
+      fields = fields map { case (local, _) => (local, locations(local)) }
       globalized = true
     }
   }
@@ -52,29 +43,41 @@ trait AnalyzedFieldSelector extends FieldSelector {
   override def relocateField(oldPosition: Int, newPosition: Int) = {
     assertGlobalized(true)
 
-    for (fieldNum <- 0 until fields.length if fields(fieldNum) == oldPosition) {
-      fields(fieldNum) = newPosition
+    fields = fields map { 
+      case (local, global) if global == oldPosition => (local, newPosition)
+      case field => field
     }
   }
 }
 
 object AnalyzedFieldSelector {
 
-  def apply[T1: UDT, R](fun: T1 => R): FieldSelectorCode[T1 => R] = new FieldSelectorImpl[T1, R](implicitly[UDT[T1]].numFields)
-
-  def apply[T1: UDT, R](fun: T1 => R, selFields: Set[Int]): FieldSelectorCode[T1 => R] = {
-    val inputLength = implicitly[UDT[T1]].numFields
-    val sel = new FieldSelectorImpl[T1, R](inputLength)
-    ((0 until inputLength).toSet diff selFields) foreach { sel.markFieldUnused(_) }
-    sel
-  }
-
-  private class FieldSelectorImpl[T1, R](fieldCount: Int) extends FieldSelectorCode[T1 => R] with AnalyzedFieldSelector {
-    override val fields = getInitialFields(fieldCount)
-  }
+  def apply[T1: UDT, R](fun: T1 => R): FieldSelectorCode[T1 => R] = apply[T1, R](fun, (0 until implicitly[UDT[T1]].numFields).toList)
+  def apply[T1: UDT, R](fun: T1 => R, selFields: List[Int]): FieldSelectorCode[T1 => R] = apply[T1, R](fun, selFields map { x => (x, x) })
+  def apply[T1: UDT, R](fun: T1 => R, selFields: Seq[(Int, Int)]): FieldSelectorCode[T1 => R] = new FieldSelectorImpl[T1, R](selFields)
 
   def apply[T1, R](udt: UDT[T1]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R)(udt)
-  def apply[T1, R](udt: UDT[T1], selFields: Set[Int]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, selFields)(udt)
-  def apply[T1, R](udt: UDT[T1], selections: Seq[Seq[String]]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, selections.toSet flatMap udt.getFieldIndex)(udt)
+  def apply[T1, R](udt: UDT[T1], selFields: List[Int]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, selFields)(udt)
+  def apply[T1, R](udt: UDT[T1], selections: Seq[Seq[String]]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, (selections flatMap udt.getFieldIndex).toList)(udt)
+  
+  def fromIndexMap[T1, R](udt: UDT[T1], indexMap: Array[Int]): FieldSelectorCode[T1 => R] = {
+    val selFields = indexMap.zipWithIndex.toSeq.map(_.swap)
+    new FieldSelectorImpl[T1, R](selFields)
+  }
+  
+  def toIndexMap[T1: UDT, R](fieldSelector: FieldSelectorCode[T1 => R]): Array[Int] = {
+    val numFields = implicitly[UDT[T1]].numFields
+    val indexMap = (0 until numFields).toArray
+    val fields = fieldSelector.getFields.toMap
+    
+    for (fieldNum <- 0 until numFields)
+      indexMap(fieldNum) = fields get(fieldNum) getOrElse -1
+    
+    indexMap
+  }
+
+  private class FieldSelectorImpl[T1, R](selFields: Seq[(Int, Int)]) extends FieldSelectorCode[T1 => R] with AnalyzedFieldSelector {
+    setInitialFields(selFields)
+  }
 }
 

@@ -32,7 +32,7 @@ trait UDT[T] extends Serializable {
   val fieldTypes: Array[Class[_ <: PactValue]]
   def numFields = fieldTypes.length
 
-  def getFieldIndex(selection: Seq[String]): Set[Int] = Set()
+  def getFieldIndex(selection: Seq[String]): Seq[Int] = Seq()
 
   def getKeySet(fields: Seq[Int]): Array[Class[_ <: PactKey]] = {
     fields map { fieldNum => fieldTypes(fieldNum).asInstanceOf[Class[_ <: PactKey]] } toArray

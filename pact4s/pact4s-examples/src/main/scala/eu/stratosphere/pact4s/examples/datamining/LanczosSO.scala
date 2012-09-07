@@ -149,7 +149,7 @@ class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outp
   }
 
   def union[T: analyzer.UDT](x: DataStream[T], y: DataStream[T]) = {
-    implicit def sel(fun: Function1[(Int, T), Int]): analyzer.FieldSelectorCode[Function1[(Int, T), Int]] = analyzer.AnalyzedFieldSelector(fun, Set[Int](0))
+    implicit def sel(fun: Function1[(Int, T), Int]): analyzer.FieldSelectorCode[Function1[(Int, T), Int]] = analyzer.AnalyzedFieldSelector(fun, List[Int](0))
     (x map { (0, _) }) cogroup (y map { (0, _) }) on { _._1 } isEqualTo { _._1 } flatMap { (xs, ys) => (xs map { _._2 }) ++ (ys map { _._2 }) }
   }
 
@@ -303,7 +303,7 @@ trait LanczosSOGeneratedImplicits { this: LanczosSO =>
   */
 
   // These defs are non-functional and only prevent compiler errors about missing key selectors
-  implicit def sel0(fun: Function1[TaggedItem[Cell], String]): FieldSelectorCode[Function1[TaggedItem[Cell], String]] = AnalyzedFieldSelector(fun, Set[Int]())
-  implicit def sel1(fun: Function1[Cell, Int]): FieldSelectorCode[Function1[Cell, Int]] = AnalyzedFieldSelector(fun, Set[Int]())
-  implicit def sel2(fun: Function1[(Int, TaggedItem[Cell]), Int]): FieldSelectorCode[Function1[(Int, TaggedItem[Cell]), Int]] = AnalyzedFieldSelector(fun, Set[Int]())
+  implicit def sel0(fun: Function1[TaggedItem[Cell], String]): FieldSelectorCode[Function1[TaggedItem[Cell], String]] = AnalyzedFieldSelector(fun, List[Int]())
+  implicit def sel1(fun: Function1[Cell, Int]): FieldSelectorCode[Function1[Cell, Int]] = AnalyzedFieldSelector(fun, List[Int]())
+  implicit def sel2(fun: Function1[(Int, TaggedItem[Cell]), Int]): FieldSelectorCode[Function1[(Int, TaggedItem[Cell]), Int]] = AnalyzedFieldSelector(fun, List[Int]())
 }

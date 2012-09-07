@@ -384,8 +384,8 @@ trait BatchGradientDescentGeneratedImplicits { this: BatchGradientDescent =>
   implicit def udfOut(fun: ((Int, Array[Double])) => String): UDF1Code[((Int, Array[Double])) => String] = AnalyzedUDF1.default(fun)
   */
 
-  implicit def selNewWeights(fun: ((Int, Array[Double])) => Int): FieldSelectorCode[((Int, Array[Double])) => Int] = AnalyzedFieldSelector(fun, Set(0))
-  implicit def selLossAndGradientSums(fun: ValueAndGradient => Int): FieldSelectorCode[ValueAndGradient => Int] = AnalyzedFieldSelector(fun, Set(0))
-  implicit def selGdNewWeightsLeft(fun: ((Int, Array[Double], Double)) => Int): FieldSelectorCode[((Int, Array[Double], Double)) => Int] = AnalyzedFieldSelector(fun, Set(0))
+  implicit def selNewWeights(fun: ((Int, Array[Double])) => Int): FieldSelectorCode[((Int, Array[Double])) => Int] = AnalyzedFieldSelector(fun, List(0))
+  implicit def selLossAndGradientSums(fun: ValueAndGradient => Int): FieldSelectorCode[ValueAndGradient => Int] = AnalyzedFieldSelector(fun, List(0))
+  implicit def selGdNewWeightsLeft(fun: ((Int, Array[Double], Double)) => Int): FieldSelectorCode[((Int, Array[Double], Double)) => Int] = AnalyzedFieldSelector(fun, List(0))
 }
 

@@ -172,8 +172,8 @@ trait TransitiveClosureNaiveGeneratedImplicits { this: TransitiveClosureNaive =>
   implicit def udfOut(fun: Function1[Path, String]): UDF1Code[Function1[Path, String]] = AnalyzedUDF1.default(fun)
   */
 
-  implicit def selEdge(fun: Function1[Path, (Int, Int)]): FieldSelectorCode[Function1[Path, (Int, Int)]] = AnalyzedFieldSelector(fun, Set(0, 1))
-  def selFrom(fun: Function1[Path, Int]): FieldSelectorCode[Function1[Path, Int]] = AnalyzedFieldSelector(fun, Set(0))
-  def selTo(fun: Function1[Path, Int]): FieldSelectorCode[Function1[Path, Int]] = AnalyzedFieldSelector(fun, Set(1))
+  implicit def selEdge(fun: Function1[Path, (Int, Int)]): FieldSelectorCode[Function1[Path, (Int, Int)]] = AnalyzedFieldSelector(fun, List(0, 1))
+  def selFrom(fun: Function1[Path, Int]): FieldSelectorCode[Function1[Path, Int]] = AnalyzedFieldSelector(fun, List(0))
+  def selTo(fun: Function1[Path, Int]): FieldSelectorCode[Function1[Path, Int]] = AnalyzedFieldSelector(fun, List(1))
 }
 

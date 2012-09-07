@@ -341,8 +341,8 @@ trait TPCHQuery3GeneratedImplicits { this: TPCHQuery3 =>
   implicit def udfOut(fun: Function1[PrioritizedOrder, String]): UDF1Code[Function1[PrioritizedOrder, String]] = AnalyzedUDF1.default(fun)
   */
 
-  implicit def selPrioritizedItemsLeft(fun: Function1[Order, Int]): FieldSelectorCode[Function1[Order, Int]] = AnalyzedFieldSelector(fun, Set(0))
-  implicit def selPrioritizedItemsRight(fun: Function1[LineItem, Int]): FieldSelectorCode[Function1[LineItem, Int]] = AnalyzedFieldSelector(fun, Set(0))
-  implicit def selPrioritizedOrders(fun: Function1[PrioritizedOrder, (Int, Int)]): FieldSelectorCode[Function1[PrioritizedOrder, (Int, Int)]] = AnalyzedFieldSelector(fun, Set(0, 1))
+  implicit def selPrioritizedItemsLeft(fun: Function1[Order, Int]): FieldSelectorCode[Function1[Order, Int]] = AnalyzedFieldSelector(fun, List(0))
+  implicit def selPrioritizedItemsRight(fun: Function1[LineItem, Int]): FieldSelectorCode[Function1[LineItem, Int]] = AnalyzedFieldSelector(fun, List(0))
+  implicit def selPrioritizedOrders(fun: Function1[PrioritizedOrder, (Int, Int)]): FieldSelectorCode[Function1[PrioritizedOrder, (Int, Int)]] = AnalyzedFieldSelector(fun, List(0, 1))
 }
 

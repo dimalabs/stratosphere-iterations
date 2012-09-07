@@ -52,8 +52,8 @@ class ReduceOperator[In: UDT](input: DataStream[In]) extends Serializable {
 
     override def createContract = {
 
-      val keyFields = keySelector.getFields filter { _ >= 0 }
-      val keyFieldTypes = implicitly[UDT[In]].getKeySet(keyFields)
+      val keyFields = keySelector.getFields
+      val keyFieldTypes = implicitly[UDT[In]].getKeySet(keyFields map { _._1 })
 
       val udfs = {
         if (combineUDF eq reduceUDF)
@@ -64,7 +64,7 @@ class ReduceOperator[In: UDT](input: DataStream[In]) extends Serializable {
 
       val builder = Reduce4sContract.newBuilder.input(input.getContract)
 
-      for ((keyType, keyField) <- (keyFieldTypes, keyFields).zipped.toList) {
+      for ((keyType, (_, keyField)) <- (keyFieldTypes, keyFields).zipped.toList) {
         builder.keyField(keyType, keyField)
       }
 

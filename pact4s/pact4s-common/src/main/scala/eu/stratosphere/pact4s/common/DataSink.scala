@@ -43,11 +43,11 @@ case class RawDataSinkFormat[In: UDT, F >: (In, OutputStream) => Unit <% UDF2](v
   override val stub = classOf[RawOutput4sStub[In]]
 
   override val inputUDT = implicitly[UDT[In]]
-  override val fieldSelector = AnalyzedFieldSelector(implicitly[UDT[In]], writeFunction.getReadFields._1.toSet)
+  override val fieldSelector = AnalyzedFieldSelector.fromIndexMap(implicitly[UDT[In]], writeFunction.getReadFields._1)
 
   override def persistConfiguration(config: Configuration) {
 
-    val deserializer = inputUDT.getSerializer(fieldSelector.getFields)
+    val deserializer = inputUDT.getSerializer(AnalyzedFieldSelector.toIndexMap(fieldSelector))
 
     val stubParameters = RawOutputParameters(deserializer, writeFunction)
     stubParameters.persist(config)
@@ -61,11 +61,11 @@ case class BinaryDataSinkFormat[In: UDT, F >: (In, DataOutput) => Unit <% UDF2](
   override val stub = classOf[BinaryOutput4sStub[In]]
 
   override val inputUDT = implicitly[UDT[In]]
-  override val fieldSelector = AnalyzedFieldSelector(implicitly[UDT[In]], writeFunction.getReadFields._1.toSet)
+  override val fieldSelector = AnalyzedFieldSelector.fromIndexMap(implicitly[UDT[In]], writeFunction.getReadFields._1)
 
   override def persistConfiguration(config: Configuration) {
 
-    val deserializer = inputUDT.getSerializer(fieldSelector.getFields)
+    val deserializer = inputUDT.getSerializer(AnalyzedFieldSelector.toIndexMap(fieldSelector))
 
     val stubParameters = BinaryOutputParameters(deserializer, writeFunction)
     stubParameters.persist(config)
@@ -95,11 +95,11 @@ case class DelimetedDataSinkFormat[In: UDT](val writeFunction: UDF2Code[(In, Arr
   override val stub = classOf[DelimetedOutput4sStub[In]]
 
   override val inputUDT = implicitly[UDT[In]]
-  override val fieldSelector = AnalyzedFieldSelector(implicitly[UDT[In]], writeFunction.getReadFields._1.toSet)
+  override val fieldSelector = AnalyzedFieldSelector.fromIndexMap(implicitly[UDT[In]], writeFunction.getReadFields._1)
 
   override def persistConfiguration(config: Configuration) {
 
-    val deserializer = inputUDT.getSerializer(fieldSelector.getFields)
+    val deserializer = inputUDT.getSerializer(AnalyzedFieldSelector.toIndexMap(fieldSelector))
 
     val stubParameters = DelimetedOutputParameters(deserializer, writeFunction.userFunction)
     stubParameters.persist(config)

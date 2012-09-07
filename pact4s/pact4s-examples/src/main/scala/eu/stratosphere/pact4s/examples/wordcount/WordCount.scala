@@ -157,6 +157,6 @@ trait WordCountGeneratedImplicits { this: WordCount =>
   implicit def udfOut(fun: Function1[(String, Int), String]): UDF1Code[Function1[(String, Int), String]] = AnalyzedUDF1.default(fun)
   */
 
-  implicit def selCounts(fun: Function1[(String, Int), String]): FieldSelectorCode[Function1[(String, Int), String]] = AnalyzedFieldSelector(fun, Set(0))
+  implicit def selCounts(fun: Function1[(String, Int), String]): FieldSelectorCode[Function1[(String, Int), String]] = AnalyzedFieldSelector(fun, List(0))
 }
 

@@ -153,6 +153,6 @@ trait ConnectedComponentsGeneratedImplicits { this: ConnectedComponents =>
   implicit def udfOut(fun: Function1[(Int, Int), String]): UDF1Code[Function1[(Int, Int), String]] = AnalyzedUDF1.default(fun)
   */
 
-  implicit def selFirst(fun: Function1[(Int, Int), Int]): FieldSelectorCode[Function1[(Int, Int), Int]] = AnalyzedFieldSelector(fun, Set(0))
+  implicit def selFirst(fun: Function1[(Int, Int), Int]): FieldSelectorCode[Function1[(Int, Int), Int]] = AnalyzedFieldSelector(fun, List(0))
 }
 

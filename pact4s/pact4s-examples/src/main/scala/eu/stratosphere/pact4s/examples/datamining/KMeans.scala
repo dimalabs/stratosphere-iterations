@@ -356,7 +356,7 @@ trait KMeansGeneratedImplicits { this: KMeans =>
   implicit def udfOut(fun: Function1[(Int, Point), String]): UDF1Code[Function1[(Int, Point), String]] = AnalyzedUDF1.default(fun)
   */
 
-  implicit def selNearestCenters(fun: Function1[(Int, Distance), Int]): FieldSelectorCode[Function1[(Int, Distance), Int]] = AnalyzedFieldSelector(fun, Set(0))
-  implicit def selNewCenters(fun: Function1[(Int, PointSum), Int]): FieldSelectorCode[Function1[(Int, PointSum), Int]] = AnalyzedFieldSelector(fun, Set(0))
+  implicit def selNearestCenters(fun: Function1[(Int, Distance), Int]): FieldSelectorCode[Function1[(Int, Distance), Int]] = AnalyzedFieldSelector(fun, List(0))
+  implicit def selNewCenters(fun: Function1[(Int, PointSum), Int]): FieldSelectorCode[Function1[(Int, PointSum), Int]] = AnalyzedFieldSelector(fun, List(0))
 }
 

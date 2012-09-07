@@ -83,8 +83,8 @@ class WorksetIterateOperator[SolutionItem: UDT, WorksetItem: UDT](stepFunction: 
 
     override def createContract = {
 
-      val keyFields = s0.keySelector.getFields filter { _ >= 0 }
-      val keyFieldTypes = implicitly[UDT[SolutionItem]].getKeySet(keyFields)
+      val keyFields = s0.keySelector.getFields
+      val keyFieldTypes = implicitly[UDT[SolutionItem]].getKeySet(keyFields map { _._1 })
 
       val contract = new WorksetIteration with WorksetIterate4sContract[SolutionItem, WorksetItem] {
 
