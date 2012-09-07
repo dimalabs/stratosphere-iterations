@@ -24,7 +24,7 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
   import global._
   import defs._
 
-  trait SymbolSnapshot { val snapshot: Map[Symbol, ValOrDefDef] }
+  trait SymbolSnapshot { val snapshot: Map[Symbol, Tree]; def mkSnapshot(tree: Tree): Map[Symbol, Tree] }
 
   trait SelectorAnalyzer extends UDTGenSiteParticipant { this: TypingTransformer with TreeGenerator with Logger with SymbolSnapshot =>
 
@@ -38,7 +38,6 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
             case (udt, desc) => {
               val ret = getSelector(fun, Set(), snapshot).getResult.right flatMap { sels =>
 
-                Warn.report("Analyzed FieldSelector[" + mkFunctionType(t1.tpe, r.tpe) + "]: { " + sels.map(_.mkString(".")).mkString(", ") + " }")
                 val errs = sels flatMap { sel => chkSelector(desc, sel.head, sel.tail) }
                 Either.cond(errs.isEmpty, sels map { _.tail }, errs)
               }
@@ -50,7 +49,6 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
 
             case Left(errs) => {
               errs.foreach { err => Error.report("Error analyzing FieldSelector[" + mkFunctionType(t1.tpe, r.tpe) + "]: " + err) }
-              Inspect.report("Field Selector Error", fun)
               None
             }
 
@@ -95,9 +93,9 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
           def unapply(tree: Tree): Option[Tree] = tree match {
             case Match(arg, List(CaseDef(pat @ PatType(substs), EmptyTree, body))) => {
               val (syms, paths) = substs.unzip
-              val funParams = syms map { sym => ValDef(sym) setSymbol sym }
-              val funArgs = paths map { path => mkSelect(arg, path: _*) }
-              Some(Apply(Function(funParams, body), funArgs))
+              val funParams = syms map { sym => ValDef(sym) setSymbol sym setPos tree.pos }
+              val funArgs = paths map { path => mkSelect(arg, path: _*) setPos tree.pos }
+              Some(Apply(Function(funParams, body), funArgs) setPos tree.pos)
             }
             case _ => None
           }
@@ -115,7 +113,8 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
                 else
                   None
               }
-              case Bind(_, _: Ident)        => Some(List((tree.symbol, Seq())))
+              case Ident(_)                 => Some(List((tree.symbol, Seq())))
+              case Bind(_, Ident(_))        => Some(List((tree.symbol, Seq())))
               case Bind(_, PatType(inners)) => Some((tree.symbol, Seq()) +: inners)
               case _                        => None
             }
@@ -136,58 +135,104 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
 
         object Reference {
           def unapply(tree: Tree): Option[Tree] = tree match {
-            case _: Ident                                => env.get(tree.symbol)
-            case _: Select if !tree.symbol.isConstructor => env.get(tree.symbol)
-            case _: TypeApply                            => env.get(tree.symbol)
-            case _                                       => None
+            case _: Ident                  => env.get(tree.symbol)
+            case _: Select                 => env.get(tree.symbol)
+            case TypeApply(fun: Ident, _)  => unapply(fun)
+            case TypeApply(fun: Select, _) => unapply(fun)
+            case _                         => None
           }
         }
 
         object Ctor {
           def unapply(tree: Tree): Option[Tree] = tree match {
-            case Select(New(_), _) if tree.symbol.isDefaultInit && tree.symbol.owner.isCaseClass => {
+            case Select(New(_), _) if tree.symbol.isPrimaryConstructor && tree.symbol.owner.isCaseClass => {
               val fields = tree.symbol.owner.caseFieldAccessors
-              val funParams = fields map { sym => ValDef(sym) setSymbol sym }
+              val funParams = fields map { sym => ValDef(sym) setSymbol sym setPos tree.pos }
 
               // Abusing the Bind and Alternative subclasses because they have
               // the parameter types we need to form a list of labeled trees.
-              // The Binds will survive eval'ing the Function, while the Idents
-              // will be replaced by the Apply args.
-              val funElems = fields map { sym => Bind(sym.name, Ident(sym)) }
-              val fun = Function(funParams, Alternative(funElems))
+              // The Binds don't have symbols, so they will survive eval'ing the 
+              // Function, while the Idents will be replaced by args from Apply.
+              val funElems = fields map { sym => Bind(sym.name, Ident(sym) setPos tree.pos) setPos tree.pos }
+              val fun = Function(funParams, Alternative(funElems) setPos tree.pos) setPos tree.pos
 
               Some(fun)
             }
-            case _: Select if tree.symbol.isConstructor => Some(EmptyTree)
-            case _                                      => None
+            case Select(New(_), name) if tree.symbol.isConstructor => Some(EmptyTree)
+            case _                                                 => None
           }
         }
 
-        val ret = tree match {
+        tree match {
 
-          case Reference(EmptyTree)                       => ComplexSelector(tree)
-          case Reference(target)                          => getSelector(target, roots, env + (tree.symbol -> EmptyTree))
-          case Ident(name) if roots.contains(tree.symbol) => RootSelector(name.toString)
-          case Ctor(EmptyTree)                            => ComplexSelector(tree)
-          case Ctor(fun)                                  => getSelector(fun, roots, env)
-          case Alternative(elems)                         => CompositeSelector(elems map { case Bind(name, arg) => (name.toString, getSelector(arg, roots, env)) })
-          case Select(src, name)                          => SimpleSelector(getSelector(src, roots, env), name.toString)
-          case PatMatch(fun)                              => getSelector(fun, roots, env)
-          case Block(_, expr)                             => getSelector(expr, roots, env)
-          case ValDef(_, _, _, body)                      => getSelector(body, roots, env)
-          case DefDef(m, n, tps, paramss, tpt, body)      => getSelector(paramss.foldRight(body) { (params, body) => Function(params, body) }, roots, env)
-          case Function(Nil, body)                        => getSelector(body, roots, env)
-          case Function(params, body)                     => LazySelector(params map { _.symbol }, body, roots, env)
-          case Apply(fun, args) => getSelector(fun, roots, env) match {
-            case sel: ComplexSelector => sel
-            case sel: LazySelector    => sel.eval(args)
-            case _                    => ComplexSelector(fun)
+          case Reference(EmptyTree) => {
+            Debug.report("getSelector(" + tree + ") failed: illegal reference")
+            ComplexSelector(tree)
           }
-          case _ => ComplexSelector(tree)
+          case Ctor(EmptyTree) => {
+            Debug.report("getSelector(" + tree + ") failed: non-default constructor")
+            ComplexSelector(tree)
+          }
+          case Reference(target)                          => getSelector(tree, target, roots, env + (tree.symbol -> EmptyTree))
+          case Ctor(fun)                                  => getSelector(tree, fun, roots, env)
+          case PatMatch(fun)                              => getSelector(tree, fun, roots, env)
+          case Typed(expr, _)                             => getSelector(tree, expr, roots, env)
+          case Block(_, expr)                             => getSelector(tree, expr, roots, env)
+          case ValDef(_, _, _, body)                      => getSelector(tree, body, roots, env)
+          case DefDef(m, n, tps, paramss, tpt, body)      => getSelector(tree, paramss.foldRight(body) { (params, body) => Function(params, body) setPos tree.pos }, roots, env)
+          case Function(Nil, body)                        => getSelector(tree, body, roots, env)
+          case Ident(name) if roots.contains(tree.symbol) => getSelector(tree, RootSelector(name.toString))
+          case Ident(name) => {
+            Debug.report("getSelector(" + tree + ") failed: illegal identifier")
+            ComplexSelector(tree)
+          }
+          case Select(src, member) => {
+            Debug.report("getSelector(" + tree + ") = SimpleSelector(getSelector(" + src + "), " + member + ")");
+            getSelector(src, roots, env) match {
+              case sel: ComplexSelector => sel
+              
+              case sel @ CompositeSelector(sels) => sels.find(_._1 == member.toString) match {
+                case Some((_, sel)) => sel
+                case None => {
+                  Debug.report("getSelector(" + tree + ") failed: " + sel + " does not define member " + member)
+                  ComplexSelector(tree)
+                }
+              }
+              case sel => SimpleSelector(sel, member.toString)
+            }
+          }
+          case Alternative(elems) => {
+            val elemsStr = elems map { case Bind(name, arg) => (name.toString, "getSelector(" + arg + ")") }
+            Debug.report("getSelector(" + tree + ") = CompositeSelector(" + elemsStr.mkString(", ") + ")")
+            CompositeSelector(elems map { case Bind(name, arg) => (name.toString, getSelector(arg, roots, env)) })
+          }
+          case Function(params, body) => getSelector(tree, LazySelector(params map { _.symbol }, body, roots, env))
+          case Apply(fun, args) => {
+            Debug.report("getSelector(" + tree + ") = getSelector(" + fun + ").eval(" + args.mkString(", ") + ")")
+            getSelector(fun, roots, env) match {
+              case sel: ComplexSelector => sel
+              case sel: LazySelector    => sel.eval(args)
+              case sel => {
+                Debug.report("getSelector(" + tree + ") failed: expected LazySelector but found " + sel)
+                ComplexSelector(fun)
+              }
+            }
+          }
+          case _ => {
+            Debug.report("getSelector(" + tree + ") failed: no matching pattern")
+            ComplexSelector(tree)
+          }
         }
+      }
 
-        Warn.report("getSelector(" + tree + ") = " + ret)
-        ret
+      private def getSelector(from: Tree, to: Tree, roots: Set[Symbol], env: Map[Symbol, Tree]): Selector = {
+        Debug.report("getSelector(" + from + ") = getSelector(" + to + ")")
+        getSelector(to, roots, env)
+      }
+
+      private def getSelector(from: Tree, to: Selector): Selector = {
+        Debug.report("getSelector(" + from + ") = " + to)
+        to
       }
 
       abstract sealed class Selector {
@@ -195,16 +240,34 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
       }
 
       case class ComplexSelector(tree: Tree) extends Selector {
-        override def getResult = Left(List(tree.getClass.getName + " expression is too complex - " + tree.toString))
+        
+        private def treeKind = {
+          val name = tree.getClass.getName
+          val idx = math.max(name.lastIndexOf('$'), name.lastIndexOf('.')) + 1
+          name.substring(idx)
+        }
+        
+        override def getResult = {
+          val loc = "%s[%s:%s]".format(tree.pos.source, tree.pos.line, tree.pos.column)
+          Left(List(treeKind + " expression is too complex @ " + loc))
+        }
       }
 
       case class LazySelector(params: List[Symbol], body: Tree, roots: Set[Symbol], env: Map[Symbol, Tree]) extends Selector {
         def eval(args: List[Tree]) = {
           val subst = (new TreeSubstituter(params, args)).transform(body)
-          getSelector(subst, roots, env)
+          val (dead, alive) = env.partition(_._2.isEmpty)
+          Debug.report(this + ".eval(" + args.mkString(", ") + ") = getSelector(" + subst + ")")
+          getSelector(subst, roots, (alive ++ mkSnapshot(subst)) ++ dead)
         }
 
-        def eval() = getSelector(body, roots ++ params, env)
+        private def eval(): Selector = {
+          Debug.report(this + ".eval()")
+          getSelector(body, roots ++ params, env) match {
+            case LazySelector(params, body, _, _) => ComplexSelector(Function(params map { sym => ValDef(sym) setSymbol sym }, body))
+            case sel                              => sel
+          }
+        }
 
         def getResult = eval().getResult
 
@@ -217,14 +280,9 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
 
       case class SimpleSelector(source: Selector, member: String) extends Selector {
 
-        override def getResult = source match {
-          case source: ComplexSelector => source.getResult
-          case source: LazySelector    => SimpleSelector(source.eval(), member).getResult
-          case CompositeSelector(sels) => sels.find(_._1 == member).get._2.getResult
-          case _ => source.getResult.right flatMap {
-            case List(path) => Right(List(path :+ member))
-            case paths      => Left(List(" found unexpected composite (" + paths.map(_.mkString(".")).mkString(", ") + ")"))
-          }
+        override def getResult = source.getResult.right flatMap {
+          case List(path) => Right(List(path :+ member))
+          case paths      => Left(List(" found unexpected composite (" + paths.map(_.mkString(".")).mkString(", ") + ")"))
         }
       }
 

@@ -12,15 +12,32 @@ class KeyTest {
   def ping(x: Int): Int = pong(x)
   def pong(x: Int): Int = ping(x)
   
-  case class IntPair(x: Int, y: Int)
-  
-  //val test1: FieldSelectorCode[((Int, Int, Int)) => Int] = { arg => fst(arg) }
-  val test2: FieldSelectorCode[((Int, (Int, Int))) => Any] = { case (x, (y, z)) => IntPair(x, y) } 
-  //val test3 = toFS { x: (Int, Int, Int) => x._1 }
-  
-  def testPat(xy: (Int, Int)) = xy match {
-    case (x, y) => Some(x)
-    case _ => None
+  case class IntPair(x: Int, y: Int) {
+    def this() = this(0, 0)
   }
   
-} //
+  object IntPairExtr {
+    def unapply(xy: IntPair): Some[(Int, Int)] = Some(xy.x, xy.y)
+  }
+  
+  /*
+  val test1: FieldSelectorCode[((Int, Int, Int)) => Int] = { arg => fst(arg) }
+  val test2: FieldSelectorCode[((Int, (Int, Int))) => Any] = { case (x, (y, z)) =>
+    val q = IntPair(x, z)
+    q.y
+  } 
+  val test3 = toFS { x: (Int, Int, Int) => x._1 }
+  */
+  val test4 = toFS { testUnapply _ }
+  
+  def testUnapply(q: (Int, (Int, Int))) = {
+    val (x, p@(y, z)) = q
+    val r = IntPair(y, z)
+    r.y
+    //r match { case IntPairExtr(_, z2) => z2 }
+    //p match { case (y2, _) => (x, y2) }
+    //val IntPairExtr(y2, z2) = r
+    //z2
+  }
+  
+} 

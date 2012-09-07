@@ -26,27 +26,37 @@ trait UDFAnalyzers extends SelectorAnalyzers with FlowAnalyzers with FallbackBin
   import defs._
 
   trait UDFAnalyzer extends Pact4sComponent {
-    
-    var snapshot: Map[Symbol, ValOrDefDef] = _
-    
-    override def beforeRun() = {
 
-      def findValOrDefDef(sym: Symbol, trees: List[Tree]) = trees find {
-        case ValDef(_, _, _, EmptyTree) => false
-        case _: ValDef => true
-        case _: DefDef => true
-        case _ => false
-      } map { tree => (sym, tree.asInstanceOf[ValOrDefDef]) }
-      
-      def collectValAndDefDefs(unit: CompilationUnit) = unit.body filter { t => t.hasSymbol && !t.symbol.hasFlag(Flags.MUTABLE) } groupBy (_.symbol) flatMap { case (k, vs) => findValOrDefDef(k, vs) }
-            
-      snapshot = currentRun.units.toSeq flatMap { collectValAndDefDefs(_) } toMap
+    private var snapshot: Map[Symbol, Tree] = _
+
+    private def mkSnapshot(tree: Tree): Map[Symbol, Tree] = {
+
+      object Def {
+        def unapply(trees: List[Tree]) = trees find {
+          case ValDef(_, _, _, EmptyTree) => false
+          case _: ValDef                  => true
+          case _: DefDef                  => true
+          case _                          => false
+        }
+      }
+
+      tree filter { _.hasSymbolWhich(_ != NoSymbol) } groupBy (_.symbol) flatMap {
+        case (sym, Def(_)) if sym.hasFlag(Flags.MUTABLE)              => Some((sym, EmptyTree))
+        case (sym, Def(_)) if sym.isConstructor || sym.isCaseAccessor => None
+        case (sym, Def(tree))                                         => Some((sym, tree))
+        case _                                                        => None
+      }
+    }
+
+    override def beforeRun() = {
+      snapshot = currentRun.units.toSeq flatMap { unit => mkSnapshot(unit.body) } toMap
     }
 
     override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with TreeGenerator with Logger with SymbolSnapshot with SelectorAnalyzer with FlowAnalyzer with FallbackBinder {
 
       val snapshot = UDFAnalyzer.this.snapshot
-      
+      def mkSnapshot(tree: Tree) = UDFAnalyzer.this.mkSnapshot(tree)
+
       override def apply(tree: Tree) = super.apply {
         unlift(tree) match {
           case FieldSelector(result) => localTyper.typed { result }
@@ -70,7 +80,7 @@ trait UDFAnalyzers extends SelectorAnalyzers with FlowAnalyzers with FallbackBin
             case (`unanalyzedUDF1`, List(t1, r))          => mkFunctionType(mkFunctionType(t1, r), mkUDF1CodeOf(t1, r))
             case (`unanalyzedUDF2`, List(t1, t2, r))      => mkFunctionType(mkFunctionType(t1, t2, r), mkUDF2CodeOf(t1, t2, r))
           }
-          
+
           // ref is unanalyzedFieldSelector, unanalyzedUDF1, unanalyzedUDF2, or a user-supplied view
           val ref = inferImplicitView(viewTpe, dontInfer = Set())
           localTyper.typed { Apply(ref.get, List(fun)) }
