@@ -29,14 +29,25 @@ class StubParameters extends Serializable {
 }
 
 object StubParameters {
+  
+  /*
+   * Tried using the new config.getBytes/setBytes methods,
+   * but getBytes would only return null (despite the key
+   * being present and setBytes having written real data).
+   * The built-in sun.misc.BASE64 encoder works...
+   */
+  
   private val parameterName = "pact4s.stub.parameters"
 
   def getValue[T <: StubParameters](config: Configuration): T = {
 
     val classLoader = config.getClassLoader()
-    val data = config.getBytes(parameterName, null)
+    val data = config.getString(parameterName, null)
 
-    val bais = new ByteArrayInputStream(data)
+    val decoder = new sun.misc.BASE64Decoder
+    val byteData = decoder.decodeBuffer(data)
+
+    val bais = new ByteArrayInputStream(byteData)
 
     val ois = new ObjectInputStream(bais) {
 
@@ -65,9 +76,11 @@ object StubParameters {
 
     try {
       oos.writeObject(parameters)
-      val data = baos.toByteArray
 
-      config.setBytes(parameterName, data)
+      val encoder = new sun.misc.BASE64Encoder
+      val data = encoder.encode(baos.toByteArray)
+
+      config.setString(parameterName, data)
 
     } finally {
       oos.close
@@ -77,3 +90,4 @@ object StubParameters {
 
   def setValue(contract: Contract, parameters: StubParameters): Unit = setValue(contract.getParameters(), parameters)
 }
+
