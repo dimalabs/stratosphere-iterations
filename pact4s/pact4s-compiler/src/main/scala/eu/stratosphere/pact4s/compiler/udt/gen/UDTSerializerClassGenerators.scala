@@ -42,7 +42,10 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
           case inits => List(mkMethod(classSym, "init", Flags.OVERRIDE | Flags.FINAL, List(), definitions.UnitClass.tpe) { _ => Block((inits :+ mkUnit): _*) })
         }
 
-        listImpls ++ fields ++ mkPactWrappers(classSym, desc, listImplTypes) ++ init ++ mkSerialize(classSym, desc, listImplTypes) ++ mkDeserialize(classSym, desc, listImplTypes)
+        val helpers = listImpls ++ fields ++ mkPactWrappers(classSym, desc, listImplTypes) ++ init
+        val methods = mkGetFieldIndex(classSym, desc) :: mkSerialize(classSym, desc, listImplTypes) ++ mkDeserialize(classSym, desc, listImplTypes)
+
+        helpers ++ methods
       }
     }
 
@@ -85,12 +88,6 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
       (listImpls.flatten, listTypes.flatten.toMap)
     }
 
-    private def getIndexFields(desc: UDTDescriptor): Seq[UDTDescriptor] = desc match {
-      case CaseClassDescriptor(_, _, _, _, getters) => getters filterNot { _.isBaseField } flatMap { f => getIndexFields(f.desc) }
-      case BaseClassDescriptor(id, _, getters, subTypes) => (getters flatMap { f => getIndexFields(f.desc) }) ++ (subTypes flatMap getIndexFields)
-      case _ => Seq(desc)
-    }
-
     private def mkIndexes(udtSerClassSym: Symbol, descId: Int, descFields: List[UDTDescriptor], boxed: Boolean, indexMapIter: Tree): (List[Tree], List[Tree]) = {
 
       val prefix = (if (boxed) "boxed" else "flat") + descId
@@ -129,12 +126,12 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
       def getBoxedDescriptors(d: UDTDescriptor): Seq[UDTDescriptor] = d match {
         case ListDescriptor(_, _, _, _, _, elem: BaseClassDescriptor) => elem +: getBoxedDescriptors(elem)
         case ListDescriptor(_, _, _, _, _, elem: CaseClassDescriptor) => elem +: getBoxedDescriptors(elem)
-        case ListDescriptor(_, _, _, _, _, elem: OpaqueDescriptor) => Seq(elem)
-        case ListDescriptor(_, _, _, _, _, elem) => getBoxedDescriptors(elem)
-        case CaseClassDescriptor(_, _, _, _, getters) => getters filterNot { _.isBaseField } flatMap { f => getBoxedDescriptors(f.desc) }
-        case BaseClassDescriptor(id, _, getters, subTypes) => (getters flatMap { f => getBoxedDescriptors(f.desc) }) ++ (subTypes flatMap getBoxedDescriptors)
-        case RecursiveDescriptor(_, _, refId) => desc.findById(refId).map(_.mkRoot).toSeq
-        case _ => Seq()
+        case ListDescriptor(_, _, _, _, _, elem: OpaqueDescriptor)    => Seq(elem)
+        case ListDescriptor(_, _, _, _, _, elem)                      => getBoxedDescriptors(elem)
+        case CaseClassDescriptor(_, _, _, _, getters)                 => getters filterNot { _.isBaseField } flatMap { f => getBoxedDescriptors(f.desc) }
+        case BaseClassDescriptor(id, _, getters, subTypes)            => (getters flatMap { f => getBoxedDescriptors(f.desc) }) ++ (subTypes flatMap getBoxedDescriptors)
+        case RecursiveDescriptor(_, _, refId)                         => desc.findById(refId).map(_.mkRoot).toSeq
+        case _                                                        => Seq()
       }
 
       val fieldsAndInits = getBoxedDescriptors(desc).distinct.toList flatMap { d =>
@@ -170,9 +167,9 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
           }
           listField +: elemFields
         }
-        case CaseClassDescriptor(_, _, _, _, getters) => getters filterNot { _.isBaseField } flatMap { f => getFieldTypes(f.desc) }
+        case CaseClassDescriptor(_, _, _, _, getters)     => getters filterNot { _.isBaseField } flatMap { f => getFieldTypes(f.desc) }
         case BaseClassDescriptor(_, _, getters, subTypes) => (getters flatMap { f => getFieldTypes(f.desc) }) ++ (subTypes flatMap getFieldTypes)
-        case _ => Seq()
+        case _                                            => Seq()
       }
 
       getFieldTypes(desc) toList match {
@@ -189,6 +186,65 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
           }
 
           fields :+ readObject
+      }
+    }
+
+    private def mkGetFieldIndex(udtSerClassSym: Symbol, desc: UDTDescriptor): Tree = {
+
+      val env = GenEnvironment(udtSerClassSym, NoSymbol, Map(), "flat" + desc.id, false, true, true)
+
+      def mkCases(desc: UDTDescriptor, path: Seq[String]): Seq[(Seq[String], Tree)] = desc match {
+
+        case PrimitiveDescriptor(id, _, _, _)            => Seq((path, mkList(List(env.mkSelectIdx(id)))))
+        case BoxedPrimitiveDescriptor(id, _, _, _, _, _) => Seq((path, mkList(List(env.mkSelectIdx(id)))))
+
+        case BaseClassDescriptor(_, _, Seq(tag, getters @ _*), _) => {
+          val tagCase = Seq((path :+ "getClass", mkList(List(env.mkSelectIdx(tag.desc.id)))))
+          val fieldCases = getters flatMap { f => mkCases(f.desc, path :+ f.sym.name.toString) }
+          tagCase ++ fieldCases
+        }
+
+        case CaseClassDescriptor(_, _, _, _, getters) => {
+          def fieldCases = getters flatMap { f => mkCases(f.desc, path :+ f.sym.name.toString) }
+          val allFieldsCase = desc match {
+            case _ if desc.isPrimitiveProduct => {
+              val nonRest = fieldCases filter { case (p, _) => p.size == path.size + 1 } map { _._2 }
+              Seq((path, nonRest.reduceLeft((z, f) => Apply(Select(z, "$plus$plus"), List(f)))))
+            }
+            case _ => Seq()
+          }
+          allFieldsCase ++ fieldCases
+        }
+
+        case OpaqueDescriptor(id, _, _) => {
+          val endPath = (path, Apply(Select(env.mkSelectSerializer(id), "getFieldIndex"), List(mkSeq(Nil))))
+          val restPath = (path :+ null, Apply(Select(env.mkSelectSerializer(id), "getFieldIndex"), List(Ident("rrrest"))))
+          Seq(endPath, restPath)
+        }
+
+        case _ => Seq()
+      }
+      
+      def mkPat(unapplyDummy: Symbol, path: Seq[String]): Tree = {
+        
+        val seqUnapply = TypeApply(mkSelect("scala", "collection", "Seq", "unapplySeq"), List(TypeTree(stringTpe)))
+        val fun = Apply(seqUnapply, List(mkIdent(unapplyDummy)))
+        
+        val args = path map {
+          case null => Bind("rrrest", Star(Ident("_")))
+          case s => Literal(s)
+        }
+        
+        UnApply(fun, args.toList)
+      }
+
+      mkMethod(udtSerClassSym, "getFieldIndex", Flags.OVERRIDE | Flags.FINAL, List(("selection", mkSeqOf(stringTpe))), mkListOf(intTpe)) { methodSym =>
+
+        val unapplyDummy = methodSym.newValue(curPos, nme.SELECTOR_DUMMY) setFlag Flags.SYNTHETIC setInfo mkSeqOf(stringTpe)
+        
+        val cases = mkCases(desc, Seq()) map { case (path, idxs) => CaseDef(mkPat(unapplyDummy, path), EmptyTree, idxs) }
+        val errCase = CaseDef(Ident("_"), EmptyTree, mkThrow(noSuchElementExceptionTpe, Apply(Select(Ident("selection"), "mkString"), List(Literal(".")))))
+        Match(Ident("selection"), (cases :+ errCase).toList)
       }
     }
 

@@ -34,6 +34,11 @@ final class BooleanUDT extends UDT[Boolean] {
 
     @transient private var pactField = new PactInteger()
 
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => List(index)
+      case _     => throw new NoSuchElementException(selection.mkString("."))
+    }
+
     override def serialize(item: Boolean, record: PactRecord) = {
       if (index >= 0) {
         pactField.setValue(if (item) 1 else 0)

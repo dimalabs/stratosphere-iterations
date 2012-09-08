@@ -54,11 +54,9 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
 
             case Right((udt, sels)) => {
 
-              Debug.report("Analyzed FieldSelector[" + mkFunctionType(t1.tpe, r.tpe) + "]: { " + sels.map(_.mkString(".")).mkString(", ") + " }")
+              Debug.report("Analyzed FieldSelector[" + mkFunctionType(t1.tpe, r.tpe) + "]: " + sels.map(_.mkString(".")).mkString(", "))
 
-              def mkSeq(items: List[Tree]): Tree = Apply(mkSelect("scala", "collection", "Seq", "apply"), items)
               val selsTree = mkSeq(sels map { sel => mkSeq(sel map { Literal(_) }) })
-
               val factory = mkSelect("eu", "stratosphere", "pact4s", "common", "analyzer", "AnalyzedFieldSelector", "apply")
 
               Some(Apply(TypeApply(factory, List(TypeTree(t1.tpe), TypeTree(r.tpe))), List(udt, selsTree)))

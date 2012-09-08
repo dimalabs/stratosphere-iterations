@@ -28,16 +28,27 @@ trait UDTClassGenerators extends UDTSerializerClassGenerators { this: Pact4sPlug
 
     protected def mkUdtClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 
-      mkClass(owner, unit.freshTypeName("UDTImpl"), Flags.FINAL, List(definitions.ObjectClass.tpe, mkUdtOf(desc.tpe), definitions.SerializableClass.tpe)) { classSym =>
+      localTyper.typed {
+        mkClass(owner, unit.freshTypeName("UDTImpl"), Flags.FINAL, List(definitions.ObjectClass.tpe, mkUdtOf(desc.tpe), definitions.SerializableClass.tpe)) { classSym =>
 
-        val createSerializer = mkMethod(classSym, "createSerializer", Flags.OVERRIDE | Flags.FINAL, List(("indexMap", intArrayTpe)), mkUdtSerializerOf(desc.tpe)) { methodSym =>
-          val udtSer = mkUdtSerializerClass(methodSym, desc)
-          val inst = New(TypeTree(udtSer.symbol.tpe), List(List()))
-          Block(udtSer, inst)
+          val createSerializer = mkMethod(classSym, "createSerializer", Flags.OVERRIDE | Flags.FINAL, List(("indexMap", intArrayTpe)), mkUdtSerializerOf(desc.tpe)) { methodSym =>
+            val udtSer = mkUdtSerializerClass(methodSym, desc)
+            val inst = New(TypeTree(udtSer.symbol.tpe), List(List()))
+            Block(udtSer, inst)
+          }
+
+          mkFieldTypes(classSym, desc) :+ createSerializer
         }
-
-        mkFieldTypes(classSym, desc) :+ createSerializer
       }
+    }
+
+    protected def getIndexFields(desc: UDTDescriptor): Seq[UDTDescriptor] = desc match {
+      // Flatten product types
+      case CaseClassDescriptor(_, _, _, _, getters)      => getters filterNot { _.isBaseField } flatMap { f => getIndexFields(f.desc) }
+      // TODO (Joe): Rather than laying out subclass fields sequentially, just reserve enough fields for the largest subclass.
+      // This is tricky because subclasses can contain opaque descriptors, so we don't know how many fields we need until runtime.
+      case BaseClassDescriptor(id, _, getters, subTypes) => (getters flatMap { f => getIndexFields(f.desc) }) ++ (subTypes flatMap getIndexFields)
+      case _                                             => Seq(desc)
     }
 
     private def mkFieldTypes(udtClassSym: Symbol, desc: UDTDescriptor): List[Tree] = {
@@ -47,25 +58,16 @@ trait UDTClassGenerators extends UDTSerializerClassGenerators { this: Pact4sPlug
 
       mkValAndGetter(udtClassSym, "fieldTypes", Flags.OVERRIDE | Flags.FINAL, definitions.arrayType(pactValueTpe)) { _ =>
 
-        def getFieldTypes(desc: UDTDescriptor): Seq[Tree] = desc match {
-          case PrimitiveDescriptor(_, _, _, wrapper)            => Seq(mkClassOf(wrapper.tpe))
-          case BoxedPrimitiveDescriptor(_, _, _, wrapper, _, _) => Seq(mkClassOf(wrapper.tpe))
-          case ListDescriptor(_, _, _, _, _, elem)              => Seq(mkClassOf(pactListTpe))
-          // Flatten product types
-          case CaseClassDescriptor(_, _, _, _, getters)         => getters filterNot { _.isBaseField } flatMap { f => getFieldTypes(f.desc) }
-          // Tag and flatten summation types
-          // TODO (Joe): Rather than laying subclasses out sequentially, just 
-          //             reserve enough fields for the largest subclass.
-          //             This is tricky because subclasses can contain opaque
-          //             descriptors, so we don't know how many fields we
-          //             need until runtime.
-          case BaseClassDescriptor(_, _, getters, subTypes)     => (getters flatMap { f => getFieldTypes(f.desc) }) ++ (subTypes flatMap getFieldTypes)
-          case OpaqueDescriptor(_, _, ref)                      => Seq(Select(ref(), "fieldTypes"))
+        val fieldTypes = getIndexFields(desc) map {
+          case PrimitiveDescriptor(_, _, _, wrapper)            => mkClassOf(wrapper.tpe)
+          case BoxedPrimitiveDescriptor(_, _, _, wrapper, _, _) => mkClassOf(wrapper.tpe)
+          case ListDescriptor(_, _, _, _, _, _)                 => mkClassOf(pactListTpe)
+          case OpaqueDescriptor(_, _, ref)                      => Select(ref(), "fieldTypes")
           // Box inner instances of recursive types
-          case RecursiveDescriptor(_, _, _)                     => Seq(mkClassOf(pactRecordClass.tpe))
+          case RecursiveDescriptor(_, _, _)                     => mkClassOf(pactRecordClass.tpe)
         }
 
-        val fieldSets = getFieldTypes(desc).foldRight(Seq[Tree]()) { (f, z) =>
+        val fieldSets = fieldTypes.foldRight(Seq[Tree]()) { (f, z) =>
           (f, z) match {
             case (_: Select, _)                => f +: z
             case (_, ArrayValue(tpe, fs) :: r) => ArrayValue(tpe, f +: fs) +: r

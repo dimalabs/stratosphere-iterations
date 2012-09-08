@@ -110,6 +110,7 @@ trait UDTDescriptors { this: Pact4sPlugin =>
 
     private val refString = ref().toString
     
+    override val isPrimitiveProduct = true
     override def flatten = Seq(this)
 
     // Use string representation of Trees to approximate structural hashing and

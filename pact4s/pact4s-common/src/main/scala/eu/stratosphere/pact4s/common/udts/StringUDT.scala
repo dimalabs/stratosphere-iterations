@@ -34,6 +34,11 @@ final class StringUDT extends UDT[String] {
 
     @transient private var pactField = new PactString()
 
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => List(index)
+      case _     => throw new NoSuchElementException(selection.mkString("."))
+    }
+
     override def serialize(item: String, record: PactRecord) = {
       if (index >= 0) {
         pactField.setValue(item)

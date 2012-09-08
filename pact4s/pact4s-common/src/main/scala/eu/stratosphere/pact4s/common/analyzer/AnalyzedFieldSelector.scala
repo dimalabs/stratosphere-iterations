@@ -58,7 +58,7 @@ object AnalyzedFieldSelector {
 
   def apply[T1, R](udt: UDT[T1]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R)(udt)
   def apply[T1, R](udt: UDT[T1], selFields: List[Int]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, selFields)(udt)
-  def apply[T1, R](udt: UDT[T1], selections: Seq[Seq[String]]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, (selections flatMap udt.getFieldIndex).toList)(udt)
+  def apply[T1, R](udt: UDT[T1], selections: Seq[Seq[String]]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, udt.getFieldIndexes(selections))(udt)
   
   def fromIndexMap[T1, R](udt: UDT[T1], indexMap: Array[Int]): FieldSelectorCode[T1 => R] = {
     val selFields = indexMap.zipWithIndex.toSeq.map(_.swap)

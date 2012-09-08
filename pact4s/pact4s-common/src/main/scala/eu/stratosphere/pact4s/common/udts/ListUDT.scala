@@ -45,6 +45,11 @@ final class ListUDT[T, L[T] <: GenTraversableOnce[T]](implicit udtInst: UDT[T], 
       inner = udt.getSerializerWithDefaultLayout
     }
 
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => List(index)
+      case _     => throw new NoSuchElementException(selection.mkString("."))
+    }
+
     override def serialize(items: L[T], record: PactRecord) = {
       // This method will be reentrant if T contains a List[T]
 

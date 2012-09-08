@@ -29,7 +29,7 @@ trait TreeGenerators { this: TypingTransformers =>
     def mkNull = Literal(Constant(null)) setType ConstantType(Constant(null))
     def mkZero = Literal(Constant(0)) setType ConstantType(Constant(0))
     def mkOne = Literal(Constant(1)) setType ConstantType(Constant(1))
-
+    
     def mkAsInstanceOf(source: Tree, targetTpe: Type): Tree = TypeApply(Select(source, "asInstanceOf"), List(TypeTree(targetTpe)))
 
     def maybeMkAsInstanceOf(source: Tree, sourceTpe: Type, targetTpe: Type): Tree = {
@@ -42,6 +42,9 @@ trait TreeGenerators { this: TypingTransformers =>
     def mkIdent(target: Symbol): Tree = Ident(target) setType target.tpe
     def mkSelect(rootModule: String, path: String*): Tree = mkSelect(Ident(rootModule) setSymbol definitions.getModule(rootModule), path: _*)
     def mkSelect(source: Tree, path: String*): Tree = path.foldLeft(source) { (ret, item) => Select(ret, item) }
+
+    def mkSeq(items: List[Tree]): Tree = Apply(mkSelect("scala", "collection", "Seq", "apply"), items)
+    def mkList(items: List[Tree]): Tree = Apply(mkSelect("scala", "collection", "immutable", "List", "apply"), items)
 
     def mkVal(owner: Symbol, name: String, flags: Long, transient: Boolean, valTpe: Type)(value: Symbol => Tree): Tree = {
       val valSym = owner.newValue(name) setFlag flags setInfo valTpe
@@ -163,6 +166,8 @@ trait TreeGenerators { this: TypingTransformers =>
       ClassDef(classSym, Modifiers(flags | Flags.SYNTHETIC), List(Nil), List(Nil), classMembers, owner.pos)
     }
 
-    def mkThrow(msg: String) = Throw(New(TypeTree(definitions.getClass("java.lang.RuntimeException").tpe), List(List(Literal(msg)))))
+    def mkThrow(tpe: Type, msg: Tree): Tree = Throw(New(TypeTree(tpe), List(List(msg))))
+    def mkThrow(tpe: Type, msg: String): Tree = mkThrow(tpe, Literal(msg))
+    def mkThrow(msg: String): Tree = mkThrow(definitions.getClass("java.lang.RuntimeException").tpe, msg)
   }
 }

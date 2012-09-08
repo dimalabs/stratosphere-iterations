@@ -24,6 +24,7 @@ trait Definitions { this: Pact4sPlugin =>
   object defs {
 
     lazy val intTpe = definitions.IntClass.tpe
+    lazy val stringTpe = definitions.StringClass.tpe
     lazy val intArrayTpe = definitions.arrayType(definitions.IntClass.tpe)
     lazy val iteratorClass = definitions.IteratorClass
     lazy val genTraversableOnceClass = definitions.getClass("scala.collection.GenTraversableOnce")
@@ -32,6 +33,8 @@ trait Definitions { this: Pact4sPlugin =>
     lazy val objectInputStreamClass = definitions.getClass("java.io.ObjectInputStream")
     lazy val liftMethod = definitions.getMember(definitions.getModule("scala.reflect.Code"), "lift")
 
+    lazy val noSuchElementExceptionTpe = definitions.getClass("java.util.NoSuchElementException").tpe
+    
     lazy val unanalyzedUdt = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.UDT"), "unanalyzedUDT")
     lazy val unanalyzedFieldSelector = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.FieldSelector"), "unanalyzedFieldSelector")
     lazy val unanalyzedFieldSelectorCode = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.FieldSelector"), "unanalyzedFieldSelectorCode")
@@ -104,6 +107,8 @@ trait Definitions { this: Pact4sPlugin =>
     def mkUDF1CodeOf(tpeT1: Type, tpeR: Type) = appliedType(udf1CodeClass.tpe, List(definitions.functionType(List(tpeT1), tpeR)))
     def mkUDF2CodeOf(tpeT1: Type, tpeT2: Type, tpeR: Type) = appliedType(udf2CodeClass.tpe, List(definitions.functionType(List(tpeT1, tpeT2), tpeR)))
 
+    def mkSeqOf(tpe: Type) = appliedType(definitions.SeqClass.tpe, List(tpe))
+    def mkListOf(tpe: Type) = appliedType(definitions.ListClass.tpe, List(tpe))
     def mkIteratorOf(tpe: Type) = appliedType(definitions.IteratorClass.tpe, List(tpe))
     def mkClassOf(tpe: Type) = gen.mkClassOf(tpe)
     def mkFunctionType(tpes: Type*): Type = definitions.functionType(tpes.init.toList, tpes.last)

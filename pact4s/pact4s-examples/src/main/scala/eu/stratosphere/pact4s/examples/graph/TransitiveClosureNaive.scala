@@ -99,6 +99,7 @@ trait TransitiveClosureNaiveGeneratedImplicits { this: TransitiveClosureNaive =>
   import eu.stratosphere.pact.common.`type`._
   import eu.stratosphere.pact.common.`type`.base._
 
+  /*
   implicit val pathSerializer: UDT[Path] = new UDT[Path] {
 
     override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactInteger])
@@ -165,7 +166,6 @@ trait TransitiveClosureNaiveGeneratedImplicits { this: TransitiveClosureNaive =>
     }
   }
 
-  /*
   implicit def udf1(fun: Function1[Iterator[Path], Path]): UDF1Code[Function1[Iterator[Path], Path]] = AnalyzedUDF1.defaultIterT(fun)
   implicit def udf2(fun: Function2[Path, Path, Path]): UDF2Code[Function2[Path, Path, Path]] = AnalyzedUDF2.default(fun)
   implicit def udf3(fun: Function2[Iterator[Path], Iterator[Path], Iterator[Path]]): UDF2Code[Function2[Iterator[Path], Iterator[Path], Iterator[Path]]] = AnalyzedUDF2.defaultIterTR(fun)

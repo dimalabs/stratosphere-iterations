@@ -45,9 +45,15 @@ import eu.stratosphere.pact.common.`type`.base.PactInteger
  * in these UDT's. We opt to flatten the fields, as key selection 
  * is the more desirable feature and flattening is more efficient
  * than boxing.
+ * 
+ * Note that key selection is only supported for the default
+ * getter names (_1, _2, etc). If a subclass of Product defines
+ * other field names, then a corresponding subclass of ProductUDT
+ * should also be created to allow selection on those names.
  */
 
-/* REPL script to generate the contents of this file: 
+/* REPL script to generate the contents of this file: */
+
 object ProductUDTGenerator {
 
   def generateProductUDT(arity: Int) = {
@@ -72,16 +78,23 @@ object ProductUDTGenerator {
     }
     val innerInits = mkSepList("\n") { i => "      inner" + i + " = udt" + i + ".getSerializer(indexMap" + (if (arity == 1) "" else i) + ")" }
     val init = "    override def init() = {\n" + indexInits + "\n" + innerInits + "\n    }"
+    
+    val allFieldsIndexes = "      case Seq() => " + mkSepList(" ++ ") { i => "inner" + i + ".getFieldIndex(Seq())" }
+    val noFieldsIndexes = """      case _ => throw new NoSuchElementException(selection.mkString("."))"""
+    val fieldIndexes = mkSepList("\n") { i => """      case Seq("_""" + i + """", rest @ _*) => inner""" + i + """.getFieldIndex(rest)""" }
+    val getFieldIndex = "    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {\n" + allFieldsIndexes + "\n" + fieldIndexes + "\n" + noFieldsIndexes + "\n    }"
+      
     val serialize = "    override def serialize(item: R, record: PactRecord) = {" + (mkSepList("") { i => "\n      inner" + i + ".serialize(item._" + i + ", record)" }) + "\n    }"
     val deserialize = "    override def deserialize(record: PactRecord): R = {" + (mkSepList("") { i => "\n      val x" + i + " = inner" + i + ".deserialize(record)" }) +
       "\n      factory.create(" + (mkList { "x" + _ }) + ")\n    }"
 
-    val parts = Seq(classDef, fieldTypes, createSerializer1, createSerializer2, indexVar, udtVars, innerVars, init, serialize, deserialize)
+    val parts = Seq(classDef, fieldTypes, createSerializer1, createSerializer2, indexVar, udtVars, innerVars, init, getFieldIndex, serialize, deserialize)
     (parts mkString ("\n\n")) + "\n  }\n}"
   }
 
   def print = println { (1 to 22) map { generateProductUDT(_) } mkString ("\n\n") }
 }
+
 // */
 
 class Product1UDT[T1: UDT, R <: Product1[T1]: ProductBuilder1[T1]#Factory] extends UDT[R] {
@@ -101,6 +114,12 @@ class Product1UDT[T1: UDT, R <: Product1[T1]: ProductBuilder1[T1]#Factory] exten
     override def init() = {
 
       inner1 = udt1.getSerializer(indexMap)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -134,6 +153,13 @@ class Product2UDT[T1: UDT, T2: UDT, R <: Product2[T1, T2]: ProductBuilder2[T1, T
       val (indexMap1, indexMap2) = indexMap.splitAt(udt1.numFields)
       inner1 = udt1.getSerializer(indexMap1)
       inner2 = udt2.getSerializer(indexMap2)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -173,6 +199,14 @@ class Product3UDT[T1: UDT, T2: UDT, T3: UDT, R <: Product3[T1, T2, T3]: ProductB
       inner1 = udt1.getSerializer(indexMap1)
       inner2 = udt2.getSerializer(indexMap2)
       inner3 = udt3.getSerializer(indexMap3)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -218,6 +252,15 @@ class Product4UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, R <: Product4[T1, T2, T3, 
       inner2 = udt2.getSerializer(indexMap2)
       inner3 = udt3.getSerializer(indexMap3)
       inner4 = udt4.getSerializer(indexMap4)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -269,6 +312,16 @@ class Product5UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, R <: Product5[T1,
       inner3 = udt3.getSerializer(indexMap3)
       inner4 = udt4.getSerializer(indexMap4)
       inner5 = udt5.getSerializer(indexMap5)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -326,6 +379,17 @@ class Product6UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, R <: Pro
       inner4 = udt4.getSerializer(indexMap4)
       inner5 = udt5.getSerializer(indexMap5)
       inner6 = udt6.getSerializer(indexMap6)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -389,6 +453,18 @@ class Product7UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT,
       inner5 = udt5.getSerializer(indexMap5)
       inner6 = udt6.getSerializer(indexMap6)
       inner7 = udt7.getSerializer(indexMap7)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -458,6 +534,19 @@ class Product8UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT,
       inner6 = udt6.getSerializer(indexMap6)
       inner7 = udt7.getSerializer(indexMap7)
       inner8 = udt8.getSerializer(indexMap8)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -533,6 +622,20 @@ class Product9UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT,
       inner7 = udt7.getSerializer(indexMap7)
       inner8 = udt8.getSerializer(indexMap8)
       inner9 = udt9.getSerializer(indexMap9)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -614,6 +717,21 @@ class Product10UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT
       inner8 = udt8.getSerializer(indexMap8)
       inner9 = udt9.getSerializer(indexMap9)
       inner10 = udt10.getSerializer(indexMap10)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq()) ++ inner10.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case Seq("_10", rest @ _*) => inner10.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -701,6 +819,22 @@ class Product11UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT
       inner9 = udt9.getSerializer(indexMap9)
       inner10 = udt10.getSerializer(indexMap10)
       inner11 = udt11.getSerializer(indexMap11)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq()) ++ inner10.getFieldIndex(Seq()) ++ inner11.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case Seq("_10", rest @ _*) => inner10.getFieldIndex(rest)
+      case Seq("_11", rest @ _*) => inner11.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -794,6 +928,23 @@ class Product12UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT
       inner10 = udt10.getSerializer(indexMap10)
       inner11 = udt11.getSerializer(indexMap11)
       inner12 = udt12.getSerializer(indexMap12)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq()) ++ inner10.getFieldIndex(Seq()) ++ inner11.getFieldIndex(Seq()) ++ inner12.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case Seq("_10", rest @ _*) => inner10.getFieldIndex(rest)
+      case Seq("_11", rest @ _*) => inner11.getFieldIndex(rest)
+      case Seq("_12", rest @ _*) => inner12.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -893,6 +1044,24 @@ class Product13UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT
       inner11 = udt11.getSerializer(indexMap11)
       inner12 = udt12.getSerializer(indexMap12)
       inner13 = udt13.getSerializer(indexMap13)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq()) ++ inner10.getFieldIndex(Seq()) ++ inner11.getFieldIndex(Seq()) ++ inner12.getFieldIndex(Seq()) ++ inner13.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case Seq("_10", rest @ _*) => inner10.getFieldIndex(rest)
+      case Seq("_11", rest @ _*) => inner11.getFieldIndex(rest)
+      case Seq("_12", rest @ _*) => inner12.getFieldIndex(rest)
+      case Seq("_13", rest @ _*) => inner13.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -998,6 +1167,25 @@ class Product14UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT
       inner12 = udt12.getSerializer(indexMap12)
       inner13 = udt13.getSerializer(indexMap13)
       inner14 = udt14.getSerializer(indexMap14)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq()) ++ inner10.getFieldIndex(Seq()) ++ inner11.getFieldIndex(Seq()) ++ inner12.getFieldIndex(Seq()) ++ inner13.getFieldIndex(Seq()) ++ inner14.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case Seq("_10", rest @ _*) => inner10.getFieldIndex(rest)
+      case Seq("_11", rest @ _*) => inner11.getFieldIndex(rest)
+      case Seq("_12", rest @ _*) => inner12.getFieldIndex(rest)
+      case Seq("_13", rest @ _*) => inner13.getFieldIndex(rest)
+      case Seq("_14", rest @ _*) => inner14.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -1109,6 +1297,26 @@ class Product15UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT
       inner13 = udt13.getSerializer(indexMap13)
       inner14 = udt14.getSerializer(indexMap14)
       inner15 = udt15.getSerializer(indexMap15)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq()) ++ inner10.getFieldIndex(Seq()) ++ inner11.getFieldIndex(Seq()) ++ inner12.getFieldIndex(Seq()) ++ inner13.getFieldIndex(Seq()) ++ inner14.getFieldIndex(Seq()) ++ inner15.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case Seq("_10", rest @ _*) => inner10.getFieldIndex(rest)
+      case Seq("_11", rest @ _*) => inner11.getFieldIndex(rest)
+      case Seq("_12", rest @ _*) => inner12.getFieldIndex(rest)
+      case Seq("_13", rest @ _*) => inner13.getFieldIndex(rest)
+      case Seq("_14", rest @ _*) => inner14.getFieldIndex(rest)
+      case Seq("_15", rest @ _*) => inner15.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -1226,6 +1434,27 @@ class Product16UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT
       inner14 = udt14.getSerializer(indexMap14)
       inner15 = udt15.getSerializer(indexMap15)
       inner16 = udt16.getSerializer(indexMap16)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq()) ++ inner10.getFieldIndex(Seq()) ++ inner11.getFieldIndex(Seq()) ++ inner12.getFieldIndex(Seq()) ++ inner13.getFieldIndex(Seq()) ++ inner14.getFieldIndex(Seq()) ++ inner15.getFieldIndex(Seq()) ++ inner16.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case Seq("_10", rest @ _*) => inner10.getFieldIndex(rest)
+      case Seq("_11", rest @ _*) => inner11.getFieldIndex(rest)
+      case Seq("_12", rest @ _*) => inner12.getFieldIndex(rest)
+      case Seq("_13", rest @ _*) => inner13.getFieldIndex(rest)
+      case Seq("_14", rest @ _*) => inner14.getFieldIndex(rest)
+      case Seq("_15", rest @ _*) => inner15.getFieldIndex(rest)
+      case Seq("_16", rest @ _*) => inner16.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -1349,6 +1578,28 @@ class Product17UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT
       inner15 = udt15.getSerializer(indexMap15)
       inner16 = udt16.getSerializer(indexMap16)
       inner17 = udt17.getSerializer(indexMap17)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq()) ++ inner10.getFieldIndex(Seq()) ++ inner11.getFieldIndex(Seq()) ++ inner12.getFieldIndex(Seq()) ++ inner13.getFieldIndex(Seq()) ++ inner14.getFieldIndex(Seq()) ++ inner15.getFieldIndex(Seq()) ++ inner16.getFieldIndex(Seq()) ++ inner17.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case Seq("_10", rest @ _*) => inner10.getFieldIndex(rest)
+      case Seq("_11", rest @ _*) => inner11.getFieldIndex(rest)
+      case Seq("_12", rest @ _*) => inner12.getFieldIndex(rest)
+      case Seq("_13", rest @ _*) => inner13.getFieldIndex(rest)
+      case Seq("_14", rest @ _*) => inner14.getFieldIndex(rest)
+      case Seq("_15", rest @ _*) => inner15.getFieldIndex(rest)
+      case Seq("_16", rest @ _*) => inner16.getFieldIndex(rest)
+      case Seq("_17", rest @ _*) => inner17.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -1478,6 +1729,29 @@ class Product18UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT
       inner16 = udt16.getSerializer(indexMap16)
       inner17 = udt17.getSerializer(indexMap17)
       inner18 = udt18.getSerializer(indexMap18)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq()) ++ inner10.getFieldIndex(Seq()) ++ inner11.getFieldIndex(Seq()) ++ inner12.getFieldIndex(Seq()) ++ inner13.getFieldIndex(Seq()) ++ inner14.getFieldIndex(Seq()) ++ inner15.getFieldIndex(Seq()) ++ inner16.getFieldIndex(Seq()) ++ inner17.getFieldIndex(Seq()) ++ inner18.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case Seq("_10", rest @ _*) => inner10.getFieldIndex(rest)
+      case Seq("_11", rest @ _*) => inner11.getFieldIndex(rest)
+      case Seq("_12", rest @ _*) => inner12.getFieldIndex(rest)
+      case Seq("_13", rest @ _*) => inner13.getFieldIndex(rest)
+      case Seq("_14", rest @ _*) => inner14.getFieldIndex(rest)
+      case Seq("_15", rest @ _*) => inner15.getFieldIndex(rest)
+      case Seq("_16", rest @ _*) => inner16.getFieldIndex(rest)
+      case Seq("_17", rest @ _*) => inner17.getFieldIndex(rest)
+      case Seq("_18", rest @ _*) => inner18.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -1613,6 +1887,30 @@ class Product19UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT
       inner17 = udt17.getSerializer(indexMap17)
       inner18 = udt18.getSerializer(indexMap18)
       inner19 = udt19.getSerializer(indexMap19)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq()) ++ inner10.getFieldIndex(Seq()) ++ inner11.getFieldIndex(Seq()) ++ inner12.getFieldIndex(Seq()) ++ inner13.getFieldIndex(Seq()) ++ inner14.getFieldIndex(Seq()) ++ inner15.getFieldIndex(Seq()) ++ inner16.getFieldIndex(Seq()) ++ inner17.getFieldIndex(Seq()) ++ inner18.getFieldIndex(Seq()) ++ inner19.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case Seq("_10", rest @ _*) => inner10.getFieldIndex(rest)
+      case Seq("_11", rest @ _*) => inner11.getFieldIndex(rest)
+      case Seq("_12", rest @ _*) => inner12.getFieldIndex(rest)
+      case Seq("_13", rest @ _*) => inner13.getFieldIndex(rest)
+      case Seq("_14", rest @ _*) => inner14.getFieldIndex(rest)
+      case Seq("_15", rest @ _*) => inner15.getFieldIndex(rest)
+      case Seq("_16", rest @ _*) => inner16.getFieldIndex(rest)
+      case Seq("_17", rest @ _*) => inner17.getFieldIndex(rest)
+      case Seq("_18", rest @ _*) => inner18.getFieldIndex(rest)
+      case Seq("_19", rest @ _*) => inner19.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -1754,6 +2052,31 @@ class Product20UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT
       inner18 = udt18.getSerializer(indexMap18)
       inner19 = udt19.getSerializer(indexMap19)
       inner20 = udt20.getSerializer(indexMap20)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq()) ++ inner10.getFieldIndex(Seq()) ++ inner11.getFieldIndex(Seq()) ++ inner12.getFieldIndex(Seq()) ++ inner13.getFieldIndex(Seq()) ++ inner14.getFieldIndex(Seq()) ++ inner15.getFieldIndex(Seq()) ++ inner16.getFieldIndex(Seq()) ++ inner17.getFieldIndex(Seq()) ++ inner18.getFieldIndex(Seq()) ++ inner19.getFieldIndex(Seq()) ++ inner20.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case Seq("_10", rest @ _*) => inner10.getFieldIndex(rest)
+      case Seq("_11", rest @ _*) => inner11.getFieldIndex(rest)
+      case Seq("_12", rest @ _*) => inner12.getFieldIndex(rest)
+      case Seq("_13", rest @ _*) => inner13.getFieldIndex(rest)
+      case Seq("_14", rest @ _*) => inner14.getFieldIndex(rest)
+      case Seq("_15", rest @ _*) => inner15.getFieldIndex(rest)
+      case Seq("_16", rest @ _*) => inner16.getFieldIndex(rest)
+      case Seq("_17", rest @ _*) => inner17.getFieldIndex(rest)
+      case Seq("_18", rest @ _*) => inner18.getFieldIndex(rest)
+      case Seq("_19", rest @ _*) => inner19.getFieldIndex(rest)
+      case Seq("_20", rest @ _*) => inner20.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -1901,6 +2224,32 @@ class Product21UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT
       inner19 = udt19.getSerializer(indexMap19)
       inner20 = udt20.getSerializer(indexMap20)
       inner21 = udt21.getSerializer(indexMap21)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq()) ++ inner10.getFieldIndex(Seq()) ++ inner11.getFieldIndex(Seq()) ++ inner12.getFieldIndex(Seq()) ++ inner13.getFieldIndex(Seq()) ++ inner14.getFieldIndex(Seq()) ++ inner15.getFieldIndex(Seq()) ++ inner16.getFieldIndex(Seq()) ++ inner17.getFieldIndex(Seq()) ++ inner18.getFieldIndex(Seq()) ++ inner19.getFieldIndex(Seq()) ++ inner20.getFieldIndex(Seq()) ++ inner21.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case Seq("_10", rest @ _*) => inner10.getFieldIndex(rest)
+      case Seq("_11", rest @ _*) => inner11.getFieldIndex(rest)
+      case Seq("_12", rest @ _*) => inner12.getFieldIndex(rest)
+      case Seq("_13", rest @ _*) => inner13.getFieldIndex(rest)
+      case Seq("_14", rest @ _*) => inner14.getFieldIndex(rest)
+      case Seq("_15", rest @ _*) => inner15.getFieldIndex(rest)
+      case Seq("_16", rest @ _*) => inner16.getFieldIndex(rest)
+      case Seq("_17", rest @ _*) => inner17.getFieldIndex(rest)
+      case Seq("_18", rest @ _*) => inner18.getFieldIndex(rest)
+      case Seq("_19", rest @ _*) => inner19.getFieldIndex(rest)
+      case Seq("_20", rest @ _*) => inner20.getFieldIndex(rest)
+      case Seq("_21", rest @ _*) => inner21.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {
@@ -2054,6 +2403,33 @@ class Product22UDT[T1: UDT, T2: UDT, T3: UDT, T4: UDT, T5: UDT, T6: UDT, T7: UDT
       inner20 = udt20.getSerializer(indexMap20)
       inner21 = udt21.getSerializer(indexMap21)
       inner22 = udt22.getSerializer(indexMap22)
+    }
+
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => inner1.getFieldIndex(Seq()) ++ inner2.getFieldIndex(Seq()) ++ inner3.getFieldIndex(Seq()) ++ inner4.getFieldIndex(Seq()) ++ inner5.getFieldIndex(Seq()) ++ inner6.getFieldIndex(Seq()) ++ inner7.getFieldIndex(Seq()) ++ inner8.getFieldIndex(Seq()) ++ inner9.getFieldIndex(Seq()) ++ inner10.getFieldIndex(Seq()) ++ inner11.getFieldIndex(Seq()) ++ inner12.getFieldIndex(Seq()) ++ inner13.getFieldIndex(Seq()) ++ inner14.getFieldIndex(Seq()) ++ inner15.getFieldIndex(Seq()) ++ inner16.getFieldIndex(Seq()) ++ inner17.getFieldIndex(Seq()) ++ inner18.getFieldIndex(Seq()) ++ inner19.getFieldIndex(Seq()) ++ inner20.getFieldIndex(Seq()) ++ inner21.getFieldIndex(Seq()) ++ inner22.getFieldIndex(Seq())
+      case Seq("_1", rest @ _*) => inner1.getFieldIndex(rest)
+      case Seq("_2", rest @ _*) => inner2.getFieldIndex(rest)
+      case Seq("_3", rest @ _*) => inner3.getFieldIndex(rest)
+      case Seq("_4", rest @ _*) => inner4.getFieldIndex(rest)
+      case Seq("_5", rest @ _*) => inner5.getFieldIndex(rest)
+      case Seq("_6", rest @ _*) => inner6.getFieldIndex(rest)
+      case Seq("_7", rest @ _*) => inner7.getFieldIndex(rest)
+      case Seq("_8", rest @ _*) => inner8.getFieldIndex(rest)
+      case Seq("_9", rest @ _*) => inner9.getFieldIndex(rest)
+      case Seq("_10", rest @ _*) => inner10.getFieldIndex(rest)
+      case Seq("_11", rest @ _*) => inner11.getFieldIndex(rest)
+      case Seq("_12", rest @ _*) => inner12.getFieldIndex(rest)
+      case Seq("_13", rest @ _*) => inner13.getFieldIndex(rest)
+      case Seq("_14", rest @ _*) => inner14.getFieldIndex(rest)
+      case Seq("_15", rest @ _*) => inner15.getFieldIndex(rest)
+      case Seq("_16", rest @ _*) => inner16.getFieldIndex(rest)
+      case Seq("_17", rest @ _*) => inner17.getFieldIndex(rest)
+      case Seq("_18", rest @ _*) => inner18.getFieldIndex(rest)
+      case Seq("_19", rest @ _*) => inner19.getFieldIndex(rest)
+      case Seq("_20", rest @ _*) => inner20.getFieldIndex(rest)
+      case Seq("_21", rest @ _*) => inner21.getFieldIndex(rest)
+      case Seq("_22", rest @ _*) => inner22.getFieldIndex(rest)
+      case _ => throw new NoSuchElementException(selection.mkString("."))
     }
 
     override def serialize(item: R, record: PactRecord) = {

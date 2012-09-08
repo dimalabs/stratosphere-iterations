@@ -34,6 +34,11 @@ final class DoubleUDT extends UDT[Double] {
 
     @transient private var pactField = new PactDouble()
 
+    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+      case Seq() => List(index)
+      case _     => throw new NoSuchElementException(selection.mkString("."))
+    }
+
     override def serialize(item: Double, record: PactRecord) = {
       if (index >= 0) {
         pactField.setValue(item)
