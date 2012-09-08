@@ -218,7 +218,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
 
         case OpaqueDescriptor(id, _, _) => {
           val endPath = (path, Apply(Select(env.mkSelectSerializer(id), "getFieldIndex"), List(mkSeq(Nil))))
-          val restPath = (path :+ null, Apply(Select(env.mkSelectSerializer(id), "getFieldIndex"), List(Ident("rrrest"))))
+          val restPath = (path :+ null, Apply(Select(env.mkSelectSerializer(id), "getFieldIndex"), List(Ident("rest"))))
           Seq(endPath, restPath)
         }
 
@@ -231,7 +231,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
         val fun = Apply(seqUnapply, List(mkIdent(unapplyDummy)))
         
         val args = path map {
-          case null => Bind("rrrest", Star(Ident("_")))
+          case null => Bind("rest", Star(Ident("_")))
           case s => Literal(s)
         }
         

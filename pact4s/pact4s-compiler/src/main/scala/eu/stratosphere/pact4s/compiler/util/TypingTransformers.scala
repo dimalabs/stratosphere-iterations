@@ -76,7 +76,9 @@ trait TypingTransformers {
     }
 
     protected def post(tree: Tree) = {
-      if (tree.pos eq NoPosition) tree setPos curTree.pos
+      val pos = curPos
+      tree filter { _.pos eq NoPosition } foreach { _.pos = pos }
+
       setScope(envs.head._2)
       envs = envs.tail
     }

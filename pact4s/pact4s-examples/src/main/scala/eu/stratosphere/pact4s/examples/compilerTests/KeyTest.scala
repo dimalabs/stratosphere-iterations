@@ -43,13 +43,13 @@ class KeyTest {
   */
 
   val udt = implicitly[UDT[(Int, (Int, Int))]]
-  
+
   def testMatch(testSeq: Seq[String]): Int = testSeq match {
-    case Seq()                 => 0
-    case Seq("fst")            => 1
-    case Seq("fst", "snd")     => 2
-    case Seq("fst", rest @ _*) => 1 + rest.size
-    case _                     => throw new NoSuchElementException
+    case Seq()                        => 0
+    case Seq("fst")                   => 1
+    case Seq("fst", "snd")            => 2
+    case Seq("fst", "snd", rest @ _*) => 2 + rest.size
+    case _                            => throw new NoSuchElementException
   }
 } 
 
