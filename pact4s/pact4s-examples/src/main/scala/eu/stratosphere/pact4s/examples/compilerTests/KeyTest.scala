@@ -4,7 +4,6 @@ import eu.stratosphere.pact4s.common.analyzer._
 
 class KeyTest {
 
-  /*
   def toFS[T1: UDT, R](fun: FieldSelectorCode[T1 => R]) = fun
 
   def fst(x: (Int, Int, Int)): Int = x._1
@@ -26,7 +25,7 @@ class KeyTest {
     val q = IntPair(x, z)
     q.y
   } 
-  val test3 = toFS { x: (Int, Int, Int) => x._1 }
+  val test3 = toFS { x: (Int, Int, Int) => x }
   val test4 = toFS { testUnapply _ }
 
   def testUnapply(q: (Int, (Int, Int))) = {
@@ -40,16 +39,5 @@ class KeyTest {
   }
 
   val testSeq = Seq[String]("fst", "snd")
-  */
-
-  val udt = implicitly[UDT[(Int, (Int, Int))]]
-
-  def testMatch(testSeq: Seq[String]): Int = testSeq match {
-    case Seq()                        => 0
-    case Seq("fst")                   => 1
-    case Seq("fst", "snd")            => 2
-    case Seq("fst", "snd", rest @ _*) => 2 + rest.size
-    case _                            => throw new NoSuchElementException
-  }
 } 
 

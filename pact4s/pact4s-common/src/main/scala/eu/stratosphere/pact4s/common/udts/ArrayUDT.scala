@@ -45,10 +45,7 @@ final class ArrayUDT[T](implicit udtInst: UDT[T], m: Manifest[T]) extends UDT[Ar
       inner = udt.getSerializerWithDefaultLayout
     }
 
-    override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
-      case Seq() => List(index)
-      case _     => throw new NoSuchElementException(selection.mkString("."))
-    }
+    override def getFieldIndex(selection: Seq[String]): List[Int] = invalidSelection(selection)
 
     override def serialize(items: Array[T], record: PactRecord) = {
       // This method will be reentrant if T contains an Array[T]

@@ -33,8 +33,6 @@ trait Definitions { this: Pact4sPlugin =>
     lazy val objectInputStreamClass = definitions.getClass("java.io.ObjectInputStream")
     lazy val liftMethod = definitions.getMember(definitions.getModule("scala.reflect.Code"), "lift")
 
-    lazy val noSuchElementExceptionTpe = definitions.getClass("java.util.NoSuchElementException").tpe
-    
     lazy val unanalyzedUdt = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.UDT"), "unanalyzedUDT")
     lazy val unanalyzedFieldSelector = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.FieldSelector"), "unanalyzedFieldSelector")
     lazy val unanalyzedFieldSelectorCode = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.FieldSelector"), "unanalyzedFieldSelectorCode")

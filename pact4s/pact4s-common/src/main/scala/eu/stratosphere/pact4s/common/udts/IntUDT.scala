@@ -36,7 +36,7 @@ final class IntUDT extends UDT[Int] {
 
     override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
       case Seq() => List(index)
-      case _     => throw new NoSuchElementException(selection.mkString("."))
+      case _     => invalidSelection(selection)
     }
 
     override def serialize(item: Int, record: PactRecord) = {

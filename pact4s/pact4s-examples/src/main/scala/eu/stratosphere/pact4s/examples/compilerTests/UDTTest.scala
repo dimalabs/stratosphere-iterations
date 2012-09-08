@@ -26,7 +26,6 @@ import eu.stratosphere.pact.common.`type`.base._
 
 import scala.collection.JavaConversions._
 
-/*
 class GenericTest[T] {
 
   val testFun: UDT[T] => UDT[(Int, T)] = { implicit udtEv: UDT[T] => implicitly[UDT[(Int, T)]] }
@@ -189,4 +188,3 @@ class Outer {
     private val outerUdt = implicitly[UDT[Outer.this.Test[Y, Z]]]
   }
 }
-*/

@@ -64,6 +64,16 @@ trait UDT[T] extends Serializable {
 abstract class UDTSerializer[T] extends Serializable {
 
   protected[analyzer] def init(): Unit = ()
+  
+  protected def invalidSelection(selection: Seq[String]) = {
+    val sel = selection match {
+      case null => "<null>"
+      case Seq() => "<all>"
+      case _ => selection.mkString(".")
+    }
+    throw new UDT.UDTSelectionFailedException("Invalid selection: " + sel)
+  }
+
   def getFieldIndex(selection: Seq[String]): List[Int]
   def serialize(item: T, record: PactRecord)
   def deserialize(record: PactRecord): T
@@ -72,6 +82,7 @@ abstract class UDTSerializer[T] extends Serializable {
 trait UDTLowPriorityImplicits {
 
   class UDTAnalysisFailedException extends RuntimeException("UDT analysis failed. This should have been caught at compile time.")
+  class UDTSelectionFailedException(msg: String) extends RuntimeException(msg)
 
   implicit def unanalyzedUDT[T]: UDT[T] = throw new UDTAnalysisFailedException
 }

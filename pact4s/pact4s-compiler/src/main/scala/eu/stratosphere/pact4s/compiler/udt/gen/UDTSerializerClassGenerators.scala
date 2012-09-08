@@ -243,7 +243,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
         val unapplyDummy = methodSym.newValue(curPos, nme.SELECTOR_DUMMY) setFlag Flags.SYNTHETIC setInfo mkSeqOf(stringTpe)
         
         val cases = mkCases(desc, Seq()) map { case (path, idxs) => CaseDef(mkPat(unapplyDummy, path), EmptyTree, idxs) }
-        val errCase = CaseDef(Ident("_"), EmptyTree, mkThrow(noSuchElementExceptionTpe, Apply(Select(Ident("selection"), "mkString"), List(Literal(".")))))
+        val errCase = CaseDef(Ident("_"), EmptyTree, Apply(Select(This(udtSerClassSym), "invalidSelection"), List(Ident("selection"))))
         Match(Ident("selection"), (cases :+ errCase).toList)
       }
     }
