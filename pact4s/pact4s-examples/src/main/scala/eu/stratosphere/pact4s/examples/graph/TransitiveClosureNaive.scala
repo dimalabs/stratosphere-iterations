@@ -31,20 +31,19 @@ class TransitiveClosureNaiveDescriptor extends PactDescriptor[TransitiveClosureN
   override def createInstance(args: Map[Int, String]) = new TransitiveClosureNaive(args.getOrElse(1, "vertices"), args.getOrElse(2, "edges"), args.getOrElse(3, "output"))
 }
 
-class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOutput: String) extends PactProgram with TransitiveClosureNaiveGeneratedImplicits {
+class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOutput: String) extends PactProgram {
 
   val vertices = new DataSource(verticesInput, DelimetedDataSourceFormat(parseVertex))
   val edges = new DataSource(edgesInput, DelimetedDataSourceFormat(parseEdge))
   val output = new DataSink(pathsOutput, DelimetedDataSinkFormat(formatOutput))
 
-  //val transitiveClosure = vertices iterate createClosure
   val transitiveClosure = createClosure iterate (s0 = vertices)
 
   override def outputs = output <~ transitiveClosure
 
   def createClosure = (paths: DataStream[Path]) => {
 
-    val allNewPaths = paths join edges on selTo(getTo) isEqualTo selFrom(getFrom) map joinPaths
+    val allNewPaths = paths join edges on getTo isEqualTo getFrom map joinPaths
     val shortestPaths = allNewPaths groupBy getEdge combine { _ minBy { _.dist } }
 
     val delta = paths cogroup shortestPaths on getEdge isEqualTo getEdge flatMap { (oldPaths, newPaths) =>
@@ -76,10 +75,7 @@ class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOut
 
   case class Path(from: Int, to: Int, dist: Int)
 
-  def parseVertex = (line: String) => {
-    val v = line.toInt
-    Path(v, v, 0)
-  }
+  def parseVertex = (line: String) => { val v = line.toInt; Path(v, v, 0) }
 
   val EdgeInputPattern = """(\d+)\|(\d+)\|""".r
 
@@ -88,92 +84,5 @@ class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOut
   }
 
   def formatOutput = (path: Path) => "%d|%d|%d".format(path.from, path.to, path.dist)
-}
-
-trait TransitiveClosureNaiveGeneratedImplicits { this: TransitiveClosureNaive =>
-
-  import java.io.ObjectInputStream
-
-  import eu.stratosphere.pact4s.common.analyzer._
-
-  import eu.stratosphere.pact.common.`type`._
-  import eu.stratosphere.pact.common.`type`.base._
-
-  /*
-  implicit val pathSerializer: UDT[Path] = new UDT[Path] {
-
-    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactInteger])
-
-    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[Path] {
-
-      private val ix0 = indexMap(0)
-      private val ix1 = indexMap(1)
-      private val ix2 = indexMap(2)
-
-      @transient private var w0 = new PactInteger()
-      @transient private var w1 = new PactInteger()
-      @transient private var w2 = new PactInteger()
-
-      override def serialize(item: Path, record: PactRecord) = {
-        val Path(v0, v1, v2) = item
-
-        if (ix0 >= 0) {
-          w0.setValue(v0)
-          record.setField(ix0, w0)
-        }
-
-        if (ix1 >= 0) {
-          w1.setValue(v1)
-          record.setField(ix1, w1)
-        }
-
-        if (ix2 >= 0) {
-          w2.setValue(v2)
-          record.setField(ix2, w2)
-        }
-      }
-
-      override def deserialize(record: PactRecord): Path = {
-
-        var v0: Int = 0
-        var v1: Int = 0
-        var v2: Int = 0
-
-        if (ix0 >= 0) {
-          record.getFieldInto(ix0, w0)
-          v0 = w0.getValue()
-        }
-
-        if (ix1 >= 0) {
-          record.getFieldInto(ix1, w1)
-          v1 = w1.getValue()
-        }
-
-        if (ix2 >= 0) {
-          record.getFieldInto(ix2, w2)
-          v2 = w2.getValue()
-        }
-
-        Path(v0, v1, v2)
-      }
-
-      private def readObject(in: ObjectInputStream) = {
-        in.defaultReadObject()
-        w0 = new PactInteger()
-        w1 = new PactInteger()
-        w2 = new PactInteger()
-      }
-    }
-  }
-
-  implicit def udf1(fun: Function1[Iterator[Path], Path]): UDF1Code[Function1[Iterator[Path], Path]] = AnalyzedUDF1.defaultIterT(fun)
-  implicit def udf2(fun: Function2[Path, Path, Path]): UDF2Code[Function2[Path, Path, Path]] = AnalyzedUDF2.default(fun)
-  implicit def udf3(fun: Function2[Iterator[Path], Iterator[Path], Iterator[Path]]): UDF2Code[Function2[Iterator[Path], Iterator[Path], Iterator[Path]]] = AnalyzedUDF2.defaultIterTR(fun)
-  implicit def udfOut(fun: Function1[Path, String]): UDF1Code[Function1[Path, String]] = AnalyzedUDF1.default(fun)
-  */
-
-  implicit def selEdge(fun: Function1[Path, (Int, Int)]): FieldSelectorCode[Function1[Path, (Int, Int)]] = AnalyzedFieldSelector(fun, List(0, 1))
-  def selFrom(fun: Function1[Path, Int]): FieldSelectorCode[Function1[Path, Int]] = AnalyzedFieldSelector(fun, List(0))
-  def selTo(fun: Function1[Path, Int]): FieldSelectorCode[Function1[Path, Int]] = AnalyzedFieldSelector(fun, List(1))
 }
 

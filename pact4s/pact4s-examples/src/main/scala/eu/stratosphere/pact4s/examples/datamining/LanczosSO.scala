@@ -31,7 +31,7 @@ class LanczosSODescriptor extends PactDescriptor[LanczosSO] {
     args.getOrElse(4, "A"), args.getOrElse(5, "b"), args.getOrElse(6, "λ"), args.getOrElse(7, "Y"))
 }
 
-class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outputLambda: String, outputY: String) extends PactProgram with LanczosSOGeneratedImplicits {
+class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outputLambda: String, outputY: String) extends PactProgram {
 
   val A = new DataSource(inputA, DelimetedDataSourceFormat(parseCell))
   val b = new DataSource(inputB, DelimetedDataSourceFormat(parseCell))
@@ -58,8 +58,7 @@ class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outp
   val (q, d) = decompose(t)
 
   val diag = d filter { c => c.col == c.row } map { TaggedItem("", _) }
-  val diagGrouped = diag groupBy { _.tag }
-  val λ = diagGrouped reduce { eigenValues =>
+  val λ = diag groupBy { _.tag } reduce { eigenValues =>
     val highToLow = eigenValues.toSeq.sortBy(tc => abs(tc.item.value))(Ordering[Double].reverse)
     highToLow take (k) map { tc => tc.item.copy(row = 0) }
   } flatMap { c => c }
@@ -149,7 +148,6 @@ class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outp
   }
 
   def union[T: analyzer.UDT](x: DataStream[T], y: DataStream[T]) = {
-    implicit def sel(fun: Function1[(Int, T), Int]): analyzer.FieldSelectorCode[Function1[(Int, T), Int]] = analyzer.AnalyzedFieldSelector(fun, List[Int](0))
     (x map { (0, _) }) cogroup (y map { (0, _) }) on { _._1 } isEqualTo { _._1 } flatMap { (xs, ys) => (xs map { _._2 }) ++ (ys map { _._2 }) }
   }
 
@@ -181,129 +179,3 @@ class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outp
   def formatCell = (cell: Cell) => "%d|%d|%.2f|".format(cell.row, cell.col, cell.value)
 }
 
-trait LanczosSOGeneratedImplicits { this: LanczosSO =>
-
-  import java.io.ObjectInputStream
-
-  import eu.stratosphere.pact4s.common.analyzer._
-
-  import eu.stratosphere.pact.common.`type`._
-  import eu.stratosphere.pact.common.`type`.base._
-
-  /*
-  implicit def cellSerializer: UDT[Cell] = new UDT[Cell] {
-
-    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactDouble])
-
-    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[Cell] {
-
-      private val ix0 = indexMap(0)
-      private val ix1 = indexMap(1)
-      private val ix2 = indexMap(2)
-
-      @transient private var w0 = new PactInteger()
-      @transient private var w1 = new PactInteger()
-      @transient private var w2 = new PactDouble()
-
-      override def serialize(item: Cell, record: PactRecord) = {
-        val Cell(v0, v1, v2) = item
-
-        if (ix0 >= 0) {
-          w0.setValue(v0)
-          record.setField(ix0, w0)
-        }
-
-        if (ix1 >= 0) {
-          w1.setValue(v1)
-          record.setField(ix1, w1)
-        }
-
-        if (ix2 >= 0) {
-          w2.setValue(v2)
-          record.setField(ix2, w2)
-        }
-      }
-
-      override def deserialize(record: PactRecord): Cell = {
-        var v0: Int = 0
-        var v1: Int = 0
-        var v2: Double = 0
-
-        if (ix0 >= 0) {
-          record.getFieldInto(ix0, w0)
-          v0 = w0.getValue()
-        }
-
-        if (ix1 >= 0) {
-          record.getFieldInto(ix1, w1)
-          v1 = w1.getValue()
-        }
-
-        if (ix2 >= 0) {
-          record.getFieldInto(ix2, w2)
-          v2 = w2.getValue()
-        }
-
-        Cell(v0, v1, v2)
-      }
-
-      private def readObject(in: ObjectInputStream) = {
-        in.defaultReadObject()
-        w0 = new PactInteger()
-        w1 = new PactInteger()
-        w2 = new PactDouble()
-      }
-    }
-  }
-
-  implicit def seqUDT[T: UDT]: UDT[Seq[T]] = new udts.ListUDT[T, Seq]()(implicitly[UDT[T]], Seq.canBuildFrom)
-
-  implicit def taggedItemSerializer[T: UDT]: UDT[TaggedItem[T]] = new UDT[TaggedItem[T]] {
-
-    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactString]) ++ implicitly[UDT[T]].fieldTypes
-
-    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[TaggedItem[T]] {
-
-      private val ix0 = indexMap(0)
-      private val indexMap1 = indexMap.drop(1)
-
-      @transient private var w0 = new PactString()
-      private val inner1 = implicitly[UDT[T]].getSerializer(indexMap1)
-
-      override def serialize(item: TaggedItem[T], record: PactRecord) = {
-        val TaggedItem(v0, v1) = item
-
-        if (ix0 >= 0) {
-          w0.setValue(v0)
-          record.setField(ix0, w0)
-        }
-
-        inner1.serialize(v1, record)
-      }
-
-      override def deserialize(record: PactRecord): TaggedItem[T] = {
-        var v0: String = ""
-
-        if (ix0 >= 0) {
-          record.getFieldInto(ix0, w0)
-          v0 = w0.getValue()
-        }
-
-        val v1 = inner1.deserialize(record)
-
-        TaggedItem(v0, v1)
-      }
-
-      private def readObject(in: ObjectInputStream) = {
-        in.defaultReadObject()
-        w0 = new PactString()
-      }
-    }
-  }
-  */
-
-  // These defs are non-functional and only prevent compiler errors about missing key selectors
-  implicit def sel0(fun: Function1[TaggedItem[Cell], String]): FieldSelectorCode[Function1[TaggedItem[Cell], String]] = AnalyzedFieldSelector(fun, List[Int]())
-  implicit def sel1(fun: Function1[Cell, Int]): FieldSelectorCode[Function1[Cell, Int]] = AnalyzedFieldSelector(fun, List[Int]())
-  implicit def sel2(fun: Function1[(Int, TaggedItem[Cell]), Int]): FieldSelectorCode[Function1[(Int, TaggedItem[Cell]), Int]] = AnalyzedFieldSelector(fun, List[Int]())
-}

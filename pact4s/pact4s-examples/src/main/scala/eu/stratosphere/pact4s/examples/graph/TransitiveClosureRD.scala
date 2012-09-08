@@ -34,23 +34,22 @@ class TransitiveClosureRDDescriptor extends PactDescriptor[TransitiveClosureRD] 
   override def createInstance(args: Map[Int, String]) = new TransitiveClosureRD(args.getOrElse(1, "vertices"), args.getOrElse(2, "edges"), args.getOrElse(3, "output"))
 }
 
-class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput: String) extends PactProgram with TransitiveClosureRDGeneratedImplicits {
+class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput: String) extends PactProgram {
 
   val vertices = new DataSource(verticesInput, DelimetedDataSourceFormat(parseVertex))
   val edges = new DataSource(edgesInput, DelimetedDataSourceFormat(parseEdge))
   val output = new DataSink(pathsOutput, DelimetedDataSinkFormat(formatOutput))
 
-  //val transitiveClosure = vertices distinctBy getEdge untilEmpty edges iterate createClosure
   val transitiveClosure = createClosure iterate (s0 = vertices distinctBy getEdge, ws0 = edges)
 
   override def outputs = output <~ transitiveClosure
 
   def createClosure = (c: DataStream[Path], x: DataStream[Path]) => {
 
-    val cNewPaths = x join c on selTo(getTo) isEqualTo selFrom(getFrom) map joinPaths
+    val cNewPaths = x join c on getTo isEqualTo getFrom map joinPaths
     val c1 = cNewPaths cogroup c on getEdge isEqualTo getEdge map selectShortestDistance
 
-    val xNewPaths = x join x on selTo(getTo) isEqualTo selFrom(getFrom) map joinPaths
+    val xNewPaths = x join x on getTo isEqualTo getFrom map joinPaths
     val x1 = xNewPaths cogroup c1 on getEdge isEqualTo getEdge flatMap excludeKnownPaths
 
     cNewPaths.hints = PactName("cNewPaths")
@@ -63,12 +62,7 @@ class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput
 
   def selectShortestDistance = (dist1: Iterator[Path], dist2: Iterator[Path]) => (dist1 ++ dist2) minBy { _.dist }
 
-  def excludeKnownPaths = (x: Iterator[Path], c: Iterator[Path]) => {
-    if (c.isEmpty)
-      x
-    else
-      Iterator.empty
-  }
+  def excludeKnownPaths = (x: Iterator[Path], c: Iterator[Path]) => if (c.isEmpty) x else Iterator.empty
 
   def joinPaths = (p1: Path, p2: Path) => (p1, p2) match {
     case (Path(from, _, dist1), Path(_, to, dist2)) => Path(from, to, dist1 + dist2)
@@ -85,10 +79,7 @@ class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput
 
   case class Path(from: Int, to: Int, dist: Int)
 
-  def parseVertex = (line: String) => {
-    val v = line.toInt
-    Path(v, v, 0)
-  }
+  def parseVertex = (line: String) => { val v = line.toInt; Path(v, v, 0) }
 
   val EdgeInputPattern = """(\d+)\|(\d+)\|""".r
 
@@ -97,94 +88,5 @@ class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput
   }
 
   def formatOutput = (path: Path) => "%d|%d|%d".format(path.from, path.to, path.dist)
-}
-
-trait TransitiveClosureRDGeneratedImplicits { this: TransitiveClosureRD =>
-
-  import java.io.ObjectInputStream
-
-  import eu.stratosphere.pact4s.common.analyzer._
-
-  import eu.stratosphere.pact.common.`type`._
-  import eu.stratosphere.pact.common.`type`.base._
-
-  /*
-  implicit val pathSerializer: UDT[Path] = new UDT[Path] {
-
-    override val fieldTypes = Array[Class[_ <: Value]](classOf[PactInteger], classOf[PactInteger], classOf[PactInteger])
-
-    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[Path] {
-
-      private val ix0 = indexMap(0)
-      private val ix1 = indexMap(1)
-      private val ix2 = indexMap(2)
-
-      @transient private var w0 = new PactInteger()
-      @transient private var w1 = new PactInteger()
-      @transient private var w2 = new PactInteger()
-
-      override def serialize(item: Path, record: PactRecord) = {
-        val Path(v0, v1, v2) = item
-
-        if (ix0 >= 0) {
-          w0.setValue(v0)
-          record.setField(ix0, w0)
-        }
-
-        if (ix1 >= 0) {
-          w1.setValue(v1)
-          record.setField(ix1, w1)
-        }
-
-        if (ix2 >= 0) {
-          w2.setValue(v2)
-          record.setField(ix2, w2)
-        }
-      }
-
-      override def deserialize(record: PactRecord): Path = {
-
-        var v0: Int = 0
-        var v1: Int = 0
-        var v2: Int = 0
-
-        if (ix0 >= 0) {
-          record.getFieldInto(ix0, w0)
-          v0 = w0.getValue()
-        }
-
-        if (ix1 >= 0) {
-          record.getFieldInto(ix1, w1)
-          v1 = w1.getValue()
-        }
-
-        if (ix2 >= 0) {
-          record.getFieldInto(ix2, w2)
-          v2 = w2.getValue()
-        }
-
-        Path(v0, v1, v2)
-      }
-
-      private def readObject(in: ObjectInputStream) = {
-        in.defaultReadObject()
-        w0 = new PactInteger()
-        w1 = new PactInteger()
-        w2 = new PactInteger()
-      }
-    }
-  }
-  */
-
-  /*
-  implicit def udf1(fun: Function2[Path, Path, Path]): UDF2Code[Function2[Path, Path, Path]] = AnalyzedUDF2.default(fun)
-  implicit def udf2(fun: Function2[Iterator[Path], Iterator[Path], Path]): UDF2Code[Function2[Iterator[Path], Iterator[Path], Path]] = AnalyzedUDF2.defaultIterT(fun)
-  implicit def udf3(fun: Function2[Iterator[Path], Iterator[Path], Iterator[Path]]): UDF2Code[Function2[Iterator[Path], Iterator[Path], Iterator[Path]]] = AnalyzedUDF2.defaultIterTR(fun)
-  implicit def udfOut(fun: Function1[Path, String]): UDF1Code[Function1[Path, String]] = AnalyzedUDF1.default(fun)
-  */
-
-  implicit def selEdge(fun: Function1[Path, (Int, Int)]): FieldSelectorCode[Function1[Path, (Int, Int)]] = AnalyzedFieldSelector(fun, List(0, 1))
-  def selFrom(fun: Function1[Path, Int]): FieldSelectorCode[Function1[Path, Int]] = AnalyzedFieldSelector[Path, Int](implicitly[UDT[Path]], List(0))
-  def selTo(fun: Function1[Path, Int]): FieldSelectorCode[Function1[Path, Int]] = AnalyzedFieldSelector[Path, Int](implicitly[UDT[Path]], List(1))
 }
 
