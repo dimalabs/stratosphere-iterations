@@ -20,6 +20,9 @@ package eu.stratosphere.pact4s.common.analyzer
 import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact.common.contract._
 
+import scala.collection.JavaConversions._
+import java.util.{ List => JList }
+
 trait GlobalSchemaGenerator {
 
   def initGlobalSchema(outputs: Seq[DataSink4sContract[_]]) = {
@@ -277,6 +280,88 @@ trait GlobalSchemaGenerator {
 
         GlobalizeResult(newFreePos, rUDF.getOutputFields, rUDF.getForwardedFields.toSet)
       }
+
+      case Union4sContract(inputs, udt, unionUDF) => {
+
+        var newFreePos = freePos
+
+        if (!unionUDF.isGlobalized) {
+
+          // Determine where this contract's children should write their output 
+          val freePos1 = unionUDF.globalize(Map(), freePos, predeterminedOutputLocations)
+
+          val (freePos3, allForwards) = inputs.toList.foldLeft((freePos1, List[Set[Int]]())) { (ret, input) =>
+            
+            val (freePos1, allForwards) = ret
+            
+            val (freePos2, exclusiveInput) = input match {
+              
+              // This input contract is a child of multiple contracts, so its
+              // output must be physically copied into the expected position.
+              case input: Pact4sContract if input.outDegree > 1 => {
+                
+                val GlobalizeResult(freePos2, inputLocations, _) = globalizeContract(freePos1, input, proxies, None)
+                
+                val mapper = new MapContract(Copy4sContract.newBuilder.input(input)) with Copy4sContract {
+                  override val copyUDF = new AnalyzedUDF1 {
+                    override val readFields = getInitialReadFields(inputLocations.size)
+                    override val writeFields = getInitialWriteFields(inputLocations.size)
+                  }
+                }
+                
+                val idx = inputs.indexOf(input)
+                inputs.set(idx, mapper)                
+                mapper.setName("Union Copy " + idx)
+                
+                (freePos2, mapper)
+              }
+              
+              // This input contract is not a child of any other contract, so it's 
+              // safe to just force its output fields into the expected position.
+              case _ => (freePos1, input)
+            }
+            
+            val GlobalizeResult(freePos3, _, forwards) = globalizeContract(freePos2, exclusiveInput, proxies, Some(unionUDF.getOutputFields))
+            (freePos3, forwards :: allForwards)
+          }
+          
+          newFreePos = freePos3
+          
+          // Union forwards the output fields it reserved for its 
+          // children, plus the set intersection of their forwards.          
+          val writeFields = unionUDF.getWriteFields filter { _ >= 0 } toSet
+          val inputFields = writeFields union (allForwards reduce { _ intersect _ })
+
+          for (pos <- inputFields)
+            unionUDF.setAmbientFieldBehavior(pos, AmbientFieldBehavior.Forward)
+
+          prepareContract(contract4s)
+        }
+
+        GlobalizeResult(newFreePos, unionUDF.getOutputFields, unionUDF.getForwardedFields.toSet)
+      }
+
+      case Copy4sContract(input, copyUDF) => {
+
+        var newFreePos = freePos
+
+        if (!copyUDF.isGlobalized) {
+
+          val GlobalizeResult(freePos1, inputLocations, forwards) = globalizeContract(freePos, input, proxies, None)
+
+          newFreePos = copyUDF.globalize(inputLocations, freePos1, predeterminedOutputLocations)
+
+          val writeFields = copyUDF.getWriteFields filter { _ >= 0 } toSet
+          val inputFields = inputLocations.values.toSet union forwards diff writeFields
+
+          for (pos <- inputFields)
+            copyUDF.setAmbientFieldBehavior(pos, AmbientFieldBehavior.Forward)
+
+          prepareContract(contract4s)
+        }
+
+        GlobalizeResult(newFreePos, copyUDF.getOutputFields, copyUDF.getForwardedFields.toSet)
+      }
     }
 
     printer.printSchema(contract, proxies)
@@ -293,6 +378,24 @@ trait GlobalSchemaGenerator {
   }
 
   private def prepareContract(contract: Pact4sContract) = {
+
+    def elimNoOps(children: JList[Contract]): Unit = {
+      for (childIndex <- 0 until children.size) {
+        children.get(childIndex) match {
+          case NoOp4sContract(grandChildren) => {
+            children.remove(childIndex)
+            children.addAll(childIndex, grandChildren)
+          }
+          case _ => ()
+        }
+      }
+    }
+
+    contract match {
+      case c: SingleInputContract[_] => elimNoOps(c.getInputs())
+      case c: DualInputContract[_]   => elimNoOps(c.getFirstInputs()); elimNoOps(c.getSecondInputs())
+      case _                         =>
+    }
 
     contract.getParameters().setClassLoader(this.getClass.getClassLoader)
     contract.persistConfiguration()

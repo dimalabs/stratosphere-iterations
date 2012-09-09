@@ -46,7 +46,7 @@ object Pact4sContract {
   implicit def toContract(c: Pact4sContract): Contract = c.asInstanceOf[Contract]
 }
 
-trait Pact4sOneInputContract extends Pact4sContract { this: Contract with Pact4sOneInputContract.OneInput =>
+trait Pact4sOneInputContract extends Pact4sContract with Pact4sOneInputContract.OneInput { this: Contract =>
 
   def singleInput = this.getInputs().get(0)
   def singleInput_=(input: Pact4sContract) = this.setInput(input)
@@ -54,12 +54,12 @@ trait Pact4sOneInputContract extends Pact4sContract { this: Contract with Pact4s
 
 object Pact4sOneInputContract {
 
-  type OneInput = { def getInputs(): JList[Contract]; def setInput(c: Contract) }
+  trait OneInput { def getInputs(): JList[Contract]; def setInput(c: Contract) }
 
   def unapply(c: Pact4sOneInputContract) = Some(c.singleInput)
 }
 
-trait Pact4sTwoInputContract extends Pact4sContract { this: Contract with Pact4sTwoInputContract.TwoInput =>
+trait Pact4sTwoInputContract extends Pact4sContract with Pact4sTwoInputContract.TwoInput { this: Contract =>
   def leftInput = this.getFirstInputs().get(0)
   def leftInput_=(left: Pact4sContract) = this.setFirstInput(left)
 
@@ -69,9 +69,15 @@ trait Pact4sTwoInputContract extends Pact4sContract { this: Contract with Pact4s
 
 object Pact4sTwoInputContract {
 
-  type TwoInput = { def getFirstInputs(): JList[Contract]; def setFirstInput(c: Contract); def getSecondInputs(): JList[Contract]; def setSecondInput(c: Contract) }
+  trait TwoInput { def getFirstInputs(): JList[Contract]; def setFirstInput(c: Contract); def getSecondInputs(): JList[Contract]; def setSecondInput(c: Contract) }
 
   def unapply(c: Pact4sTwoInputContract) = Some((c.leftInput, c.rightInput))
+}
+
+trait NoOp4sContract extends Pact4sOneInputContract { this: Contract => }
+
+object NoOp4sContract {
+  def unapply(c: NoOp4sContract) = Some(c.getInputs())
 }
 
 trait DataSource4sContract[Out] extends Pact4sContract { this: GenericDataSource[_ <: InputFormat[_, _]] =>

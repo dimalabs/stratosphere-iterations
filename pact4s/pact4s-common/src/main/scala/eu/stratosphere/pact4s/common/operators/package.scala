@@ -31,6 +31,7 @@ package object operators {
   implicit def dataStream2Join[T: UDT](input: DataStream[T]): JoinOperator[T] = new JoinOperator(input)
   implicit def dataStream2Map[T: UDT](input: DataStream[T]): MapOperator[T] = new MapOperator(input)
   implicit def dataStream2Reduce[T: UDT](input: DataStream[T]): ReduceOperator[T] = new ReduceOperator(input)
+  implicit def dataStream2Union[T: UDT](input: DataStream[T]): UnionOperator[T] = new UnionOperator(input)
 
   implicit def funToRepeat[SolutionItem: UDT](stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]) = new RepeatOperator(stepFunction)
   implicit def funToIterate[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStream[SolutionItem] => (DataStream[SolutionItem], DataStream[DeltaItem])) = new IterateOperator(stepFunction)

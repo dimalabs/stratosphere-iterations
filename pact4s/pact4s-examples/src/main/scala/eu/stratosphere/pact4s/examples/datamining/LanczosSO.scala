@@ -39,41 +39,35 @@ class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outp
   val ysink = new DataSink(outputY, DelimetedDataSinkFormat(formatCell))
 
   val αʹβʹvʹ = mulVS(b, normV(b) map { 1 / _ }) flatMap { c =>
-    val v0 = TaggedItem("v", Cell(0, c.col, 0))
-    val v1 = TaggedItem("v", c.copy(row = 1))
+    val v0: Cell = VCell(0, c.col, 0)
+    val v1: Cell = VCell(1, c.col, c.value)
 
     if (c.col == 0)
-      Seq(TaggedItem("β", Cell(0, 0, 0)), v0, v1)
+      Seq(BetaCell(0, 0, 0), v0, v1)
     else
       Seq(v0, v1)
   }
 
-  val αβv = (stepI ^ m)(αʹβʹvʹ)
-
-  val α = αβv filter { tc => tc.tag == "α" } map { _.item }
-  val β = αβv filter { tc => tc.tag == "β" } map { _.item }
-  val v = αβv filter { tc => tc.tag == "v" } map { _.item }
+  val (α, β, v) = splitαβv((stepI ^ m)(αʹβʹvʹ))
 
   val t = triDiag(α, β filter { _.col > 0 })
   val (q, d) = decompose(t)
 
-  val diag = d filter { c => c.col == c.row } map { TaggedItem("", _) }
-  val λ = diag groupBy { _.tag } reduce { eigenValues =>
-    val highToLow = eigenValues.toSeq.sortBy(tc => abs(tc.item.value))(Ordering[Double].reverse)
-    highToLow take (k) map { tc => tc.item.copy(row = 0) }
+  val diag = d filter { c => c.col == c.row }
+  val λ = diag map { (0, _) } groupBy { _._1 } reduce { eigenValues =>
+    val highToLow = eigenValues.map(_._2).toSeq.sortBy(c => abs(c.value))(Ordering[Double].reverse)
+    highToLow take (k) map { c => OtherCell(0, c.col, c.value): Cell }
   } flatMap { c => c }
 
   val y = mulMM(v, q join λ on { _.col } isEqualTo { _.col } map { (q, _) => q })
 
   override def outputs = Seq(λsink <~ λ, ysink <~ y)
 
-  def stepI = (αʹβʹv: DataStream[TaggedItem[Cell]]) => {
+  def stepI = (αʹβʹv: DataStream[Cell]) => {
 
     val i = 1 // need current iteration!
 
-    val αʹ = αʹβʹv filter { tc => tc.tag == "α" } map { _.item }
-    val βʹ = αʹβʹv filter { tc => tc.tag == "β" } map { _.item }
-    val v = αʹβʹv filter { tc => tc.tag == "v" } map { _.item }
+    val (αʹ, βʹ, v) = splitαβv(αʹβʹv)
 
     val vᵢ = v filter { _.row == i }
     val vᵢᐨ = v filter { _.row == i - 1 }
@@ -84,71 +78,64 @@ class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outp
     val vᵢᐩʹʹ = sub(vᵢᐩʹʹʹ, sub(mulVS(vᵢᐨ, βᵢᐨ), mulVS(vᵢ, αᵢ)))
     val βᵢʹ = normV(vᵢᐩʹʹ)
 
-    val α = union(αʹ, αᵢ map { Cell(0, i, _) })
-    val t = triDiag(α, union(βʹ, βᵢʹ map { Cell(0, i, _) }))
+    val α = αʹ union (αᵢ map { AlphaCell(0, i, _): Cell })
+    val t = triDiag(α, βʹ union (βᵢʹ map { BetaCell(0, i, _): Cell }))
     val (q, d) = decompose(t)
 
-    val βᵢʹvᵢᐩʹʹ = union(βᵢʹ map { x => TaggedItem("β", Cell(0, 0, x)) }, vᵢᐩʹʹ map { TaggedItem("v", _) })
+    val βᵢʹvᵢᐩʹʹ = (βᵢʹ map { x => BetaCell(0, 0, x): Cell }) union vᵢᐩʹʹ
 
     val βᵢvᵢᐩʹ = (stepJ(i, v, q, normM(t)) ^ i)(βᵢʹvᵢᐩʹʹ)
-    val βᵢ = βᵢvᵢᐩʹ filter { _.tag == "β" } map { _.item.value }
-    val vᵢᐩʹ = βᵢvᵢᐩʹ filter { _.tag == "v" } map { _.item }
+    val βᵢ = βᵢvᵢᐩʹ filter { _.isBeta } map { _.value }
+    val vᵢᐩʹ = βᵢvᵢᐩʹ filter { _.isV }
 
-    val β = union(βʹ, βᵢ map { Cell(0, i, _) })
+    val β = βʹ union (βᵢ map { BetaCell(0, i, _): Cell })
     val vᵢᐩ = mulVS(vᵢᐩʹ, βᵢ map { 1 / _ })
-    val vᐩ = union(v, vᵢᐩ)
+    val vᐩ = v union vᵢᐩ
 
-    union(union(α map { TaggedItem("α", _) }, β map { TaggedItem("β", _) }), vᐩ map { TaggedItem("v", _) })
+    α union β union vᐩ
   }
 
   def stepJ = (i: Int, v: DataStream[Cell], q: DataStream[Cell], normT: DataStream[Double]) => {
 
-    val qvt = union(union(v map { TaggedItem("v", _) }, q map { TaggedItem("q", _) }), normT map { t => TaggedItem("t", Cell(0, 0, t)) })
+    val qvt = v union q union (normT map { t => OtherCell(0, 0, t): Cell })
 
-    (βᵢʹvᵢᐩʹʹ: DataStream[TaggedItem[Cell]]) => {
+    (βᵢʹvᵢᐩʹʹ: DataStream[Cell]) => {
 
       val j = 1 // need current iteration!
 
-      (qvt map { (0, _) }) cogroup (βᵢʹvᵢᐩʹʹ map { (0, _) }) on { _._1 } isEqualTo { _._1 } flatMap {
-        (qvt, βᵢʹvᵢᐩʹʹ) =>
-          {
+      // Would it be better to union+reduce instead of cogroup here?
+      (qvt map { (0, _) }) cogroup (βᵢʹvᵢᐩʹʹ map { (0, _) }) on { _._1 } isEqualTo { _._1 } flatMap { (qvt, βᵢʹvᵢᐩʹʹ) =>
 
-            val (tq, vt) = qvt.toSeq map { _._2 } partition { _.tag == "q" }
-            val (tv, tt) = vt partition { _.tag == "v" }
-            val q = tq map { _.item }
-            val qij = q.find(c => c.row == i && c.col == j).get.value
-            val normT = tt.head.item.value
+        val (q, vt) = qvt.toSeq map { _._2 } partition { _.isQ }
+        val (v, t) = vt partition { _.isV }
+        val qij = q.find(c => c.row == i && c.col == j).get.value
+        val normT = t.head.value
 
-            val (tβᵢʹ, tvᵢᐩʹʹ) = βᵢʹvᵢᐩʹʹ.toSeq map { _._2 } partition { _.tag == "β" }
-            val βᵢʹ = tβᵢʹ.head.item.value
+        val (βᵢʹs, vᵢᐩʹʹ) = βᵢʹvᵢᐩʹʹ.toSeq map { _._2 } partition { _.isBeta }
+        val βᵢʹ = βᵢʹs.head.value
 
-            if (βᵢʹ * abs(qij) <= sqrt(ε) * normT) {
-              val v = tv map { _.item }
-              val vᵢᐩʹʹ = tvᵢᐩʹʹ map { _.item }
-              val r = mulMV(v, q filter { _.col == j })
+        if (βᵢʹ * abs(qij) <= sqrt(ε) * normT) {
+          val r = mulMV(v, q filter { _.col == j })
 
-              val vᵢᐩʹ = sub(vᵢᐩʹʹ, mulVS(r, dot(r, vᵢᐩʹʹ)))
-              val βᵢ = Cell(0, i, norm(vᵢᐩʹ))
+          val vᵢᐩʹ = sub(vᵢᐩʹʹ, mulVS(r, dot(r, vᵢᐩʹʹ)))
+          val βᵢ = BetaCell(0, i, norm(vᵢᐩʹ)): Cell
 
-              TaggedItem("β", βᵢ) +: (vᵢᐩʹ map { c => TaggedItem("v", c) })
+          βᵢ +: vᵢᐩʹ
 
-            } else {
-              tβᵢʹ ++ tvᵢᐩʹʹ
-            }
-          }
+        } else {
+          βᵢʹs ++ vᵢᐩʹʹ
+        }
       }
     }
   }
 
-  def triDiag(α: DataStream[Cell], β: DataStream[Cell]) = {
-    val diag = α map { c => c.copy(row = c.col) }
-    val lower = β map { c => Cell(c.col, c.col - 1, c.value) }
-    val upper = β map { c => Cell(c.col - 1, c.col, c.value) }
-    union(diag, union(lower, upper))
-  }
+  def splitαβv(αβv: DataStream[Cell]) = (αβv filter { _.isAlpha }, αβv filter { _.isBeta }, αβv filter { _.isV })
 
-  def union[T: analyzer.UDT](x: DataStream[T], y: DataStream[T]) = {
-    (x map { (0, _) }) cogroup (y map { (0, _) }) on { _._1 } isEqualTo { _._1 } flatMap { (xs, ys) => (xs map { _._2 }) ++ (ys map { _._2 }) }
+  def triDiag(α: DataStream[Cell], β: DataStream[Cell]) = {
+    val diag = α map { c => OtherCell(c.col, c.col, c.value): Cell }
+    val lower = β map { c => OtherCell(c.col, c.col - 1, c.value): Cell }
+    val upper = β map { c => OtherCell(c.col - 1, c.col, c.value): Cell }
+    diag union lower union upper
   }
 
   def normV(x: DataStream[Cell]): DataStream[Double] = throw new RuntimeException("Not implemented")
@@ -167,13 +154,20 @@ class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outp
   def mulVS(x: Seq[Cell], y: Double): Seq[Cell] = throw new RuntimeException("Not implemented")
   def mulMV(x: Seq[Cell], y: Seq[Cell]): Seq[Cell] = throw new RuntimeException("Not implemented")
 
-  case class Cell(row: Int, col: Int, value: Double)
-  case class TaggedItem[T](tag: String, item: T)
+  abstract sealed class Cell {
+    val row: Int; val col: Int; val value: Double
+    def isAlpha = false; def isBeta = false; def isQ = false; def isV = false; def isOther = false
+  }
+  case class AlphaCell(row: Int, col: Int, value: Double) extends Cell { override def isAlpha = true }
+  case class BetaCell(row: Int, col: Int, value: Double) extends Cell { override def isBeta = true }
+  case class QCell(row: Int, col: Int, value: Double) extends Cell { override def isQ = true }
+  case class VCell(row: Int, col: Int, value: Double) extends Cell { override def isV = true }
+  case class OtherCell(row: Int, col: Int, value: Double) extends Cell { override def isOther = true }
 
   val CellInputPattern = """(\d+)\|(\d+)\|(\d+\.\d+)\|""".r
 
   def parseCell = (line: String) => line match {
-    case CellInputPattern(row, col, value) => Cell(row.toInt, col.toInt, value.toDouble)
+    case CellInputPattern(row, col, value) => OtherCell(row.toInt, col.toInt, value.toDouble): Cell
   }
 
   def formatCell = (cell: Cell) => "%d|%d|%.2f|".format(cell.row, cell.col, cell.value)
