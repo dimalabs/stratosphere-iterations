@@ -93,7 +93,7 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
                     tree
                   }
                   case Some(udtInst) => {
-                    Debug.report("Applied " + udtInst.symbol.fullName + ": " + udtInst.tpe)
+                    //Debug.report("Applied " + udtInst.symbol.fullName + ": " + udtInst.tpe)
                     localTyper.typed { udtInst }
                   }
                 }
@@ -106,14 +106,15 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
       }
 
       private def availUdts(locals: List[Symbol]): String = {
-        val ctx = localTyper.context.implicitss.flatten.map(m => m.sym)
+        //val ctx = localTyper.context.implicitss.flatten.map(m => m.sym)
         val loc = locals filter { sym => (sym ne NoSymbol) && sym.isImplicit }
-        (ctx union loc).map(sym => sym.name + ": " + sym.tpe).filter(_.startsWith("udtInst")).sorted.mkString(", ")
+        loc.map(sym => sym.name + ": " + sym.tpe).filter(_.startsWith("udtInst")).sorted.mkString(", ")
       }
 
       private def mkUdtInst(owner: Symbol, desc: UDTDescriptor): List[Tree] = {
 
-        verbosely[List[Tree]] { case l => "Generated " + l.head.symbol.fullName + "[" + desc.tpe + "] @ " + owner } {
+        //verbosely[List[Tree]] { case l => "Generated " + l.head.symbol.fullName + "[" + desc.tpe + "] @ " + owner } 
+        {
 
           val privateFlag = if (owner.isClass) Flags.PRIVATE else 0
 

@@ -32,8 +32,8 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
     private val seen = collection.mutable.Set[(Type, Boolean)]()
 
     def getUDTDescriptor(tpe: Type): UDTDescriptor = {
-      if (seen.add(normTpe(tpe), false))
-        Debug.report("Analyzing UDT[" + tpe + "]")
+      //if (seen.add(normTpe(tpe), false))
+      //  Debug.report("Analyzing UDT[" + tpe + "]")
 
       (new UDTAnalyzerInstance).analyze(tpe)
     }
@@ -54,7 +54,8 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
         // TODO (Joe): Fix issues with Nothing type
 
         cache.getOrElseUpdate(normed) { id =>
-          maybeVerbosely[UDTDescriptor](_ => seen.add(normed, true)) { d => "Analyzed UDT[" + tpe + " ~> " + normed + "] - " + d.getClass.getName } {
+          //maybeVerbosely[UDTDescriptor](_ => seen.add(normed, true)) { d => "Analyzed UDT[" + tpe + " ~> " + normed + "] - " + d.getClass.getName } 
+          {
             normed match {
               case OpaqueType(ref) => OpaqueDescriptor(id, normed, ref)
               case PrimitiveType(default, wrapper) => PrimitiveDescriptor(id, normed, default, wrapper)
@@ -82,7 +83,8 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
 
         val subTypes = tpe.typeSymbol.children flatMap { d =>
 
-          val dTpe = verbosely[Type] { dTpe => d.tpe + " <: " + tpe + " instantiated as " + dTpe + " (" + (if (dTpe <:< tpe) "Valid" else "Invalid") + " subtype)" } {
+          val dTpe = // verbosely[Type] { dTpe => d.tpe + " <: " + tpe + " instantiated as " + dTpe + " (" + (if (dTpe <:< tpe) "Valid" else "Invalid") + " subtype)" } 
+          {
             val tArgs = (tpe.typeConstructor.typeParams, tpe.typeArgs).zipped.toMap
             val dArgs = d.typeParams map { dp =>
               val tArg = tArgs.keySet.find { tp => dp == tp.tpe.asSeenFrom(d.tpe, tpe.typeSymbol).typeSymbol }
@@ -140,7 +142,7 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
               }
             }
 
-            Debug.report("BaseClass " + tpe + " has shared fields: " + (baseFields.map { m => m.sym.name + ": " + m.tpe }))
+            //Debug.report("BaseClass " + tpe + " has shared fields: " + (baseFields.map { m => m.sym.name + ": " + m.tpe }))
             BaseClassDescriptor(id, tpe, tagField +: baseFields, subTypes map wireBaseFields)
           }
         }

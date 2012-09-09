@@ -44,7 +44,7 @@ trait FallbackBinders { this: Pact4sPlugin =>
             }
 
             case Right(udts) => {
-              Debug.report("Inferred default for UDF[" + mkFunctionType(tpes: _*) + "] @ " + curTree.id)
+              //Debug.report("Inferred default for UDF[" + mkFunctionType(tpes: _*) + "] @ " + curTree.id)
 
               val (owner, kind) = getDefaultUDFKind(tpes)
               val factory = mkSelect("eu", "stratosphere", "pact4s", "common", "analyzer", owner, kind)
