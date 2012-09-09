@@ -240,7 +240,8 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
       case class ComplexSelector(tree: Tree) extends Selector {
         
         private def treeKind = {
-          val name = tree.getClass.getName
+          var name = tree.getClass.getName
+          if (name.endsWith("$")) name = name.substring(0, name.length - 1)
           val idx = math.max(name.lastIndexOf('$'), name.lastIndexOf('.')) + 1
           name.substring(idx)
         }
