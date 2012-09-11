@@ -24,7 +24,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
   import global._
   import defs._
 
-  trait UDTSerializerClassGenerator extends UDTSerializeMethodGenerator with UDTDeserializeMethodGenerator { this: UDTClassGenerator with TypingVisitor with TreeGenerator with Logger =>
+  trait UDTSerializerClassGenerator extends UDTSerializeMethodGenerator with UDTDeserializeMethodGenerator { this: UDTClassGenerator with TypingVisitor with UnitBoundTreeGenerator with Logger =>
 
     protected def mkUdtSerializerClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 

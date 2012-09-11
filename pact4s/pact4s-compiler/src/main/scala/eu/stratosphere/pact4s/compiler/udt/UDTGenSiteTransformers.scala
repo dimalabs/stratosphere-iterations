@@ -26,7 +26,7 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
 
   trait UDTGenSiteTransformer extends Pact4sComponent with UDTGenSiteParticipant {
 
-    override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with Logger with TreeGenerator with UDTClassGenerator {
+    override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with Logger with UnitBoundTreeGenerator with UDTClassGenerator {
 
       private val genSites = getUDTGenSites(unit)
       private val descriptors = getUDTDescriptors(unit)

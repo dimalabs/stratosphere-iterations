@@ -24,7 +24,7 @@ trait UDTClassGenerators extends UDTSerializerClassGenerators { this: Pact4sPlug
   import global._
   import defs._
 
-  trait UDTClassGenerator extends UDTSerializerClassGenerator { this: TypingVisitor with TreeGenerator with Logger =>
+  trait UDTClassGenerator extends UDTSerializerClassGenerator { this: TypingVisitor with UnitBoundTreeGenerator with Logger =>
 
     protected def mkUdtClass(owner: Symbol, desc: UDTDescriptor): Tree = {
 

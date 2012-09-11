@@ -50,7 +50,7 @@ trait Loggers { this: TypingTransformers =>
   object logger { var level: LogLevel = LogLevel.Warn }
   private val counter = new Counter
 
-  trait Logger { this: TypingVisitor =>
+  trait Logger { this: HasPosition =>
 
     abstract sealed class Severity {
       protected val toInt: Int

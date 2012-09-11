@@ -20,9 +20,8 @@ package eu.stratosphere.pact4s.compiler.util
 import scala.tools.nsc.Global
 import scala.tools.nsc.transform.{ TypingTransformers => NscTypingTransformers }
 
-trait TypingTransformers {
+trait TypingTransformers extends HasGlobal { this: HasGlobal =>
 
-  val global: Global
   import global._
 
   private[TypingTransformers] val nscTypingTransformers = new NscTypingTransformers {
@@ -31,9 +30,8 @@ trait TypingTransformers {
 
   val neverInfer = Set[Symbol]()
 
-  trait TypingVisitor {
+  trait TypingVisitor extends HasCompilationUnit with HasPosition { this: HasCompilationUnit =>
 
-    protected def unit: CompilationUnit
     protected def localTyper: analyzer.Typer
     protected var curTree: Tree
 
@@ -112,7 +110,7 @@ trait TypingTransformers {
     }
   }
 
-  abstract class TypingTransformer(protected val unit: CompilationUnit) extends nscTypingTransformers.TypingTransformer(unit) with TypingVisitor {
+  abstract class TypingTransformer(protected val unit: CompilationUnit) extends nscTypingTransformers.TypingTransformer(unit) with TypingVisitor with HasCompilationUnit {
 
     final override def transform(tree: Tree): Tree = {
       pre(tree)
@@ -127,7 +125,7 @@ trait TypingTransformers {
     }
   }
 
-  abstract class TypingTraverser(protected val unit: CompilationUnit) extends nscTypingTransformers.TypingTransformer(unit) with TypingVisitor {
+  abstract class TypingTraverser(protected val unit: CompilationUnit) extends nscTypingTransformers.TypingTransformer(unit) with TypingVisitor with HasCompilationUnit {
 
     final override def transform(tree: Tree): Tree = {
       pre(tree)

@@ -68,9 +68,9 @@ class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput
     case (Path(from, _, dist1), Path(_, to, dist2)) => Path(from, to, dist1 + dist2)
   }
 
-  def getEdge = (p: Path) => (p.from, p.to)
-  def getFrom = (p: Path) => p.from
-  def getTo = (p: Path) => p.to
+  final def getEdge = (p: Path) => (p.from, p.to)
+  final def getFrom = (p: Path) => p.from
+  final def getTo = (p: Path) => p.to
 
   vertices.hints = RecordSize(16) +: PactName("Vertices")
   edges.hints = RecordSize(16) +: PactName("Edges")

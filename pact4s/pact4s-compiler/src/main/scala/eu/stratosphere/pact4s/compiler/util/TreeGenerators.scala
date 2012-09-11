@@ -17,11 +17,11 @@
 
 package eu.stratosphere.pact4s.compiler.util
 
-trait TreeGenerators { this: TypingTransformers =>
+trait TreeGenerators { this: HasGlobal =>
 
   import global._
 
-  trait TreeGenerator { this: TypingVisitor =>
+  trait TreeGenerator {
 
     val Flags = scala.tools.nsc.symtab.Flags
 
@@ -29,7 +29,7 @@ trait TreeGenerators { this: TypingTransformers =>
     def mkNull = Literal(Constant(null)) setType ConstantType(Constant(null))
     def mkZero = Literal(Constant(0)) setType ConstantType(Constant(0))
     def mkOne = Literal(Constant(1)) setType ConstantType(Constant(1))
-    
+
     def mkAsInstanceOf(source: Tree, targetTpe: Type): Tree = TypeApply(Select(source, "asInstanceOf"), List(TypeTree(targetTpe)))
 
     def maybeMkAsInstanceOf(source: Tree, sourceTpe: Type, targetTpe: Type): Tree = {
@@ -103,16 +103,6 @@ trait TreeGenerators { this: TypingTransformers =>
       (field setType NoType, getter setType NoType)
     }
 
-    def mkWhile(cond: Tree)(body: Tree): Tree = {
-      val lblName = unit.freshTermName("while")
-      val jump = Apply(Ident(lblName), Nil)
-      val block = body match {
-        case Block(stats, expr) => new Block(stats :+ expr, jump)
-        case _                  => new Block(List(body), jump)
-      }
-      LabelDef(lblName, Nil, If(cond, block, EmptyTree))
-    }
-
     def mkIf(cond: Tree, bodyT: Tree): Tree = mkIf(cond, bodyT, EmptyTree)
 
     def mkIf(cond: Tree, bodyT: Tree, bodyF: Tree): Tree = cond match {
@@ -170,4 +160,18 @@ trait TreeGenerators { this: TypingTransformers =>
     def mkThrow(tpe: Type, msg: String): Tree = mkThrow(tpe, Literal(msg))
     def mkThrow(msg: String): Tree = mkThrow(definitions.getClass("java.lang.RuntimeException").tpe, msg)
   }
+
+  trait UnitBoundTreeGenerator extends TreeGenerator { this: HasCompilationUnit =>
+
+    def mkWhile(cond: Tree)(body: Tree): Tree = {
+      val lblName = unit.freshTermName("while")
+      val jump = Apply(Ident(lblName), Nil)
+      val block = body match {
+        case Block(stats, expr) => new Block(stats :+ expr, jump)
+        case _                  => new Block(List(body), jump)
+      }
+      LabelDef(lblName, Nil, If(cond, block, EmptyTree))
+    }
+  }
 }
+

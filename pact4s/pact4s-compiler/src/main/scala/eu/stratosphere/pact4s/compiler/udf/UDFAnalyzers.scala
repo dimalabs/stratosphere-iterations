@@ -27,37 +27,15 @@ trait UDFAnalyzers extends SelectorAnalyzers with FlowAnalyzers with FallbackBin
 
   trait UDFAnalyzer extends Pact4sComponent {
 
-    private var snapshot: Map[Symbol, Tree] = _
-
-    private def mkSnapshot(tree: Tree): Map[Symbol, Tree] = {
-
-      object Def {
-        def unapply(trees: List[Tree]) = trees find {
-          case ValDef(_, _, _, EmptyTree)       => false
-          case DefDef(_, _, _, _, _, EmptyTree) => false
-          case _: ValDef                        => true
-          case _: DefDef                        => true
-          case _                                => false
-        }
-      }
-
-      tree filter { _.hasSymbolWhich(_ != NoSymbol) } groupBy (_.symbol) flatMap {
-        case (sym, Def(_)) if sym.hasFlag(Flags.MUTABLE) => Some((sym, EmptyTree))
-        case (sym, Def(_)) if sym.isConstructor          => None
-        case (sym, Def(_)) if sym.isCaseAccessor         => None
-        case (sym, Def(tree))                            => Some((sym, tree))
-        case _                                           => None
-      }
-    }
+    private var snapshot: TreeReducer.Environment = _
 
     override def beforeRun() = {
-      snapshot = currentRun.units.toSeq flatMap { unit => mkSnapshot(unit.body) } toMap
+      snapshot = currentRun.units.foldLeft(TreeReducer.Environment.Empty) { (env, unit) => env.update(NoSymbol, unit.body).get }
     }
 
     override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with TreeGenerator with Logger with SymbolSnapshot with SelectorAnalyzer with FlowAnalyzer with FallbackBinder {
 
       val snapshot = UDFAnalyzer.this.snapshot
-      def mkSnapshot(tree: Tree) = UDFAnalyzer.this.mkSnapshot(tree)
 
       override def apply(tree: Tree) = super.apply {
         unlift(tree) match {
