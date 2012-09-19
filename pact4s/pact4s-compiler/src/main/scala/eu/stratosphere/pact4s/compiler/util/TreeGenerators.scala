@@ -25,6 +25,22 @@ trait TreeGenerators { this: HasGlobal =>
 
     val Flags = scala.tools.nsc.symtab.Flags
 
+    def mkDefault(classSym: Symbol): Tree = {
+      import definitions._
+      classSym match {
+        case BooleanClass => Literal(false)
+        case ByteClass    => Literal(0: Byte)
+        case CharClass    => Literal(0: Char)
+        case DoubleClass  => Literal(0: Double)
+        case FloatClass   => Literal(0: Float)
+        case IntClass     => Literal(0: Int)
+        case LongClass    => Literal(0: Long)
+        case ShortClass   => Literal(0: Short)
+        case UnitClass    => Literal(())
+        case _            => Literal(null: Any)
+      }
+    }
+
     def mkUnit = Literal(Constant(())) setType definitions.UnitClass.tpe
     def mkNull = Literal(Constant(null)) setType ConstantType(Constant(null))
     def mkZero = Literal(Constant(0)) setType ConstantType(Constant(0))
@@ -159,6 +175,22 @@ trait TreeGenerators { this: HasGlobal =>
     def mkThrow(tpe: Type, msg: Tree): Tree = Throw(New(TypeTree(tpe), List(List(msg))))
     def mkThrow(tpe: Type, msg: String): Tree = mkThrow(tpe, Literal(msg))
     def mkThrow(msg: String): Tree = mkThrow(definitions.getClass("java.lang.RuntimeException").tpe, msg)
+
+    implicit def tree2Ops[T <: Tree](tree: T) = new {
+      // copy of Tree.copyAttrs, since that method is private
+      def copyAttrs(from: Tree): T = {
+        tree.pos = from.pos
+        tree.tpe = from.tpe
+        if (tree.hasSymbol) tree.symbol = from.symbol
+        tree
+      }
+
+      def getSimpleClassName: String = {
+        val name = tree.getClass.getName
+        val idx = math.max(name.lastIndexOf('$'), name.lastIndexOf('.')) + 1
+        name.substring(idx)
+      }
+    }
   }
 
   trait UnitBoundTreeGenerator extends TreeGenerator { this: HasCompilationUnit =>

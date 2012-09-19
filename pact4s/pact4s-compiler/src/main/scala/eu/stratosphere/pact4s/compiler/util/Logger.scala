@@ -56,7 +56,14 @@ trait Loggers { this: TypingTransformers =>
       protected val toInt: Int
       protected def reportInner(msg: String, pos: Position)
 
-      protected def formatMsg(msg: String) = "%04d".format(counter.next) + "#" + globalPhase.name + " - " + msg
+      private def msgPrefix = {
+        if (logger.level >= LogLevel.Debug)
+          "%04d".format(counter.next) + "#" + globalPhase.name + " - "
+        else
+          ""
+      }
+
+      protected def formatMsg(msg: String) = msgPrefix + msg
 
       def isEnabled = this.toInt <= logger.level.toInt
 
