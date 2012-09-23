@@ -112,7 +112,7 @@ trait TreeReducers extends TreeReducerEnvironments with TreeReducerImpls { this:
         envs foreach { _.panic }
       }
     }
-    
+
     object NonReducible {
       def panicked(reason: ReductionError, expr: Tree): NonReducible = {
         val ret = NonReducible(reason, expr)
@@ -123,6 +123,7 @@ trait TreeReducers extends TreeReducerEnvironments with TreeReducerImpls { this:
 
     sealed abstract class ReductionError
     object ReductionError {
+      case object Synthetic extends ReductionError
       case object NoSource extends ReductionError
       case object Recursive extends ReductionError
       case object NonDeterministic extends ReductionError
@@ -135,6 +136,101 @@ trait TreeReducers extends TreeReducerEnvironments with TreeReducerImpls { this:
           case reason: CausedBy => apply(reason.cause)
           case _                => new CausedBy(inner)
         }
+      }
+    }
+
+    object EnvironmentBuilder {
+      
+      case object CurrentEnvironment extends Tree
+
+      def build(env: Environment, path: List[Tree]): Environment = path match {
+
+        case Nil => env
+
+        case (pd: PackageDef) :: rest => env.get(pd.symbol) match {
+          case Some(env: Environment) => build(env, rest)
+          case _                      => throw new UnsupportedOperationException("Couldn't find package")
+        }
+
+        case (cd: ClassDef) :: rest if cd.symbol.isModuleClass => {
+          val inst = reduce(Ident(cd.symbol), env, false) match {
+            case env: Environment => env
+            case _                => throw new UnsupportedOperationException("Couldn't find object")
+          }
+          build(inst, rest)
+        }
+
+        case (cd: ClassDef) :: rest => {
+          val ctor = Select(New(Ident(cd.symbol)), cd.symbol.primaryConstructor)
+          val newExpr = cd.symbol.primaryConstructor.paramss.foldLeft(ctor: Tree) { (fun, params) => Apply(fun, params map { _ => NonReducible(ReductionError.Synthetic, EmptyTree) }) }
+          val inst = reduce(newExpr, env, false) match {
+            case env: Environment => env
+            case _                => throw new UnsupportedOperationException("Couldn't construct class")
+          }
+          build(inst, rest)
+        }
+
+        case (dd: DefDef) :: rest => {
+
+          val (evalEnv, params) = reduce(Ident(dd.symbol), env, false) match {
+            case Extractors.Closure(evalEnv, params, _) => (evalEnv, params)
+            case _                                      => throw new UnsupportedOperationException("Couldn't find def")
+          }
+
+          for (p <- params)
+            evalEnv(p.symbol) = NonReducible(ReductionError.Synthetic, EmptyTree)
+
+          build(evalEnv, rest)
+        }
+
+        case (ld: LabelDef) :: rest => {
+
+          val (evalEnv, params) = reduce(Ident(ld.symbol), env, false) match {
+            case Extractors.Closure(evalEnv, params, _) => (evalEnv, params)
+            case _                                      => throw new UnsupportedOperationException("Couldn't find label")
+          }
+
+          for (p <- params)
+            evalEnv(p.symbol) = NonReducible(ReductionError.Synthetic, EmptyTree)
+
+          build(evalEnv, rest)
+        }
+
+        case (fun: Function) :: rest => {
+          val evalEnv = env.makeChild setSymbol fun.symbol
+          for (p <- fun.vparams)
+            evalEnv(p.symbol) = NonReducible(ReductionError.Synthetic, EmptyTree)
+
+          build(evalEnv, rest)
+        }
+
+        case (blk: Block) :: Nil => env
+
+        case (blk: Block) :: next :: rest => {
+
+          val orderedStats = blk.stats.zipWithIndex sortBy {
+            case (_: ValDef, index)    => (1, index)
+            case (_: MemberDef, index) => (0, index)
+            case (_, index)            => (1, index)
+          } map { _._1 }
+
+          val (pre, others) = blk.stats.partition(_ ne next)
+
+          val post = others flatMap {
+            case stat: ValDef    => Some(stat.copy(rhs = EmptyTree))
+            case stat: MemberDef => Some(stat)
+            case _               => None
+          }
+
+          val blkEnv = reduce(Block(pre ++ post, CurrentEnvironment), env, false) match {
+            case env: Environment => env
+            case _                => throw new UnsupportedOperationException("Error building block environment")
+          }
+          
+          build(blkEnv, next :: rest)
+        }
+
+        case _ :: rest => build(env, rest)
       }
     }
 

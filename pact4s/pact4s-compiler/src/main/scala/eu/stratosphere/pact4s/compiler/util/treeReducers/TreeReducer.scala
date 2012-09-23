@@ -318,6 +318,8 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
       case _: TypeDef | _: TypTree | _: Literal | EmptyTree => tree
       case _: Environment | _: Closure | _: NonReducible    => tree
 
+      case EnvironmentBuilder.CurrentEnvironment            => env
+
       case Function(vparams, body)                          => mkClosure({ env.makeChild }, tree.symbol, List(vparams), body)
 
       case Ident(_) => env.findParent(_.defines(tree.symbol)) match {
