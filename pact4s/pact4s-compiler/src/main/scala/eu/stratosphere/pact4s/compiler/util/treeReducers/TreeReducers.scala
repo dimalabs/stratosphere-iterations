@@ -40,7 +40,6 @@ trait TreeReducers extends TreeReducerEnvironments with TreeReducerImpls { this:
 
       def makeAnonFun(owner: Symbol): Symbol = makeSymbol(owner, "anonfun$")
       def makeInstanceOf(classSym: Symbol): Symbol = makeSymbol(classSym, "inst$")
-      def makeCtorFlag(classSym: Symbol): Symbol = makeSymbol(classSym, "init$")
     }
 
     object TypeOf {
@@ -49,6 +48,24 @@ trait TreeReducers extends TreeReducerEnvironments with TreeReducerImpls { this:
       def apply(env: Environment): Symbol = env.get(typeOfSym) match {
         case Some(tpt) => tpt.symbol
         case None      => NoSymbol
+      }
+    }
+
+    object CtorFlag {
+      def checkAndSet(env: Environment, classSym: Symbol): Boolean = {
+        val flag = SymbolFactory.makeSymbol(classSym, "init$")
+        val isFirst = !env.defines(flag)
+        if (isFirst) env(flag) = EmptyTree
+        isFirst
+      }
+    }
+
+    object Tag {
+      private val tagSym = NoSymbol.newValue("tag$")
+      def update(env: Environment, value: String): Unit = env(tagSym) = Literal(value)
+      def apply(env: Environment): Option[String] = env.get(tagSym) match {
+        case Some(Literal(Constant(value: String))) => Some(value)
+        case _                                      => None
       }
     }
 
@@ -77,7 +94,32 @@ trait TreeReducers extends TreeReducerEnvironments with TreeReducerImpls { this:
       }
     }
 
-    case class NonReducible(reason: ReductionError, expr: Tree) extends TermTree
+    case class NonReducible(reason: ReductionError, expr: Tree) extends TermTree {
+      def panic: Unit = {
+        var envs: List[Environment] = Nil
+        val findEnvs = new Traverser {
+          import Extractors._
+          import ReductionError._
+          override def traverse(tree: Tree) = tree match {
+            case env: Environment                    => envs = env :: envs
+            case Closure(env, _, body)               => envs = env :: envs; traverse(body)
+            case NonReducible(CausedBy(cause), expr) => traverse(cause); traverse(expr)
+            case NonReducible(_, expr)               => traverse(expr)
+            case tree                                => super.traverse(tree)
+          }
+        }
+        findEnvs.traverse(this)
+        envs foreach { _.panic }
+      }
+    }
+    
+    object NonReducible {
+      def panicked(reason: ReductionError, expr: Tree): NonReducible = {
+        val ret = NonReducible(reason, expr)
+        ret.panic
+        ret
+      }
+    }
 
     sealed abstract class ReductionError
     object ReductionError {

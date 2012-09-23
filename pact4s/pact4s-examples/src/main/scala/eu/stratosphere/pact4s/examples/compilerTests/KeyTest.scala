@@ -19,20 +19,8 @@ package eu.stratosphere.pact4s.examples.compilerTests
 
 import eu.stratosphere.pact4s.common.analyzer._
 
-object FooTest {
-  
-  var _x: Int = 0
-  
-  def x = _x
-  def x_=(value: Int) = _x = value
-  
-  x = 1
-}
-
 class KeyTest {
 
-  FooTest.x = 2
-  
   /*
   def toFS[T1: UDT, R](fun: FieldSelectorCode[T1 => R]) = fun
 

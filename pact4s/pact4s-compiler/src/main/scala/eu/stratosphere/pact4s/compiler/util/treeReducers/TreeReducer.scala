@@ -73,13 +73,13 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
       }
 
       if (diverging.value.contains(marker)) {
-        
+
         branches
-        
+
       } else {
-        
+
         diverging.withValue(diverging.value + marker) {
-          
+
           val orig = env.copy
 
           branches map { expr =>
@@ -168,7 +168,7 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
         val ctor = mkClosure(inst, ctorSym, Nil, body)
         val rhs = Block(List(upd), ctor)
 
-        env(classSym) = mkClosure(env, classSym.newValue("<objInit>"), Nil, rhs)
+        env.initMember(classSym, mkClosure(env, classSym.newValue("<objInit>"), Nil, rhs))
         mkUnit
       }
 
@@ -222,7 +222,7 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
         val sel = Select(This(tree.symbol.owner), tree.symbol)
         val upd = Assign(sel, init)
 
-        env(tree.symbol) = mkClosure(env, tree.symbol, Nil, Block(List(upd), sel))
+        env.initMember(tree.symbol, mkClosure(env, tree.symbol, Nil, Block(List(upd), sel)))
         mkUnit
       }
 
@@ -235,12 +235,26 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
         case ctor @ Closure(classEnv, params, body) => {
           val inst = classEnv.makeChild setSymbol SymbolFactory.makeInstanceOf(classEnv.symbol)
           TypeOf(inst) = classEnv.symbol
-          mkClosure(inst, ctor.symbol, List(params), body)
+          mkClosure(inst, ctor.symbol, List(params), Block(List(body), inst))
         }
 
-        // TODO: make a function that initializes instance members as NonReducible 
-        case ctor: NonReducible => NonReducible(ReductionError.CausedBy(ctor), tree)
-        case _                  => throw new UnsupportedOperationException("Invalid constructor")
+        // Unknown ctor - pack the parameters into a panicked instance environment 
+        case ctor: NonReducible => {
+
+          val classSym = tree.symbol.owner
+          val inst = Environment.Empty.makeChild setSymbol SymbolFactory.makeInstanceOf(classSym)
+          val paramss = tree.symbol.paramss map { params => params map { ValDef(_) } }
+
+          for (sym <- classSym.tpe.members)
+            env(sym) = NonReducible(ReductionError.NoSource, EmptyTree)
+
+          // panic the instance after the ctor parameters have been applied
+          val body = Apply(mkClosure(inst, tree.symbol.newValue("dummy$"), Nil, NonReducible(ReductionError.CausedBy(ctor), tree)), Nil)
+
+          mkClosure(inst, tree.symbol, paramss, Block(List(body), inst))
+        }
+
+        case _ => throw new UnsupportedOperationException("Invalid constructor")
       }
 
       // Ctor call site within an auxilliary ctor
@@ -257,17 +271,12 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
 
         case Some(ctor @ Closure(superClassEnv, params, body)) => {
 
-          val flag = SymbolFactory.makeCtorFlag(superClassEnv.symbol)
-
-          env.defines(flag) match {
+          CtorFlag.checkAndSet(env, superClassEnv.symbol) match {
 
             // This super class's ctor has already been called, so this call is a no-op
-            case true => mkClosure(env.makeChild, ctor.symbol, ctor.getParams, mkUnit)
+            case false => mkClosure(env.makeChild, ctor.symbol, ctor.getParams, mkUnit)
 
-            case false => {
-
-              // Mark that this super class's ctor has been called
-              env(flag) = EmptyTree
+            case true => {
 
               // Make a proxy to the instance environment with the super class as 
               // its parent, so that the super class's outer classes are accessible.
@@ -277,7 +286,23 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
           }
         }
 
-        // TODO: make a function that initializes instance members as NonReducible 
+        // Unknown super class
+        case None => {
+
+          val tops = Set(definitions.AnyClass, definitions.AnyCompanionClass, definitions.AnyValClass, definitions.AnyCompanionClass, definitions.AnyRefClass, definitions.ObjectClass)
+          val topCtors = tops flatMap { _.tpe.members.filter(_.isConstructor) }
+
+          val paramss = tree.symbol.paramss map { params => params map { ValDef(_) } }
+
+          for (sym <- tree.symbol.owner.tpe.members)
+            env(sym) = NonReducible(ReductionError.NoSource, EmptyTree)
+
+          topCtors.contains(tree.symbol) match {
+            case true  => mkClosure(env, tree.symbol, paramss, mkUnit)
+            case false => mkClosure(env, tree.symbol, paramss, NonReducible(ReductionError.NoSource, tree))
+          }
+        }
+
         case None => NonReducible(ReductionError.NoSource, tree)
         case _    => throw new UnsupportedOperationException("Invalid constructor")
       }
@@ -297,7 +322,7 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
 
       case Ident(_) => env.findParent(_.defines(tree.symbol)) match {
         case Some(owner) => reduce(owner(tree.symbol), env)
-        case _           => throw new UnsupportedOperationException("Invalid assignment")
+        case _           => throw new UnsupportedOperationException("Invalid local reference")
       }
 
       case This(_) => env.findParent(_.symbol eq SymbolFactory.makeInstanceOf(tree.symbol)) match {
@@ -306,7 +331,10 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
       }
 
       // Super call site within a subclass - ignore overriding
-      case Select(Super(_, _), _) => reduce(env(tree.symbol), env)
+      case Select(Super(_, _), _) => env.get(tree.symbol) match {
+        case Some(value) => reduce(value, env)
+        case None        => NonReducible(ReductionError.NoSource, tree)
+      }
 
       // Normal selection - respect overriding
       case Select(from, _) => reduce(from, env) match {
@@ -318,9 +346,13 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
             case sym             => sym
           }
 
-          reduce(inst(sym), env)
+          inst.get(sym) match {
+            case Some(value) => reduce(value, env)
+            case None        => NonReducible(ReductionError.NoSource, tree)
+          }
         }
 
+        case inst: Literal      => NonReducible(ReductionError.NoSource, Select(inst, tree.symbol))
         case inst: NonReducible => NonReducible(ReductionError.CausedBy(inst), Select(inst.expr, tree.symbol))
         case _                  => throw new UnsupportedOperationException("Invalid selection")
       }
@@ -329,26 +361,43 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
 
         case rFun @ Closure(evalEnv, vparams, body) => {
 
-          val rArgs = vparams.map(_.symbol).zip(args) map {
-            case (sym, arg) if sym.isByNameParam => (sym, mkClosure(env, sym, Nil, arg)) // call-by-name: pass arg unevaluated
-            case (sym, arg)                      => (sym, reduce(arg, env))
-          }
+          body match {
 
-          callStack.enter(rFun.symbol) {
+            case body: NonReducible => {
 
-            for ((sym, arg) <- rArgs)
-              evalEnv(sym) = arg
+              val rArgs = args map { reduce(_, env) }
 
-            reduce(body, evalEnv)
+              for ((sym, arg) <- vparams.map(_.symbol).zip(args))
+                evalEnv(sym) = arg
 
-          } getOrElse {
+              NonReducible.panicked(ReductionError.CausedBy(body), mkClosure(evalEnv, rFun.symbol, Nil, body))
+            }
 
-            diverge(evalEnv, List(body), rFun.symbol)
-            NonReducible(ReductionError.Recursive, Apply(rFun, rArgs.map(_._2)))
+            case _ => {
+
+              val rArgs = vparams.map(_.symbol).zip(args) map {
+                case (sym, arg) if sym.isByNameParam => (sym, mkClosure(env, sym, Nil, arg)) // call-by-name: pass arg unevaluated
+                case (sym, arg)                      => (sym, reduce(arg, env))
+              }
+
+              callStack.enter(rFun.symbol) {
+
+                for ((sym, arg) <- rArgs)
+                  evalEnv(sym) = arg
+
+                reduce(body, evalEnv)
+
+              } getOrElse {
+
+                diverge(evalEnv, List(body), rFun.symbol)
+                NonReducible(ReductionError.Recursive, Apply(rFun, rArgs.map(_._2)))
+              }
+            }
           }
         }
 
-        case rFun: NonReducible => NonReducible(ReductionError.CausedBy(rFun), Apply(rFun.expr, args map { reduce(_, env) }).copyAttrs(tree))
+        case rFun: NonReducible => NonReducible.panicked(ReductionError.CausedBy(rFun), Apply(rFun.expr, args map { reduce(_, env) }).copyAttrs(tree))
+
         case _                  => throw new UnsupportedOperationException("Invalid function application")
       }
 
@@ -381,7 +430,7 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
         }
 
         val inits = stats flatMap {
-          case stat: ValDef => Some(stat.copy(rhs = mkDefault(stat.symbol.tpe.typeSymbol)))
+          case stat: ValDef => Some(stat.symbol)
           case _            => None
         }
 
@@ -391,7 +440,11 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
           case (_, index)            => (1, index)
         } map { _._1 }
 
-        val rStats = (inits ++ orderedStats) map { reduce(_, blockEnv) }
+        for (sym <- inits) {
+          blockEnv.initMember(sym, mkDefault(sym.tpe.typeSymbol))
+        }
+
+        val rStats = orderedStats map { reduce(_, blockEnv) }
         val rExpr = reduce(expr, blockEnv)
 
         val notReduced = rStats find {

@@ -32,8 +32,6 @@ trait TreeReducerEnvironments { this: TreeReducers with HasGlobal =>
 
       def apply(): Environment = Empty.makeChild
 
-      def forUnknownValue(tpe: Type): Environment = Empty //throw new UnsupportedOperationException("Not implemented yet")
-
       object Empty extends Environment {
         override val parent = null
         override def symbol_=(sym: Symbol) = throw new UnsupportedOperationException("Attempted to set symbol on non-existent environment")
@@ -44,32 +42,66 @@ trait TreeReducerEnvironments { this: TreeReducers with HasGlobal =>
         override def copy(cache: mutable.Map[Environment, Environment]): Environment = this
       }
 
-      protected[Environment] class Member(val symbol: Symbol, private var _value: Tree) {
+      protected[Environment] class Member(val symbol: Symbol, private var _value: Tree, initialized: Boolean) {
 
+        private var _initialized: Boolean = initialized
         private var _accessed: Boolean = false
-        private var _modified: Boolean = false
+        private var _mutated: Boolean = false
 
         def value = { _accessed = true; _value }
-        def value_=(value: Tree) = { _modified = true; _value = value }
+        def value_=(value: Tree) = {
 
-        def peek[T](f: Tree => Option[T]): Option[T] = f(_value) map { ret => _accessed = true; ret }
-        def sneak = _value
+          if (_initialized)
+            _mutated = true
+          else
+            _initialized = true
+
+          _value = value
+        }
 
         def accessed = _accessed
-        def modified = _modified
+        def mutated = _mutated
+
+        def valueMutated = _value match {
+          case env: Environment => env.mutated
+          case _                => false
+        }
+
+        def panic: Unit = {
+          _accessed = true
+
+          _value match {
+            case env: Environment => env.panic
+            case _                =>
+          }
+
+          if (symbol.isMutable) {
+            _initialized = true
+            _mutated = true
+            _value = TreeReducer.NonReducible(ReductionError.NoSource, _value)
+          }
+        }
+
+        def copy(cache: mutable.Map[Environment, Environment]): Member = {
+          val value = _value match {
+            case env: Environment => env.copy(cache)
+            case x                => x
+          }
+          new Member(symbol, value, _initialized)
+        }
 
         def merge(that: Member): Unit = {
-          _accessed |= that._accessed
 
-          that._modified match {
-            case true => {
-              _modified = true
-              _value = NonReducible(ReductionError.NonDeterministic, Alternative(List(_value, that._value)))
-            }
-            case false => (_value, that._value) match {
-              case (env1: Environment, env2: Environment) => env1.merge(env2)
-              case _                                      =>
-            }
+          val changed = (_initialized != that._initialized) || that._mutated
+
+          _accessed |= that._accessed
+          _initialized |= changed
+          _mutated |= changed
+
+          (changed, _value, that._value) match {
+            case (true, _, _)                                    => _value = TreeReducer.NonReducible(ReductionError.NonDeterministic, _value)
+            case (false, env: Environment, thatEnv: Environment) => env.merge(thatEnv)
+            case _                                               =>
           }
         }
       }
@@ -81,6 +113,7 @@ trait TreeReducerEnvironments { this: TreeReducers with HasGlobal =>
 
       protected val parent: Environment
       protected val members: mutable.Map[Symbol, Member] = mutable.Map()
+      private val panicking = new util.DynamicVariable(false)
 
       private var _symbol: Symbol = NoSymbol
       override def hasSymbol = true
@@ -117,12 +150,19 @@ trait TreeReducerEnvironments { this: TreeReducers with HasGlobal =>
 
       def apply(sym: Symbol): Tree = get(sym).get
 
-      def update(sym: Symbol, value: Tree) = members get sym match {
+      def update(sym: Symbol, value: Tree): Unit = members get sym match {
         case Some(member) => member.value = value
-        case None         => members(sym) = new Member(sym, value)
+        case None         => members(sym) = new Member(sym, value, true)
+      }
+
+      def initMember(sym: Symbol, default: Tree): Unit = members get sym match {
+        case Some(_) =>
+        case None    => members(sym) = new Member(sym, default, false)
       }
 
       def defines(sym: Symbol): Boolean = members.contains(sym)
+
+      def mutated: Boolean = members exists { case (_, m) => m.mutated || m.valueMutated }
 
       def makeChild: Environment = {
         val self = this
@@ -155,6 +195,17 @@ trait TreeReducerEnvironments { this: TreeReducers with HasGlobal =>
         }
       }
 
+      def panic: Unit = {
+        if (!panicking.value) {
+          panicking.withValue(true) {
+            for (member <- members.values) {
+              member.panic
+            }
+            parent.panic
+          }
+        }
+      }
+
       def copy: Environment = copy(mutable.Map())
 
       protected def copy(cache: mutable.Map[Environment, Environment]): Environment = cache get this getOrElse {
@@ -164,21 +215,16 @@ trait TreeReducerEnvironments { this: TreeReducers with HasGlobal =>
           override val parent = self.parent.copy(cache)
         }
 
-        for ((sym, mem) <- members) {
-          val value = mem.sneak match {
-            case env: Environment => env.copy(cache)
-            case value            => value
-          }
-
-          that.members(sym) = new Member(sym, value)
+        for ((sym, member) <- members) {
+          that.members(sym) = member.copy(cache)
         }
 
         that setSymbol self.symbol
       }
 
       def merge(that: Environment): Unit = {
-        for ((sym, mem) <- members) {
-          mem.merge(that.members(sym))
+        for ((sym, member) <- members) {
+          member.merge(that.members(sym))
         }
       }
     }
