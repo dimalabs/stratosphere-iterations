@@ -111,6 +111,8 @@ trait TreeReducers extends TreeReducerEnvironments with TreeReducerImpls { this:
         findEnvs.traverse(this)
         envs foreach { _.panic }
       }
+
+      override def toString = "NonReducible(" + reason.toString + "): " + expr
     }
 
     object NonReducible {
@@ -123,12 +125,16 @@ trait TreeReducers extends TreeReducerEnvironments with TreeReducerImpls { this:
 
     sealed abstract class ReductionError
     object ReductionError {
+      case object NotImplemented extends ReductionError
+      case object Unexpected extends ReductionError
       case object Synthetic extends ReductionError
       case object NoSource extends ReductionError
       case object Recursive extends ReductionError
       case object NonDeterministic extends ReductionError
 
-      class CausedBy(val cause: NonReducible) extends ReductionError
+      class CausedBy(val cause: NonReducible) extends ReductionError {
+        override def toString = "CausedBy(" + cause + ")"
+      }
 
       object CausedBy {
         def unapply(err: CausedBy): Option[NonReducible] = Some(err.cause)
@@ -140,7 +146,7 @@ trait TreeReducers extends TreeReducerEnvironments with TreeReducerImpls { this:
     }
 
     object EnvironmentBuilder {
-      
+
       case object CurrentEnvironment extends Tree
 
       def build(env: Environment, path: List[Tree]): Environment = path match {
@@ -152,48 +158,42 @@ trait TreeReducers extends TreeReducerEnvironments with TreeReducerImpls { this:
           case _                      => throw new UnsupportedOperationException("Couldn't find package")
         }
 
-        case (cd: ClassDef) :: rest if cd.symbol.isModuleClass => {
-          val inst = reduce(Ident(cd.symbol), env, false) match {
-            case env: Environment => env
-            case _                => throw new UnsupportedOperationException("Couldn't find object")
+        case (cd: ClassDef) :: rest => env.get(cd.symbol) match {
+          case Some(inst: Environment) if cd.symbol.isModuleClass => build(inst, rest)
+          case Some(classEnv: Environment) => {
+
+            classEnv.get(cd.symbol.primaryConstructor) match {
+              case Some(Extractors.Closure(classEnv, params, body)) => {
+                val inst = classEnv.makeChild setSymbol SymbolFactory.makeInstanceOf(classEnv.symbol)
+                TypeOf(inst) = classEnv.symbol
+                val ctor = new Closure { override def unpacked = (inst, params, body) }
+                ctor setSymbol cd.symbol.primaryConstructor
+                val newExpr = cd.symbol.primaryConstructor.paramss.foldLeft(ctor: Tree) { (fun, params) => Apply(fun, params map { _ => NonReducible(ReductionError.Synthetic, EmptyTree) }) }
+                reduce(newExpr, env, false)
+                build(inst, rest)
+              }
+              case _ => throw new UnsupportedOperationException("Couldn't find ctor")
+            }
           }
-          build(inst, rest)
+          case _ => throw new UnsupportedOperationException("Couldn't find class")
         }
 
-        case (cd: ClassDef) :: rest => {
-          val ctor = Select(New(Ident(cd.symbol)), cd.symbol.primaryConstructor)
-          val newExpr = cd.symbol.primaryConstructor.paramss.foldLeft(ctor: Tree) { (fun, params) => Apply(fun, params map { _ => NonReducible(ReductionError.Synthetic, EmptyTree) }) }
-          val inst = reduce(newExpr, env, false) match {
-            case env: Environment => env
-            case _                => throw new UnsupportedOperationException("Couldn't construct class")
+        case (dd: DefDef) :: rest => env.get(dd.symbol) match {
+          case Some(Extractors.Closure(evalEnv, params, body)) => {
+            for (p <- params)
+              evalEnv(p.symbol) = NonReducible(ReductionError.Synthetic, EmptyTree)
+            build(evalEnv, body :: rest)
           }
-          build(inst, rest)
+          case _ => throw new UnsupportedOperationException("Couldn't find def")
         }
 
-        case (dd: DefDef) :: rest => {
-
-          val (evalEnv, params) = reduce(Ident(dd.symbol), env, false) match {
-            case Extractors.Closure(evalEnv, params, _) => (evalEnv, params)
-            case _                                      => throw new UnsupportedOperationException("Couldn't find def")
+        case (ld: LabelDef) :: rest => env.get(ld.symbol) match {
+          case Some(Extractors.Closure(evalEnv, params, body)) => {
+            for (p <- params)
+              evalEnv(p.symbol) = NonReducible(ReductionError.Synthetic, EmptyTree)
+            build(evalEnv, body :: rest)
           }
-
-          for (p <- params)
-            evalEnv(p.symbol) = NonReducible(ReductionError.Synthetic, EmptyTree)
-
-          build(evalEnv, rest)
-        }
-
-        case (ld: LabelDef) :: rest => {
-
-          val (evalEnv, params) = reduce(Ident(ld.symbol), env, false) match {
-            case Extractors.Closure(evalEnv, params, _) => (evalEnv, params)
-            case _                                      => throw new UnsupportedOperationException("Couldn't find label")
-          }
-
-          for (p <- params)
-            evalEnv(p.symbol) = NonReducible(ReductionError.Synthetic, EmptyTree)
-
-          build(evalEnv, rest)
+          case _ => throw new UnsupportedOperationException("Couldn't find def")
         }
 
         case (fun: Function) :: rest => {
@@ -201,7 +201,7 @@ trait TreeReducers extends TreeReducerEnvironments with TreeReducerImpls { this:
           for (p <- fun.vparams)
             evalEnv(p.symbol) = NonReducible(ReductionError.Synthetic, EmptyTree)
 
-          build(evalEnv, rest)
+          build(evalEnv, fun.body :: rest)
         }
 
         case (blk: Block) :: Nil => env
@@ -226,7 +226,7 @@ trait TreeReducers extends TreeReducerEnvironments with TreeReducerImpls { this:
             case env: Environment => env
             case _                => throw new UnsupportedOperationException("Error building block environment")
           }
-          
+
           build(blkEnv, next :: rest)
         }
 

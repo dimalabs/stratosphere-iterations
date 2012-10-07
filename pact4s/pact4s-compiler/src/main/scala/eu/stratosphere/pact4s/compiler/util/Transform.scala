@@ -20,7 +20,7 @@ package eu.stratosphere.pact4s.compiler.util
 import scala.tools.nsc.Phase
 import scala.tools.nsc.plugins.PluginComponent
 
-trait Transform extends PluginComponent {
+trait Transform extends PluginComponent with HasGlobal {
 
   import global._
 

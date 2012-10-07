@@ -138,21 +138,21 @@ class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outp
     diag union lower union upper
   }
 
-  def normV(x: DataStream[Cell]): DataStream[Double] = throw new RuntimeException("Not implemented")
-  def normM(x: DataStream[Cell]): DataStream[Double] = throw new RuntimeException("Not implemented")
-  def dot(x: DataStream[Cell], y: DataStream[Cell]): DataStream[Double] = throw new RuntimeException("Not implemented")
-  def sub(x: DataStream[Cell], y: DataStream[Cell]): DataStream[Cell] = throw new RuntimeException("Not implemented")
-  def mulSS(x: DataStream[Double], y: DataStream[Double]): DataStream[Double] = throw new RuntimeException("Not implemented")
-  def mulVS(x: DataStream[Cell], y: DataStream[Double]): DataStream[Cell] = throw new RuntimeException("Not implemented")
-  def mulMM(x: DataStream[Cell], y: DataStream[Cell]): DataStream[Cell] = throw new RuntimeException("Not implemented")
-  def mulMV(x: DataStream[Cell], y: DataStream[Cell]): DataStream[Cell] = throw new RuntimeException("Not implemented")
-  def decompose(t: DataStream[Cell]): (DataStream[Cell], DataStream[Cell]) = throw new RuntimeException("Not implemented")
+  def normV(x: DataStream[Cell]): DataStream[Double] = x map { _.value} //throw new RuntimeException("Not implemented")
+  def normM(x: DataStream[Cell]): DataStream[Double] = x map { _.value} //throw new RuntimeException("Not implemented")
+  def dot(x: DataStream[Cell], y: DataStream[Cell]): DataStream[Double] = x map { _.value} //throw new RuntimeException("Not implemented")
+  def sub(x: DataStream[Cell], y: DataStream[Cell]): DataStream[Cell] = x //throw new RuntimeException("Not implemented")
+  def mulSS(x: DataStream[Double], y: DataStream[Double]): DataStream[Double] = x //throw new RuntimeException("Not implemented")
+  def mulVS(x: DataStream[Cell], y: DataStream[Double]): DataStream[Cell] = x //throw new RuntimeException("Not implemented")
+  def mulMM(x: DataStream[Cell], y: DataStream[Cell]): DataStream[Cell] = x //throw new RuntimeException("Not implemented")
+  def mulMV(x: DataStream[Cell], y: DataStream[Cell]): DataStream[Cell] = x //throw new RuntimeException("Not implemented")
+  def decompose(t: DataStream[Cell]): (DataStream[Cell], DataStream[Cell]) = (t, t) // throw new RuntimeException("Not implemented")
 
-  def norm(x: Seq[Cell]): Double = throw new RuntimeException("Not implemented")
-  def dot(x: Seq[Cell], y: Seq[Cell]): Double = throw new RuntimeException("Not implemented")
-  def sub(x: Seq[Cell], y: Seq[Cell]): Seq[Cell] = throw new RuntimeException("Not implemented")
-  def mulVS(x: Seq[Cell], y: Double): Seq[Cell] = throw new RuntimeException("Not implemented")
-  def mulMV(x: Seq[Cell], y: Seq[Cell]): Seq[Cell] = throw new RuntimeException("Not implemented")
+  def norm(x: Seq[Cell]): Double = 0 //throw new RuntimeException("Not implemented")
+  def dot(x: Seq[Cell], y: Seq[Cell]): Double = 0 //throw new RuntimeException("Not implemented")
+  def sub(x: Seq[Cell], y: Seq[Cell]): Seq[Cell] = Seq() //throw new RuntimeException("Not implemented")
+  def mulVS(x: Seq[Cell], y: Double): Seq[Cell] = Seq() //throw new RuntimeException("Not implemented")
+  def mulMV(x: Seq[Cell], y: Seq[Cell]): Seq[Cell] = Seq() //throw new RuntimeException("Not implemented")
 
   abstract sealed class Cell {
     val row: Int; val col: Int; val value: Double

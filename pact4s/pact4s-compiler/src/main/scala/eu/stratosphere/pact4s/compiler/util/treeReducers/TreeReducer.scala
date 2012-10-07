@@ -120,8 +120,15 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
     def reduce(tree: Tree, env: Environment): Tree = tree match {
 
       case PackageDef(pid, stats) => {
-        val pkg = env.makeChild setSymbol tree.symbol
-        env(tree.symbol) = pkg
+        val pkg = env.get(tree.symbol) match {
+          case None => {
+            val pkg = env.makeChild setSymbol tree.symbol
+            env(tree.symbol) = pkg
+            pkg
+          }
+          case Some(pkg: Environment) => pkg
+        }
+
         stats foreach { reduce(_, pkg) }
         mkUnit
       }
@@ -132,7 +139,9 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
           // Evaluate this tree as a normal class definition
           try {
             tree.symbol.resetFlag(Flags.MODULE)
-            reduce(tree, env.makeChild)
+            val anonEnv = env.makeChild
+            reduce(tree, anonEnv)
+            anonEnv(tree.symbol)
           } finally {
             tree.symbol.setFlag(Flags.MODULE)
           }
@@ -143,9 +152,9 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
         val body = classEnv match {
           case classEnv: Environment => classEnv(ctorSym) match {
             case Closure(_, Nil, body) => body
-            case _                     => throw new UnsupportedOperationException("Invalid object definition")
+            case other                 => throw new UnsupportedOperationException("Invalid object definition")
           }
-          case _ => throw new UnsupportedOperationException("Invalid object definition")
+          case other => throw new UnsupportedOperationException("Invalid object definition")
         }
 
         /* 
@@ -178,7 +187,12 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
         val classEnv = env.makeChild setSymbol classSym
         env(classSym) = classEnv
 
-        val (ctors, cstats) = body partition {
+        val (ctors, cstats) = body filter { t =>
+          t match {
+            case _: ValDef | _: DefDef => !t.symbol.isParamAccessor
+            case _                     => true
+          }
+        } partition {
           case tree if tree.hasSymbolWhich(_.isConstructor) => true
           case _                                            => false
         }
@@ -230,12 +244,15 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
       case DefDef(_, _, _, paramss, _, rhs) => env(tree.symbol) = mkClosure({ env.makeChild }, tree.symbol, paramss, rhs); mkUnit
 
       // Ctor call site
+      case Select(New(from: TypeTree), _)   => reduce(Select(New(Ident(from.symbol)), tree.symbol), env)
+
       case Select(New(from), _) => reduce(Select(from, tree.symbol), env) match {
 
         case ctor @ Closure(classEnv, params, body) => {
           val inst = classEnv.makeChild setSymbol SymbolFactory.makeInstanceOf(classEnv.symbol)
           TypeOf(inst) = classEnv.symbol
-          mkClosure(inst, ctor.symbol, List(params), Block(List(body), inst))
+          val ctorBody = new Block(List(body), inst) { override val hasSymbol = true }
+          mkClosure(inst, ctor.symbol, List(params), ctorBody)
         }
 
         // Unknown ctor - pack the parameters into a panicked instance environment 
@@ -246,15 +263,16 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
           val paramss = tree.symbol.paramss map { params => params map { ValDef(_) } }
 
           for (sym <- classSym.tpe.members)
-            env(sym) = NonReducible(ReductionError.NoSource, EmptyTree)
+            inst(sym) = NonReducible(ReductionError.NoSource, EmptyTree)
 
           // panic the instance after the ctor parameters have been applied
-          val body = Apply(mkClosure(inst, tree.symbol.newValue("dummy$"), Nil, NonReducible(ReductionError.CausedBy(ctor), tree)), Nil)
+          val body = Apply(mkClosure(inst, tree.symbol.newValue(nme.CONSTRUCTOR), Nil, NonReducible(ReductionError.CausedBy(ctor), tree)), Nil)
+          val ctorBody = new Block(List(body), inst) { override val hasSymbol = true }
 
-          mkClosure(inst, tree.symbol, paramss, Block(List(body), inst))
+          mkClosure(inst, tree.symbol, paramss, ctorBody)
         }
 
-        case _ => throw new UnsupportedOperationException("Invalid constructor")
+        case _ => throw new UnsupportedOperationException("Invalid constructor: " + tree)
       }
 
       // Ctor call site within an auxilliary ctor
@@ -263,7 +281,7 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
         // When stepping from one ctor to another, keep the same instance environment
         case ctor @ Closure(_, params, body) => mkClosure(env, ctor.symbol, List(params), body)
 
-        case _                               => throw new UnsupportedOperationException("Invalid constructor")
+        case _                               => throw new UnsupportedOperationException("Invalid constructor: " + tree)
       }
 
       // Super ctor call site within a subclass
@@ -287,9 +305,10 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
         }
 
         // Unknown super class
-        case None => {
+        case _ => {
 
-          val tops = Set(definitions.AnyClass, definitions.AnyCompanionClass, definitions.AnyValClass, definitions.AnyCompanionClass, definitions.AnyRefClass, definitions.ObjectClass)
+          // definitions.AnyCompanionClass = scala.AnyCompanion doesn't exist
+          val tops = Set(definitions.AnyClass, definitions.AnyValClass, definitions.AnyValCompanionClass, definitions.AnyRefClass, definitions.ObjectClass)
           val topCtors = tops flatMap { _.tpe.members.filter(_.isConstructor) }
 
           val paramss = tree.symbol.paramss map { params => params map { ValDef(_) } }
@@ -302,34 +321,45 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
             case false => mkClosure(env, tree.symbol, paramss, NonReducible(ReductionError.NoSource, tree))
           }
         }
-
-        case None => NonReducible(ReductionError.NoSource, tree)
-        case _    => throw new UnsupportedOperationException("Invalid constructor")
       }
 
       // The program has already been type checked, so just unwrap type applications
-      case Typed(expr, tpt)                                 => reduce(expr, env)
-      case TypeApply(fun, args)                             => reduce(fun, env)
+      case Typed(expr, tpt)                                      => reduce(expr, env)
+      case TypeApply(fun, args)                                  => reduce(fun, env)
 
       // Calls to parameterless methods (and call-by-name arg refs) don't get Apply nodes, so reduce them on access
-      case Closure(env, Nil, body)                          => reduce(body, env)
+      case Closure(env, Nil, body) if !tree.symbol.isConstructor => reduce(body, env)
 
       // Types, literals, instances, unapplied closures, and non-reducible statements are already in WHNF
-      case _: TypeDef | _: TypTree | _: Literal | EmptyTree => tree
-      case _: Environment | _: Closure | _: NonReducible    => tree
+      case _: TypeDef | _: TypTree | _: Literal | EmptyTree      => tree
+      case _: Environment | _: Closure | _: NonReducible         => tree
+      case ArrayValue(tpt, elems)                                => treeCopy.ArrayValue(tree, tpt, elems map { reduce(_, env) })
 
-      case EnvironmentBuilder.CurrentEnvironment            => env
+      case EnvironmentBuilder.CurrentEnvironment                 => env
 
-      case Function(vparams, body)                          => mkClosure({ env.makeChild }, tree.symbol, List(vparams), body)
+      case Function(vparams, body)                               => mkClosure({ env.makeChild }, tree.symbol, List(vparams), body)
+
+      case Ident(_) if tree.symbol.isModule || tree.symbol.isClass => env.find(tree.symbol) match {
+        case Some(ref) => ref
+        case None      => NonReducible(ReductionError.NoSource, tree)
+      }
 
       case Ident(_) => env.findParent(_.defines(tree.symbol)) match {
         case Some(owner) => reduce(owner(tree.symbol), env)
-        case _           => throw new UnsupportedOperationException("Invalid local reference")
+        case _ => {
+          val keys = env.toMap.keys.map(_.name).mkString(", ")
+          throw new UnsupportedOperationException("Invalid local reference: " + tree.symbol.name + " not in " + keys + " @ " + tree.pos)
+        }
+      }
+
+      case This(_) if tree.symbol.isPackageClass => env.find(tree.symbol) match {
+        case Some(pkg) => pkg
+        case None      => NonReducible(ReductionError.NoSource, tree)
       }
 
       case This(_) => env.findParent(_.symbol eq SymbolFactory.makeInstanceOf(tree.symbol)) match {
         case Some(inst) => inst
-        case None       => throw new UnsupportedOperationException("Invalid this reference")
+        case None       => throw new UnsupportedOperationException("Invalid this reference " + tree)
       }
 
       // Super call site within a subclass - ignore overriding
@@ -350,18 +380,32 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
 
           inst.get(sym) match {
             case Some(value) => reduce(value, env)
-            case None        => NonReducible(ReductionError.NoSource, tree)
+            case None => {
+
+              inst.toMap.keys.find { k => k.name.toString == sym.name.toString } match {
+                case Some(k) => reporter.warning(tree.pos, "Found non-matching symbols with name " + sym.name)
+                case None    => reporter.warning(tree.pos, "Selection failed: " + tree)
+              }
+
+              NonReducible(ReductionError.NoSource, tree)
+            }
           }
         }
 
         case inst: Literal      => NonReducible(ReductionError.NoSource, Select(inst, tree.symbol))
+        case inst: Closure      => NonReducible(ReductionError.NoSource, Select(inst, tree.symbol))
         case inst: NonReducible => NonReducible(ReductionError.CausedBy(inst), Select(inst.expr, tree.symbol))
-        case _                  => throw new UnsupportedOperationException("Invalid selection")
+        case inst               => throw new UnsupportedOperationException("Invalid selection " + tree + ": " + inst.getClass.getName)
       }
 
       case Apply(fun, args) => reduce(fun, env) match {
 
         case rFun @ Closure(evalEnv, vparams, body) => {
+
+          val params = vparams map {
+            case vd if vd.symbol.owner.isConstructor => vd.symbol.getter(vd.symbol.owner.owner)
+            case vd                                  => vd.symbol
+          }
 
           body match {
 
@@ -369,7 +413,7 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
 
               val rArgs = args map { reduce(_, env) }
 
-              for ((sym, arg) <- vparams.map(_.symbol).zip(args))
+              for ((sym, arg) <- params.zip(args))
                 evalEnv(sym) = arg
 
               NonReducible.panicked(ReductionError.CausedBy(body), mkClosure(evalEnv, rFun.symbol, Nil, body))
@@ -377,7 +421,7 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
 
             case _ => {
 
-              val rArgs = vparams.map(_.symbol).zip(args) map {
+              val rArgs = params.zip(args) map {
                 case (sym, arg) if sym.isByNameParam => (sym, mkClosure(env, sym, Nil, arg)) // call-by-name: pass arg unevaluated
                 case (sym, arg)                      => (sym, reduce(arg, env))
               }
@@ -454,7 +498,7 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
           case _               => false
         }
 
-        (strictBlocks, notReduced) match {
+        (strictBlocks && !tree.hasSymbol, notReduced) match {
           case (true, Some(stat: NonReducible)) => NonReducible(ReductionError.CausedBy(stat), rExpr)
           case _                                => rExpr
         }
@@ -484,12 +528,12 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
         reduce(blk, env)
       }
 
-      case Match(selector, cases)        => throw new UnsupportedOperationException("Not implemented yet")
-      case CaseDef(pat, guard, body)     => throw new UnsupportedOperationException("Not implemented yet")
-      case Alternative(trees)            => throw new UnsupportedOperationException("Not implemented yet")
-      case Star(elem)                    => throw new UnsupportedOperationException("Not implemented yet")
-      case Bind(name, body)              => throw new UnsupportedOperationException("Not implemented yet")
-      case UnApply(fun: Tree, args)      => throw new UnsupportedOperationException("Not implemented yet")
+      case Match(selector, cases)        => NonReducible(ReductionError.NotImplemented, tree)
+      case CaseDef(pat, guard, body)     => NonReducible(ReductionError.NotImplemented, tree)
+      case Alternative(trees)            => NonReducible(ReductionError.NotImplemented, tree)
+      case Star(elem)                    => NonReducible(ReductionError.NotImplemented, tree)
+      case Bind(name, body)              => NonReducible(ReductionError.NotImplemented, tree)
+      case UnApply(fun: Tree, args)      => NonReducible(ReductionError.NotImplemented, tree)
 
       /*
        *  Correctly computing all possible field accesses and mutations requires complete coverage of all possible 
@@ -508,10 +552,10 @@ trait TreeReducerImpls { this: TreeReducers with HasGlobal with TreeGenerators =
        *  Return could be treated as a special case. Doing so would still require a CPS transformation, since return
        *  statements (which always apply to the next enclosing DefDef) can appear inside lambda expressions.
        */
-      case _: Return | _: Throw | _: Try => throw new UnsupportedOperationException("Unsupported construct of type " + tree.getSimpleClassName)
+      case _: Return | _: Throw | _: Try => throw new UnsupportedOperationException("Unsupported construct of type " + tree.getSimpleClassName + " @ " + tree.pos)
 
       // Just in case we forgot anything...
-      case _                             => throw new UnsupportedOperationException("Unknown construct of type " + tree.getSimpleClassName)
+      case _                             => throw new UnsupportedOperationException("Unknown construct of type " + tree.getSimpleClassName + " @ " + tree.pos)
     }
   }
 }

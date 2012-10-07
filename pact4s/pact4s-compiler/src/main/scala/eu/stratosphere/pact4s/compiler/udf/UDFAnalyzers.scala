@@ -18,9 +18,10 @@
 package eu.stratosphere.pact4s.compiler.udf
 
 import eu.stratosphere.pact4s.compiler.Pact4sPlugin
+import eu.stratosphere.pact4s.compiler.util.treeReducers._
 import scala.tools.nsc.symtab.Flags
 
-trait UDFAnalyzers extends SelectorAnalyzers with FlowAnalyzers with FallbackBinders { this: Pact4sPlugin =>
+trait UDFAnalyzers extends SelectorAnalyzers with FlowAnalyzers with FallbackBinders with TreeReducers { this: Pact4sPlugin =>
 
   import global._
   import defs._
@@ -30,7 +31,7 @@ trait UDFAnalyzers extends SelectorAnalyzers with FlowAnalyzers with FallbackBin
     private var snapshot: TreeReducer.Environment = _
 
     override def beforeRun() = {
-      snapshot = currentRun.units.foldLeft(TreeReducer.Environment.Empty) { (env, unit) => env.update(NoSymbol, unit.body).get }
+      snapshot = TreeReducer.reduce(currentRun.units.toList, true)
     }
 
     override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with TreeGenerator with Logger with SymbolSnapshot with SelectorAnalyzer with FlowAnalyzer with FallbackBinder {

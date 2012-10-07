@@ -15,6 +15,7 @@
  * ********************************************************************************************************************
  */
 
+/*
 package eu.stratosphere.pact4s.compiler.util
 
 import scala.tools.nsc.Global
@@ -328,3 +329,4 @@ trait TreeReducers { this: HasGlobal with TreeGenerators =>
     }
   }
 }
+*/

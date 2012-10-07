@@ -39,7 +39,10 @@ trait TreeReducerEnvironments { this: TreeReducers with HasGlobal =>
         override def get(sym: Symbol) = None
         override def apply(sym: Symbol) = throw new UnsupportedOperationException("Attempted to retrieve value from non-existent environment")
         override def update(sym: Symbol, value: Tree) = throw new UnsupportedOperationException("Attempted to modify non-existent environment")
+        override def setMember(sym: Symbol, value: Tree) = throw new UnsupportedOperationException("Attempted to modify non-existent environment")
+        override def initMember(sym: Symbol, default: Tree) = throw new UnsupportedOperationException("Attempted to modify non-existent environment")
         override def copy(cache: mutable.Map[Environment, Environment]): Environment = this
+        override def panic = ()
       }
 
       protected[Environment] class Member(val symbol: Symbol, private var _value: Tree, initialized: Boolean) {
@@ -66,6 +69,8 @@ trait TreeReducerEnvironments { this: TreeReducers with HasGlobal =>
           case env: Environment => env.mutated
           case _                => false
         }
+
+        def toPair: (Symbol, Tree) = (symbol, _value)
 
         def panic: Unit = {
           _accessed = true
@@ -155,6 +160,8 @@ trait TreeReducerEnvironments { this: TreeReducers with HasGlobal =>
         case None         => members(sym) = new Member(sym, value, true)
       }
 
+      def setMember(sym: Symbol, value: Tree): Unit = members(sym) = new Member(sym, value, true)
+
       def initMember(sym: Symbol, default: Tree): Unit = members get sym match {
         case Some(_) =>
         case None    => members(sym) = new Member(sym, default, false)
@@ -205,6 +212,8 @@ trait TreeReducerEnvironments { this: TreeReducers with HasGlobal =>
           }
         }
       }
+
+      def toMap: Map[Symbol, Tree] = members.values.map(_.toPair).toMap
 
       def copy: Environment = copy(mutable.Map())
 
