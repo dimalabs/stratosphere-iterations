@@ -459,6 +459,8 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
           case inst                                        => throw new UnsupportedOperationException("Invalid selection " + tree + ": source has type " + inst.getSimpleClassName + " @ " + tree.pos)
         }
 
+        case Apply(fun @ Select(from, _), List(arg)) if fun.symbol.isSetter => reduce(Assign(Select(from, fun.symbol.getter(fun.symbol.owner)), arg), env)
+
         case Apply(fun, args) => reduce(fun, env) match {
 
           case rFun @ Closure(evalEnv, vparams, body) => {
@@ -514,7 +516,7 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
 
             case Ident(_) => env.findParent(_.defines(lhs.symbol)) match {
               case Some(target) => target
-              case _            => throw new UnsupportedOperationException("Invalid assignment @" + tree.pos)
+              case _            => throw new UnsupportedOperationException("Invalid assignment @ " + tree.pos)
             }
 
             case Select(from, _) => reduce(from, env)

@@ -19,6 +19,11 @@ package eu.stratosphere.pact4s.examples.compilerTests
 
 import eu.stratosphere.pact4s.common.analyzer._
 
+class AssignTest {
+  var x = 0
+  x = 1
+}
+
 class KeyTest { 
 
   def toFS[T1: UDT, R](fun: FieldSelectorCode[T1 => R]) = fun
@@ -29,13 +34,13 @@ class KeyTest {
   final def sndAndFst = (x: (Int, Int, Int)) => (x._2, x._1)
   final def id[T](x: T): T = x
 
-  case class IntPair(x: Int, y: Int = 0) {
+  case class IntPair(var x: Int, var y: Int = 0) {
     def this() = this(0, 0)
     final def getX = x
   }
 
   object IntPairExtr {
-    def unapply(xy: IntPair): Some[(Int, Int)] = Some(xy.x, xy.y) // custom extractors fail :-(
+    def unapply(xy: IntPair): Some[(Int, Int)] = Some(xy.x, xy.y) // Unapply not supported yet...
   }
 
   abstract sealed class TestBase { val x: Int; val y: Int; def isOne = false; def isTwo = false }
@@ -45,6 +50,7 @@ class KeyTest {
   val testID = toFS { x: (Int, Int, Int) => x }
   val testFunApp = toFS { arg: (Int, Int, Int) => sndAndFst(id(arg)) }
   val testThisExpr: FieldSelectorCode[IntPair => Int] = { arg: IntPair => arg.getX }
+  val testAssignment: FieldSelectorCode[IntPair => Int] = { arg: IntPair => arg.x = arg.y; arg.getX }
   
   val testPatMatch: FieldSelectorCode[((Int, (Int, Int))) => Any] = {
     case (x, (y, z)) =>
