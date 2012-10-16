@@ -167,9 +167,9 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
           val body = classEnv match {
             case classEnv: Environment => classEnv(ctorSym) match {
               case Closure(_, Nil, body) => body
-              case other                 => throw new UnsupportedOperationException("Invalid object definition")
+              case other                 => throw new UnsupportedOperationException("Invalid object definition @ " + tree.pos)
             }
-            case other => throw new UnsupportedOperationException("Invalid object definition")
+            case other => throw new UnsupportedOperationException("Invalid object definition @ " + tree.pos)
           }
 
           /* 
@@ -237,7 +237,7 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
               classEnv(ctorDef.symbol) = mkClosure(classEnv, ctorDef.symbol, paramss, body)
             }
 
-            case _ => throw new UnsupportedOperationException("Invalid constructor definition")
+            case _ => throw new UnsupportedOperationException("Invalid constructor definition @ " + tree.pos)
           }
 
           mkUnit
@@ -287,7 +287,7 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
             mkClosure(inst, tree.symbol, paramss, ctorBody)
           }
 
-          case _ => throw new UnsupportedOperationException("Invalid constructor: " + tree)
+          case _ => throw new UnsupportedOperationException("Invalid constructor call @ " + tree.pos)
         }
 
         // Ctor call site within an auxilliary ctor
@@ -296,7 +296,7 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
           // When stepping from one ctor to another, keep the same instance environment
           case ctor @ Closure(_, params, body) => mkClosure(env, ctor.symbol, List(params), body)
 
-          case _                               => throw new UnsupportedOperationException("Invalid constructor: " + tree)
+          case _                               => throw new UnsupportedOperationException("Invalid self-constructor call @ " + tree.pos)
         }
 
         // Super ctor call site within a subclass
@@ -374,7 +374,7 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
 
         case This(_) => env.findParent(_.symbol eq SymbolFactory.makeInstanceOf(tree.symbol)) match {
           case Some(inst) => inst
-          case None       => throw new UnsupportedOperationException("Invalid this reference " + tree)
+          case None       => throw new UnsupportedOperationException("Invalid this reference @ " + tree.pos)
         }
 
         // Super call site within a subclass - ignore overriding
@@ -397,9 +397,9 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
               case Some(value) => reduce(value, env)
               case None => {
 
-                inst.toMap.keys.find { k => k.name.toString == sym.name.toString } match {
-                  case Some(k) => Warn.report("Found non-matching symbols with name " + sym.name)
-                  case None    => Warn.report("Selection failed: " + tree + " in env {" + inst.toMap.keys.map(_.name.toString).mkString(", ") + "} in expr " + origTree)
+                // this shouldn't happen
+                inst.toMap.keys.find { k => k.name.toString == sym.name.toString } map {
+                  case k => throw new UnsupportedOperationException("Invalid selection " + tree + ": " + k.name + " was found but has unexpected symbol @ " + tree.pos)
                 }
 
                 NonReducible(ReductionError.NoSource, tree)
@@ -410,7 +410,7 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
           case inst: Literal      => NonReducible(ReductionError.NoSource, Select(inst, tree.symbol))
           case inst: Closure      => NonReducible(ReductionError.NoSource, Select(inst, tree.symbol))
           case inst: NonReducible => NonReducible(ReductionError.CausedBy(inst), Select(inst.expr, tree.symbol))
-          case inst               => throw new UnsupportedOperationException("Invalid selection " + tree + ": " + inst.getClass.getName)
+          case inst               => throw new UnsupportedOperationException("Invalid selection " + tree + ": source has type " + inst.getSimpleClassName + " @ " + tree.pos)
         }
 
         case Apply(fun, args) => reduce(fun, env) match {
@@ -459,7 +459,7 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
 
           case rFun: NonReducible => NonReducible.panicked(ReductionError.CausedBy(rFun), Apply(rFun.expr, args map { reduce(_, env) }).copyAttrs(tree))
 
-          case _                  => throw new UnsupportedOperationException("Invalid function application")
+          case _                  => throw new UnsupportedOperationException("Invalid function application @ " + tree.pos)
         }
 
         case Assign(lhs, rhs) => {
@@ -468,7 +468,7 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
 
             case Ident(_) => env.findParent(_.defines(lhs.symbol)) match {
               case Some(target) => target
-              case _            => throw new UnsupportedOperationException("Invalid assignment")
+              case _            => throw new UnsupportedOperationException("Invalid assignment @" + tree.pos)
             }
 
             case Select(from, _) => reduce(from, env)
@@ -479,7 +479,7 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
             case target: Environment  => target(lhs.symbol) = reduce(rhs, env); mkUnit
 
             case target: NonReducible => NonReducible(ReductionError.CausedBy(target), Assign(target.expr, reduce(rhs, env)))
-            case _                    => throw new UnsupportedOperationException("Invalid assignment")
+            case _                    => throw new UnsupportedOperationException("Invalid assignment @ " + tree.pos)
           }
         }
 
