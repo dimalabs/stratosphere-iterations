@@ -21,12 +21,11 @@ import scala.tools.nsc.Global
 import scala.tools.nsc.Phase
 import scala.tools.nsc.SubComponent
 
-trait Visualizers {
+trait Visualizers { this: HasGlobal =>
 
-  val global: Global
   import global._
 
-  trait Visualize extends Transform {
+  trait Visualize extends Transform with InheritsGlobal {
 
     var visualize: Boolean = false
 

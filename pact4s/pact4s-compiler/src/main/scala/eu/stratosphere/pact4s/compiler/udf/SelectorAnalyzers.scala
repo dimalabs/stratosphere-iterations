@@ -21,16 +21,16 @@ import eu.stratosphere.pact4s.compiler.Pact4sPlugin
 import eu.stratosphere.pact4s.compiler.util._
 import eu.stratosphere.pact4s.compiler.util.treeReducers._
 
-trait SelectorAnalyzers { this: Pact4sPlugin with TreeReducers =>
+trait SelectorAnalyzers { this: Pact4sPlugin =>
 
   import global._
   import defs._
-  import TreeReducer._
-  import TreeReducer.Extractors._
+  import TreeReducerHelpers._
 
-  trait SymbolSnapshot { val snapshot: Environment }
+  trait SelectorAnalyzer extends UDTGenSiteParticipant { this: TypingTransformer with TreeGenerator with Logger with TreeReducer =>
 
-  trait SelectorAnalyzer extends UDTGenSiteParticipant { this: TypingTransformer with TreeGenerator with Logger with SymbolSnapshot =>
+    private val logger: Logger = this
+    val snapshot: Environment
 
     protected object FieldSelector {
 
@@ -97,47 +97,10 @@ trait SelectorAnalyzers { this: Pact4sPlugin with TreeReducers =>
 
       private def getSelector(tree: Tree, desc: UDTDescriptor): Either[List[String], List[List[String]]] = {
 
-        def getResult(tree: Tree): Either[List[String], List[List[String]]] = tree match {
-
-          case err: NonReducible => Left(List(err.toString))
-
-          case env: Environment => {
-
-            val instSym = env.symbol match {
-              case NoSymbol => NoSymbol
-              case sym      => SymbolFactory.makeInstanceOf(sym.owner)
-            }
-
-            Tag(env) match {
-
-              case Some(sel) => Right(List(sel.split('.').toList))
-
-              case None if env.symbol eq instSym => {
-                val paramSyms = env.symbol.owner.primaryConstructor.paramss.flatten map { sym => sym.getter(env.symbol.owner) }
-                val (errs, sels) = paramSyms map { sym => getResult(env(sym)) } partition { _.isLeft }
-                errs match {
-                  case Nil => Right(sels map { _.right.get } flatten)
-                  case _   => Left(errs map { _.left.get } flatten)
-                }
-              }
-
-              case _ => {
-                Warn.report("Result environment " + env.symbol.name.toString + " is not an instance: " + env.toMap.keys.map(_.name).mkString(", "))
-                Left(List(NonReducible(ReductionError.Unexpected, tree).toString))
-              }
-            }
-          }
-
-          case _ => {
-            Warn.report("Result is not an environment")
-            Left(List(NonReducible(ReductionError.Unexpected, tree).toString))
-          }
-        }
-
         try {
-          val env = EnvironmentBuilder.build(snapshot.copy, curPath.reverse.toList)
+          val env = treeReducer.build(snapshot.copy, curPath.reverse.toList)
 
-          TreeReducer.reduce(tree, env, true) match {
+          treeReducer.reduce(tree, env, true) match {
 
             case fun @ Closure(_, List(param), _) => {
               val root = mkRootParams(desc, Seq(param.symbol.name.toString), env)
@@ -148,8 +111,9 @@ trait SelectorAnalyzers { this: Pact4sPlugin with TreeReducers =>
                 }
                 case (k, v) => "[" + k.name + " = " + v + "]"
               }
-              Debug.report("Roots: " + strRoots.mkString(", "))
-              getResult(TreeReducer.reduce(Apply(fun, List(root)), env, true))
+
+              val ret = treeReducer.reduce(Apply(fun, List(root)), env, true)
+              getSelectorFromReduction(ret)
             }
 
             case nonFun => Left(List(NonReducible(ReductionError.Unexpected, nonFun).toString))
@@ -169,6 +133,43 @@ trait SelectorAnalyzers { this: Pact4sPlugin with TreeReducers =>
         }
       }
 
+      private def getSelectorFromReduction(tree: Tree): Either[List[String], List[List[String]]] = tree match {
+
+        case err: NonReducible => Left(List(err.toString))
+
+        case env: Environment => {
+
+          val instSym = env.symbol match {
+            case NoSymbol => NoSymbol
+            case sym      => SymbolFactory.makeInstanceOf(sym.owner)
+          }
+
+          Tag(env) match {
+
+            case Some(sel) => Right(List(sel.split('.').toList))
+
+            case None if env.symbol eq instSym => {
+              val paramSyms = env.symbol.owner.primaryConstructor.paramss.flatten map { sym => sym.getter(env.symbol.owner) }
+              val (errs, sels) = paramSyms map { sym => getSelectorFromReduction(env(sym)) } partition { _.isLeft }
+              errs match {
+                case Nil => Right(sels map { _.right.get } flatten)
+                case _   => Left(errs map { _.left.get } flatten)
+              }
+            }
+
+            case _ => {
+              Warn.report("Result environment " + env.symbol.name.toString + " is not an instance: " + env.toMap.keys.map(_.name).mkString(", "))
+              Left(List(NonReducible(ReductionError.Unexpected, tree).toString))
+            }
+          }
+        }
+
+        case _ => {
+          Warn.report("Result is not an environment")
+          Left(List(NonReducible(ReductionError.Unexpected, tree).toString))
+        }
+      }
+
       private def mkRootParams(desc: UDTDescriptor, path: Seq[String], scope: Environment): Environment = desc match {
 
         case _: PrimitiveDescriptor | _: BoxedPrimitiveDescriptor | _: ListDescriptor | _: RecursiveDescriptor => {
@@ -180,7 +181,7 @@ trait SelectorAnalyzers { this: Pact4sPlugin with TreeReducers =>
         case CaseClassDescriptor(_, _, ctorSym, _, getters) => {
           val ctor = Select(New(Ident(ctorSym.owner)), ctorSym)
           val args = getters map { case FieldAccessor(sym, _, _, desc) => mkRootParams(desc, path :+ sym.name.toString, scope) }
-          val env = reduce(Apply(ctor, args.toList), scope, false) match {
+          val env = treeReducer.reduce(Apply(ctor, args.toList), scope, false) match {
             case env: Environment => env
             case _                => throw new UnsupportedOperationException("Unexpected result")
           }
@@ -204,7 +205,7 @@ trait SelectorAnalyzers { this: Pact4sPlugin with TreeReducers =>
 
           val expr = args.foldLeft(ctor: Tree) { (fun, args) => Apply(fun, args) }
 
-          val env = reduce(expr, scope, false) match {
+          val env = treeReducer.reduce(expr, scope, false) match {
             case env: Environment => env
             case _                => throw new UnsupportedOperationException("Unexpected result")
           }
@@ -227,7 +228,7 @@ trait SelectorAnalyzers { this: Pact4sPlugin with TreeReducers =>
           val args = ctorSym.paramss map { _ map { _ => NonReducible(ReductionError.Synthetic, EmptyTree) } }
           val expr = args.foldLeft(ctor: Tree) { (fun, args) => Apply(fun, args) }
 
-          val env = reduce(expr, scope, false) match {
+          val env = treeReducer.reduce(expr, scope, false) match {
             case env: Environment => env
             case _                => throw new UnsupportedOperationException("Unexpected result")
           }

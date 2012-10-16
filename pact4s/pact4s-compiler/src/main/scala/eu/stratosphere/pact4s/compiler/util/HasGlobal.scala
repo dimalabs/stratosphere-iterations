@@ -7,6 +7,10 @@ trait HasGlobal {
   val global: Global
   import global._
   
+  trait InheritsGlobal extends HasGlobal {
+    val global: HasGlobal.this.global.type = HasGlobal.this.global
+  }
+  
   trait HasCompilationUnit {
     protected def unit: CompilationUnit
   }

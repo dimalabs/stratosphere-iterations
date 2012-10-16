@@ -21,22 +21,25 @@ import eu.stratosphere.pact4s.compiler.Pact4sPlugin
 import eu.stratosphere.pact4s.compiler.util.treeReducers._
 import scala.tools.nsc.symtab.Flags
 
-trait UDFAnalyzers extends SelectorAnalyzers with FlowAnalyzers with FallbackBinders with TreeReducers { this: Pact4sPlugin =>
+trait UDFAnalyzers extends SelectorAnalyzers with FlowAnalyzers with FallbackBinders { this: Pact4sPlugin =>
 
   import global._
   import defs._
 
   trait UDFAnalyzer extends Pact4sComponent {
 
-    private var snapshot: TreeReducer.Environment = _
+    private var snapshot: TreeReducerHelpers.Environment = _
 
     override def beforeRun() = {
-      snapshot = TreeReducer.reduce(currentRun.units.toList, true)
+      val tr = new UDFAnalyzers.this.HasPosition with TreeGenerator with Logger with TreeReducer {
+        override def curPos: Position = NoPosition
+      }
+      snapshot = tr.treeReducer.reduce(currentRun.units.toList, true)
     }
 
-    override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with TreeGenerator with Logger with SymbolSnapshot with SelectorAnalyzer with FlowAnalyzer with FallbackBinder {
+    override def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) with TreeGenerator with Logger with TreeReducer with SelectorAnalyzer with FlowAnalyzer with FallbackBinder {
 
-      val snapshot = UDFAnalyzer.this.snapshot
+      override val snapshot = UDFAnalyzer.this.snapshot
 
       override def apply(tree: Tree) = super.apply {
         unlift(tree) match {

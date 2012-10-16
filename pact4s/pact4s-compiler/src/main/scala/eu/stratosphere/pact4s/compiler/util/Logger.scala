@@ -22,7 +22,7 @@ import scala.concurrent.Lock
 
 import scala.tools.nsc.plugins.PluginComponent
 
-trait Loggers { this: TypingTransformers =>
+trait Loggers { this: HasGlobal =>
 
   import global._
   import treeBrowsers.BrowserFrame

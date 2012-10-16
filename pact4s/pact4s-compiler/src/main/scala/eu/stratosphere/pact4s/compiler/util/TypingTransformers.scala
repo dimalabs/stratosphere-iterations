@@ -20,13 +20,11 @@ package eu.stratosphere.pact4s.compiler.util
 import scala.tools.nsc.Global
 import scala.tools.nsc.transform.{ TypingTransformers => NscTypingTransformers }
 
-trait TypingTransformers extends HasGlobal { this: HasGlobal =>
+trait TypingTransformers { this: HasGlobal =>
 
   import global._
 
-  private[TypingTransformers] val nscTypingTransformers = new NscTypingTransformers {
-    override val global: TypingTransformers.this.global.type = TypingTransformers.this.global
-  }
+  private[TypingTransformers] val nscTypingTransformers = new NscTypingTransformers with InheritsGlobal
 
   val neverInfer = Set[Symbol]()
 
