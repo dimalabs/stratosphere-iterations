@@ -121,7 +121,7 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
           }
           
         } catch {
-          case ex => Left(List(ex.getMessage()))
+          case ex => Left(List(ex.getClass.getName + " " + ex.getMessage()))
         }
       }
 
@@ -163,6 +163,7 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
         case _: PrimitiveDescriptor | _: BoxedPrimitiveDescriptor | _: ListDescriptor | _: RecursiveDescriptor => {
           val env = Environment.Empty.makeChild
           Tag(env) = path.mkString(".")
+          TypeOf(env) = desc.tpe.typeSymbol
           env
         }
 
@@ -174,6 +175,7 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
             case _                => throw new UnsupportedOperationException("Couldn't construct instance of class " + ctorSym.owner.name)
           }
           Tag(env) = path.mkString(".")
+          TypeOf(env) = desc.tpe.typeSymbol
           env
         }
 
@@ -205,6 +207,7 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
           }
 
           Tag(env) = path.mkString(".")
+          TypeOf(env) = desc.tpe.typeSymbol
           env
         }
 
@@ -222,6 +225,7 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
           }
 
           Tag(env) = path.mkString(".")
+          TypeOf(env) = desc.tpe.typeSymbol
           env
         }
       }

@@ -40,6 +40,48 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
         case _ => None
       }
     }
+
+    object CasePattern {
+
+      def unapply(tree: Tree): Option[(List[(Symbol, Seq[Symbol])])] = tree match {
+
+        case Apply(MethodTypeTree(params), binds) => {
+
+          val exprs = params.zip(binds) map {
+            case (p, CasePattern(inners)) => {
+              val sel = p.owner.owner.info.decl(p.name) filter (_.isParamAccessor)
+              val binds = inners flatMap {
+                case (NoSymbol, _) => None
+                case (sym, path)   => Some((sym, sel +: path))
+              }
+              Some(binds)
+            }
+            case _ => None
+          }
+
+          if (exprs.forall(_.isDefined))
+            Some(exprs.flatten.flatten)
+          else
+            None
+        }
+
+        case Ident(_)                     => Some(List((tree.symbol, Seq())))
+        case Bind(_, Ident(_))            => Some(List((tree.symbol, Seq())))
+        case Bind(_, CasePattern(inners)) => Some((tree.symbol, Seq()) +: inners)
+        case _                            => None
+      }
+
+      private object MethodTypeTree {
+        def unapply(tree: Tree): Option[List[Symbol]] = tree match {
+          case _: TypeTree => tree.tpe match {
+            case MethodType(params, _) => Some(params)
+            case _                     => None
+          }
+          case _ => None
+        }
+      }
+    }
+
   }
 
   trait TreeReducerImpl extends InheritsGlobal { this: TreeGenerator with Logger with TreeReducer with EnvironmentBuilders =>
@@ -384,7 +426,7 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
         }
 
         // Normal selection - respect overriding
-        case Select(from, _) => reduce(from, env) match {
+        case Select(from, member) => reduce(from, env) match {
 
           case inst: Environment => {
 
@@ -397,9 +439,12 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
               case Some(value) => reduce(value, env)
               case None => {
 
-                // this shouldn't happen
-                inst.toMap.keys.find { k => k.name.toString == sym.name.toString } map {
-                  case k => throw new UnsupportedOperationException("Invalid selection " + tree + ": " + k.name + " was found but has unexpected symbol @ " + tree.pos)
+                inst.toMap.keys.find { k => k.name.toString == sym.name.toString } match {
+                  // this shouldn't happen
+                  case Some(k) => throw new UnsupportedOperationException("Invalid selection " + tree + ": " + sym.name + " was found but has unexpected symbol @ " + tree.pos)
+
+                  // this can happen
+                  case None    => Warn.report("Selection failed: " + tree + " @ " + tree.pos)
                 }
 
                 NonReducible(ReductionError.NoSource, tree)
@@ -407,10 +452,11 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
             }
           }
 
-          case inst: Literal      => NonReducible(ReductionError.NoSource, Select(inst, tree.symbol))
-          case inst: Closure      => NonReducible(ReductionError.NoSource, Select(inst, tree.symbol))
-          case inst: NonReducible => NonReducible(ReductionError.CausedBy(inst), Select(inst.expr, tree.symbol))
-          case inst               => throw new UnsupportedOperationException("Invalid selection " + tree + ": source has type " + inst.getSimpleClassName + " @ " + tree.pos)
+          case inst: Literal                               => NonReducible(ReductionError.NoSource, Select(inst, tree.symbol))
+          case inst: Closure if member.toString == "apply" => inst
+          case inst: Closure                               => NonReducible(ReductionError.NoSource, Select(inst, tree.symbol))
+          case inst: NonReducible                          => NonReducible(ReductionError.CausedBy(inst), Select(inst.expr, tree.symbol))
+          case inst                                        => throw new UnsupportedOperationException("Invalid selection " + tree + ": source has type " + inst.getSimpleClassName + " @ " + tree.pos)
         }
 
         case Apply(fun, args) => reduce(fun, env) match {
@@ -441,10 +487,10 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
                   case (sym, arg)                      => (sym, reduce(arg, env))
                 }
 
-                callStack.enter(rFun.symbol) {
+                for ((sym, arg) <- rArgs)
+                  evalEnv(sym) = arg
 
-                  for ((sym, arg) <- rArgs)
-                    evalEnv(sym) = arg
+                callStack.enter(rFun.symbol) {
 
                   reduce(body, evalEnv)
 
@@ -543,11 +589,58 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
           reduce(blk, env)
         }
 
+        case Match(arg, cases) => {
+
+          val expr = reduce(arg, env) match {
+
+            case rArg: NonReducible => NonReducible(ReductionError.CausedBy(rArg), rArg)
+
+            case rArg => cases match {
+
+              case List(cd @ CaseDef(CasePattern(bindings), EmptyTree, body)) => {
+                val (syms, sels) = bindings.unzip
+                val funParams = syms map {
+                  case NoSymbol => throw new UnsupportedOperationException("Pattern variable is missing symbol")
+                  case sym      => ValDef(sym) setSymbol sym setPos tree.pos
+                }
+                val funArgs = sels map { path => mkSelectSyms(rArg, path: _*) setPos tree.pos }
+                val fun = Function(funParams, body) setSymbol SymbolFactory.makeNonRecursiveAnonFun
+
+                Apply(fun, funArgs)
+              }
+
+              case List(CaseDef(pat, EmptyTree, _)) => NonReducible(ReductionError.TooComplex, pat)
+              case _                                => NonReducible(ReductionError.NonDeterministic, tree)
+            }
+          }
+
+          expr match {
+
+            case _: NonReducible => {
+
+              val branches = cases flatMap {
+                case CaseDef(_, EmptyTree, body) => Seq(body)
+                case CaseDef(_, guard, body)     => Seq(guard, body)
+              }
+
+              diverge(env, branches, SymbolFactory.makeNonRecursiveAnonFun)
+              expr
+            }
+
+            case _ => reduce(expr, env)
+          }
+        }
+
+        /*
         case Match(selector, cases)        => NonReducible(ReductionError.NotImplemented, tree)
         case CaseDef(pat, guard, body)     => NonReducible(ReductionError.NotImplemented, tree)
+        
+        case Bind(name, body)              => NonReducible(ReductionError.NotImplemented, tree)
+
         case Alternative(trees)            => NonReducible(ReductionError.NotImplemented, tree)
         case Star(elem)                    => NonReducible(ReductionError.NotImplemented, tree)
-        case Bind(name, body)              => NonReducible(ReductionError.NotImplemented, tree)
+        */
+
         case UnApply(fun: Tree, args)      => NonReducible(ReductionError.NotImplemented, tree)
 
         /*

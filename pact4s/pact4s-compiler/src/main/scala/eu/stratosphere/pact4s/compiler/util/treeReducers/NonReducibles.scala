@@ -59,6 +59,7 @@ trait NonReducibles { this: HasGlobal with Environments with Closures =>
     case object NoSource extends ReductionError
     case object Recursive extends ReductionError
     case object NonDeterministic extends ReductionError
+    case object TooComplex extends ReductionError
 
     class CausedBy(val cause: NonReducible) extends ReductionError {
       override def toString = "CausedBy(" + cause + ")"

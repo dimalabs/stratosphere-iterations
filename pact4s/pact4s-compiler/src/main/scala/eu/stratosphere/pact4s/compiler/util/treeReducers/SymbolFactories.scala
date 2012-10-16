@@ -38,6 +38,7 @@ trait SymbolFactories { this: HasGlobal with Environments =>
 
     def makeAnonFun(owner: Symbol): Symbol = makeSymbol(owner, "anonfun$")
     def makeInstanceOf(classSym: Symbol): Symbol = makeSymbol(classSym, "inst$")
+    def makeNonRecursiveAnonFun = NoSymbol.newValue("anonfun$")
   }
 
   object TypeOf {

@@ -25,36 +25,36 @@ class KeyTest {
 
   final def fst(x: (Int, Int, Int)): Int = x._1
   final def snd(x: (Int, Int, Int)): Int = x._2
-  final def fstAndSnd = (x: IntPair) => (x.x, x.y)
+  final def fstAndSnd = (x: (Int, Int, Int)) => (x._1, x._2)
+  final def sndAndFst = (x: (Int, Int, Int)) => (x._2, x._1)
   final def id[T](x: T): T = x
 
   case class IntPair(x: Int, y: Int = 0) {
     def this() = this(0, 0)
-    final def getX = x // This expressions fail :-(
+    final def getX = x
   }
 
   object IntPairExtr {
     def unapply(xy: IntPair): Some[(Int, Int)] = Some(xy.x, xy.y) // custom extractors fail :-(
   }
 
+  abstract sealed class TestBase { val x: Int; val y: Int; def isOne = false; def isTwo = false }
+  case class TestSub1(x: Int, y: Int) extends TestBase { override def isOne = true }
+  case class TestSub2(x: Int, y: Int) extends TestBase { override def isTwo = true }
   
-  val test1: FieldSelectorCode[IntPair => Int] = { x => x.x }
+  val testID = toFS { x: (Int, Int, Int) => x }
+  val testFunApp = toFS { arg: (Int, Int, Int) => sndAndFst(id(arg)) }
+  val testThisExpr: FieldSelectorCode[IntPair => Int] = { arg: IntPair => arg.getX }
   
-  def testSel: Int = {
-    val x = new IntPair(0, 0)
-    x.x
-  }
-  
-  /*
-  val test2: FieldSelectorCode[((Int, (Int, Int))) => Any] = {
+  val testPatMatch: FieldSelectorCode[((Int, (Int, Int))) => Any] = {
     case (x, (y, z)) =>
       val q = IntPair(x, z)
       var r = q
-      r = IntPair(0, 0) // Block statements aren't properly handled yet, especially in regard to assignment
-      r.x
+      //r = IntPair(0, 0) // This correctly breaks
+      (r.y, r.x)
   }
-  val test3 = toFS { x: (Int, Int, Int) => x }
-  val test4 = toFS { testUnapply _ }
+  
+  val testDefToFun = toFS { testUnapply _ }
 
   final def testUnapply(q: (Int, (Int, Int))) = {
     val (x, p @ (y, z)) = q
@@ -65,10 +65,8 @@ class KeyTest {
     //val IntPairExtr(y2, z2) = r
     //z2
   }
-  */
 
-  // These tests correctly produce a "Recursion detected" error
-  /*
+  // testPingPong and testY correctly produce a "NonReducible(Recursive)" error
   final def ping(x: Int): Int = pong(x)
   final def pong(x: Int): Int = ping(x)
 
@@ -82,8 +80,9 @@ class KeyTest {
   case class RecPair(_1: Int, _2: RecPair)
   final def rec2nd(f: RecPair => RecPair)(x: RecPair): RecPair = f(x._2)
   
+  /*
+  val testPingPong = toFS { ping _ }
   val testY =  toFS { Y { rec2nd } }
-  val testPingPong = toFS { x: (Int, (Int, Int)) => ping(id(x)._2._1) }
   */
 
 } 

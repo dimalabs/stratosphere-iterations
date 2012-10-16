@@ -58,6 +58,7 @@ trait TreeGenerators { this: HasGlobal =>
     def mkIdent(target: Symbol): Tree = Ident(target) setType target.tpe
     def mkSelect(rootModule: String, path: String*): Tree = mkSelect(Ident(rootModule) setSymbol definitions.getModule(rootModule), path: _*)
     def mkSelect(source: Tree, path: String*): Tree = path.foldLeft(source) { (ret, item) => Select(ret, item) }
+    def mkSelectSyms(source: Tree, path: Symbol*): Tree = path.foldLeft(source) { (ret, item) => Select(ret, item) }
 
     def mkSeq(items: List[Tree]): Tree = Apply(mkSelect("scala", "collection", "Seq", "apply"), items)
     def mkList(items: List[Tree]): Tree = Apply(mkSelect("scala", "collection", "immutable", "List", "apply"), items)
