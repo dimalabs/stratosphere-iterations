@@ -72,7 +72,8 @@ class KeyTest {
     //z2
   }
 
-  // testPingPong and testY correctly produce a "NonReducible(Recursive)" error
+  // These tests correctly produce a "NonReducible(Recursive)" error
+  /*
   final def ping(x: Int): Int = pong(x)
   final def pong(x: Int): Int = ping(x)
 
@@ -86,7 +87,6 @@ class KeyTest {
   case class RecPair(_1: Int, _2: RecPair)
   final def rec2nd(f: RecPair => RecPair)(x: RecPair): RecPair = f(x._2)
   
-  /*
   val testPingPong = toFS { ping _ }
   val testY =  toFS { Y { rec2nd } }
   */
