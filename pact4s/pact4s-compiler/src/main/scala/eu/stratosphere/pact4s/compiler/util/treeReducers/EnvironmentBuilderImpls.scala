@@ -49,21 +49,6 @@ trait EnvironmentBuilderImpls { this: HasGlobal with TreeReducers with TreeGener
               case inst: Environment => build(inst, rest)
               case _                 => throw new UnsupportedOperationException("Couldn't construct instance")
             }
-
-            /*
-            classEnv.get(cd.symbol.primaryConstructor) match {
-              case Some(Extractors.Closure(classEnv, params, body)) => {
-                val inst = classEnv.makeChild setSymbol SymbolFactory.makeInstanceOf(classEnv.symbol)
-                TypeOf(inst) = classEnv.symbol
-                val ctor = new Closure { override def unpacked = (inst, params, body) }
-                ctor setSymbol cd.symbol.primaryConstructor
-                val newExpr = cd.symbol.primaryConstructor.paramss.foldLeft(ctor: Tree) { (fun, params) => Apply(fun, params map { _ => NonReducible(ReductionError.Synthetic, EmptyTree) }) }
-                reduce(newExpr, env, false)
-                build(inst, rest)
-              }
-              case _ => throw new UnsupportedOperationException("Couldn't find ctor")
-            }
-            */
           }
           case _ => throw new UnsupportedOperationException("Couldn't find class")
         }
