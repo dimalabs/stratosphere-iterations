@@ -83,21 +83,21 @@ trait UDTGenSiteSelectors { this: Pact4sPlugin =>
           case Some((oldPath, newPath)) if oldPath.head eq newPath.head => false
 
           case Some((oldPath, newPath)) => {
-            verbosely[Boolean] { _ => "Updated GenSite[" + desc.tpe + "] " + posString(oldPath.head.pos) + " -> " + posString(newPath.head.pos) } {
+            //verbosely[Boolean] { _ => "Updated GenSite[" + desc.tpe + "] " + posString(oldPath.head.pos) + " -> " + posString(newPath.head.pos) } {
               genSites(oldPath.head) -= desc
               genSites(newPath.head) += desc
               genSitePaths(desc) -= oldPath
               genSitePaths(desc) += newPath
               true
-            }
+            //}
           }
 
           case None => {
-            verbosely[Boolean] { _ => "Added GenSite[" + desc.tpe + "] " + posString(curSitePath.head.pos) + " - " + desc.toString } {
+            //verbosely[Boolean] { _ => "Added GenSite[" + desc.tpe + "] " + posString(curSitePath.head.pos) + " - " + desc.toString } {
               genSites(curSitePath.head) += desc
               genSitePaths(desc) += curSitePath
               true
-            }
+            //}
           }
         }
       }

@@ -50,9 +50,9 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
               val udtInstances = genSites(tree).toList flatMap { mkUdtInst(currentOwner, _) }
               val newStats = udtInstances ++ unmangledStats
 
-              verbosely[Tree] { tree => "GenSite Block[" + posString(tree.pos) + "] defines: " + availUdts(newStats map { _.symbol }) } {
+              //verbosely[Tree] { tree => "GenSite Block[" + posString(tree.pos) + "] defines: " + availUdts(newStats map { _.symbol }) } {
                 localTyper.typed { treeCopy.Block(tree, newStats, ret) }
-              }
+              //}
             }
 
             // If a DefDef or a Function is a gen site, then it's rhs is
@@ -75,10 +75,10 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
             // in which to insert new implicits, so no mangling is needed here.
             case ClassDef(mods, name, tparams, template @ Template(parents, self, body)) if genSites(tree).nonEmpty => {
 
-              verbosely[Tree] { tree => "GenSite " + tree.symbol + " defines: " + availUdts(tree.symbol.tpe.members) } {
+              //verbosely[Tree] { tree => "GenSite " + tree.symbol + " defines: " + availUdts(tree.symbol.tpe.members) } {
                 val udtInstances = genSites(tree).toList flatMap { mkUdtInst(tree.symbol, _) }
                 localTyper.typed { treeCopy.ClassDef(tree, mods, name, tparams, treeCopy.Template(template, parents, self, udtInstances ::: body)) }
-              }
+              //}
             }
 
             // Rerun implicit inference at call sites bound to unanalyzedUdt
