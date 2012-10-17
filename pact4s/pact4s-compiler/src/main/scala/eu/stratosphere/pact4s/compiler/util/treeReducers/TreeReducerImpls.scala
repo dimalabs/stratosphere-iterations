@@ -68,6 +68,13 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
         case Ident(_)                     => Some(List((tree.symbol, Seq())))
         case Bind(_, Ident(_))            => Some(List((tree.symbol, Seq())))
         case Bind(_, CasePattern(inners)) => Some((tree.symbol, Seq()) +: inners)
+
+        /* // Not implemented yet
+        case Alternative(trees)            => None
+        case Star(elem)                    => None
+        case UnApply(fun: Tree, args)      => None
+        */
+
         case _                            => None
       }
 
@@ -404,8 +411,13 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
         case Ident(_) => env.findParent(_.defines(tree.symbol)) match {
           case Some(owner) => reduce(owner(tree.symbol), env)
           case _ => {
-            val keys = env.toMap.keys.map(_.name).mkString(", ")
-            throw new UnsupportedOperationException("Invalid local reference: " + tree.symbol.name + " not in " + keys + " @ " + tree.pos)
+            env.toMap.keys.find { k => k.name.toString == tree.symbol.name.toString } match {
+              case Some(k) => throw new UnsupportedOperationException("Invalid local reference " + tree + ": " + tree.symbol.name + " was found but has unexpected symbol @ " + tree.pos)
+              case None => {
+                val keys = env.toMap.keys.map(_.name).mkString(", ")
+                throw new UnsupportedOperationException("Invalid local reference: " + tree.symbol.name + " not in " + keys + " @ " + tree.pos)
+              }
+            }
           }
         }
 
@@ -579,7 +591,7 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
               case _                  => ReductionError.NonDeterministic
             }
 
-            val List(exprT, exprE) = diverge(env, List(thenp, elsep), NoSymbol)
+            val List(exprT, exprE) = diverge(env, List(thenp, elsep), SymbolFactory.makeNonRecursiveAnonFun)
             NonReducible(reason, If(cond, exprT, exprE))
           }
         }
@@ -593,57 +605,31 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
 
         case Match(arg, cases) => {
 
-          val expr = reduce(arg, env) match {
+          val rArg = reduce(arg, env)
+          
+          val expr = cases match {
 
-            case rArg: NonReducible => NonReducible(ReductionError.CausedBy(rArg), rArg)
-
-            case rArg => cases match {
-
-              case List(cd @ CaseDef(CasePattern(bindings), EmptyTree, body)) => {
-                val (syms, sels) = bindings.unzip
-                val funParams = syms map {
-                  case NoSymbol => throw new UnsupportedOperationException("Pattern variable is missing symbol")
-                  case sym      => ValDef(sym) setSymbol sym setPos tree.pos
-                }
-                val funArgs = sels map { path => mkSelectSyms(rArg, path: _*) setPos tree.pos }
-                val fun = Function(funParams, body) setSymbol SymbolFactory.makeNonRecursiveAnonFun
-
-                Apply(fun, funArgs)
+            case List(cd @ CaseDef(CasePattern(bindings), EmptyTree, body)) => {
+              val (syms, sels) = bindings.unzip
+              val funParams = syms map {
+                case NoSymbol => throw new UnsupportedOperationException("Pattern variable is missing symbol")
+                case sym      => ValDef(sym) setSymbol sym setPos tree.pos
               }
+              val funArgs = sels map { path => mkSelectSyms(rArg, path: _*) setPos tree.pos }
+              val fun = Function(funParams, body) setSymbol SymbolFactory.makeNonRecursiveAnonFun
 
-              case List(CaseDef(pat, EmptyTree, _)) => NonReducible(ReductionError.TooComplex, pat)
-              case _                                => NonReducible(ReductionError.NonDeterministic, tree)
-            }
-          }
-
-          expr match {
-
-            case _: NonReducible => {
-
-              val branches = cases flatMap {
-                case CaseDef(_, EmptyTree, body) => Seq(body)
-                case CaseDef(_, guard, body)     => Seq(guard, body)
-              }
-
-              diverge(env, branches, SymbolFactory.makeNonRecursiveAnonFun)
-              expr
+              Apply(fun, funArgs)
             }
 
-            case _ => reduce(expr, env)
+            // Diverging is a better option than panicking, but it would require full 
+            // support for pattern expressions (including UnApply, Alternative, and Star), 
+            // so that bound variables can be properly set on the diverging environment.
+            case List(CaseDef(pat, EmptyTree, _)) => NonReducible.panicked(ReductionError.TooComplex, pat)
+            case _                                => NonReducible.panicked(ReductionError.NonDeterministic, tree)
           }
+
+          reduce(expr, env)
         }
-
-        /*
-        case Match(selector, cases)        => NonReducible(ReductionError.NotImplemented, tree)
-        case CaseDef(pat, guard, body)     => NonReducible(ReductionError.NotImplemented, tree)
-        
-        case Bind(name, body)              => NonReducible(ReductionError.NotImplemented, tree)
-
-        case Alternative(trees)            => NonReducible(ReductionError.NotImplemented, tree)
-        case Star(elem)                    => NonReducible(ReductionError.NotImplemented, tree)
-        */
-
-        case UnApply(fun: Tree, args)      => NonReducible(ReductionError.NotImplemented, tree)
 
         /*
        *  Correctly computing all possible field accesses and mutations requires complete coverage of all possible 
@@ -665,7 +651,7 @@ trait TreeReducerImpls { this: HasGlobal with TreeReducers with TreeGenerators w
         case _: Return | _: Throw | _: Try => throw new UnsupportedOperationException("Unsupported construct of type " + tree.getSimpleClassName + " @ " + tree.pos)
 
         // Just in case we forgot anything...
-        case _                             => throw new UnsupportedOperationException("Unknown construct of type " + tree.getSimpleClassName + " @ " + tree.pos)
+        case _                             => throw new UnsupportedOperationException("Unexpected construct of type " + tree.getSimpleClassName + " @ " + tree.pos)
       }
     }
   }
