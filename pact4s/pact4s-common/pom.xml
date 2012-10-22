@@ -24,7 +24,7 @@
     
     <dependency>
     	<groupId>eu.stratosphere</groupId>
-    	<artifactId>pact-runtime</artifactId>
+    	<artifactId>pact-compiler</artifactId>
     	<version>${version}</version>
     </dependency>
   </dependencies>

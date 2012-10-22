@@ -23,8 +23,10 @@ import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact4s.common.analyzer._
 
 import eu.stratosphere.pact.common.plan._
+import eu.stratosphere.pact.compiler.plan.OptimizedPlan;
+import eu.stratosphere.pact.compiler.postpass.OptimizerPostPass;
 
-abstract class PactDescriptor[T <: PactProgram: Manifest] extends PlanAssembler with PlanAssemblerDescription with GlobalSchemaGenerator {
+abstract class PactDescriptor[T <: PactProgram: Manifest] extends PlanAssembler with PlanAssemblerDescription with OptimizerPostPass with GlobalSchemaGenerator {
 
   val name: String = implicitly[Manifest[T]].toString
   val description: String
@@ -46,6 +48,10 @@ abstract class PactDescriptor[T <: PactProgram: Manifest] extends PlanAssembler 
     val plan = new Plan(sinks, getName(argsMap))
     plan.setDefaultParallelism(getDefaultParallelism(argsMap))
     plan
+  }
+  
+  override def postPass(plan: OptimizedPlan): Unit = {
+    
   }
 
   def createInstance(args: Map[Int, String]): T = {
