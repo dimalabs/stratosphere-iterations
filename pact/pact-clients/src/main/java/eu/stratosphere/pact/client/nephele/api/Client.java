@@ -106,7 +106,9 @@ public class Client {
 	 */
 	public OptimizedPlan getOptimizedPlan(PactProgram prog) throws CompilerException, ProgramInvocationException, ErrorInPlanAssemblerException {
 		prog.checkPlan();
-		return compiler.compile(prog.getPlan());
+		OptimizedPlan plan = compiler.compile(prog.getPlan());
+		prog.invokePostPass(plan);
+		return plan;
 	}
 	
 	/**

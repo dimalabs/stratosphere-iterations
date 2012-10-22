@@ -40,6 +40,7 @@ import eu.stratosphere.pact.common.plan.PlanAssembler;
 import eu.stratosphere.pact.common.plan.PlanAssemblerDescription;
 import eu.stratosphere.pact.compiler.PactCompiler;
 import eu.stratosphere.pact.compiler.plan.OptimizedPlan;
+import eu.stratosphere.pact.compiler.postpass.OptimizerPostPass;
 import eu.stratosphere.pact.contextcheck.ContextChecker;
 
 /**
@@ -127,6 +128,33 @@ public class PactProgram {
 		return createPlanFromJar(assemblerClass, args);
 	}
 
+	/**
+	 * Runs an optional post-pass (defined by the Pact Assembler) over the optimized plan.
+	 * 
+	 * @param plan
+	 *        The optimized plan
+	 * @throws ProgramInvocationException
+	 *         This invocation is thrown if the PlanAssembler can't be properly loaded. Causes
+	 *         may be a missing / wrong class or manifest files.
+	 * @throws ErrorInPlanAssemblerException
+	 *         Thrown if an error occurred in the user-provided pact assembler. This may indicate
+	 *         missing parameters for generation.
+	 */
+	public void invokePostPass(OptimizedPlan plan) throws ProgramInvocationException, ErrorInPlanAssemblerException {
+		
+		PlanAssembler assembler = createAssemblerFromJar(assemblerClass);
+		
+		if (assembler instanceof OptimizerPostPass) {
+			OptimizerPostPass postPass = (OptimizerPostPass) assembler;
+
+			try {
+				postPass.postPass(plan);
+			} catch (Throwable t) {
+				throw new ErrorInPlanAssemblerException("Error while creating plan: " + t, t);
+			}
+		}
+	}
+	
 	/**
 	 * Semantic check of generated plan
 	 * 
