@@ -19,13 +19,19 @@ package eu.stratosphere.pact4s.common.analyzer
 
 trait AnalyzedFieldSelector extends FieldSelector {
 
+  protected case class Field(val pos: Int, val discard: Option[Boolean])
+
   private var globalized = false
-  private var fields: Seq[(Int, Int)] = _
-  
-  protected def setInitialFields(selFields: Seq[(Int, Int)]) = fields = selFields
+  private var fields: Seq[(Int, Field)] = _
+
+  protected def setInitialFields(selFields: Seq[(Int, Int)]) = fields = (selFields map { case (fieldNum, pos) => (fieldNum, Field(pos, None)) })
 
   override def isGlobalized = globalized
-  override def getFields = fields
+
+  override def getFields = fields map {
+    case (fieldNum, Field(pos, None | Some(false))) => (fieldNum, pos)
+    case (fieldNum, Field(_, Some(true)))           => (fieldNum, -1)
+  }
 
   protected def assertGlobalized(expectGlobalized: Boolean) = {
     if (expectGlobalized != globalized)
@@ -33,9 +39,9 @@ trait AnalyzedFieldSelector extends FieldSelector {
   }
 
   override def globalize(locations: Map[Int, Int]) = {
-    
+
     if (!globalized) {
-      fields = fields map { case (local, _) => (local, locations(local)) }
+      fields = fields map { case (local, _) => (local, Field(locations(local), None)) }
       globalized = true
     }
   }
@@ -43,9 +49,25 @@ trait AnalyzedFieldSelector extends FieldSelector {
   override def relocateField(oldPosition: Int, newPosition: Int) = {
     assertGlobalized(true)
 
-    fields = fields map { 
-      case (local, global) if global == oldPosition => (local, newPosition)
-      case field => field
+    fields = fields map {
+      case (fieldNum, Field(pos, dis)) if pos == oldPosition => (fieldNum, Field(newPosition, dis))
+      case field                                             => field
+    }
+  }
+
+  override def discardUnusedFields(used: Set[Int]) = {
+
+    assertGlobalized(true)
+
+    fields = fields map {
+
+      case (fieldNum, Field(pos, discard)) => {
+        val newDiscard = discard match {
+          case None | Some(true) => Some(!used.contains(pos))
+          case Some(false)       => Some(false)
+        }
+        (fieldNum, Field(pos, newDiscard))
+      }
     }
   }
 }
@@ -59,20 +81,20 @@ object AnalyzedFieldSelector {
   def apply[T1, R](udt: UDT[T1]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R)(udt)
   def apply[T1, R](udt: UDT[T1], selFields: List[Int]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, selFields)(udt)
   def apply[T1, R](udt: UDT[T1], selections: Seq[Seq[String]]): FieldSelectorCode[T1 => R] = apply[T1, R](null: T1 => R, udt.getFieldIndexes(selections))(udt)
-  
+
   def fromIndexMap[T1, R](udt: UDT[T1], indexMap: Array[Int]): FieldSelectorCode[T1 => R] = {
     val selFields = indexMap.zipWithIndex.toSeq.map(_.swap)
     new FieldSelectorImpl[T1, R](selFields)
   }
-  
+
   def toIndexMap[T1: UDT, R](fieldSelector: FieldSelectorCode[T1 => R]): Array[Int] = {
     val numFields = implicitly[UDT[T1]].numFields
     val indexMap = (0 until numFields).toArray
     val fields = fieldSelector.getFields.toMap
-    
+
     for (fieldNum <- 0 until numFields)
-      indexMap(fieldNum) = fields get(fieldNum) getOrElse -1
-    
+      indexMap(fieldNum) = fields.getOrElse(fieldNum, -1)
+
     indexMap
   }
 

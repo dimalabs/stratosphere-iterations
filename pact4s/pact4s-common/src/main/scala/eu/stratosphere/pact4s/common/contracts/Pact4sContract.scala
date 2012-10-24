@@ -31,8 +31,8 @@ import eu.stratosphere.pact.common.generic.io._
 
 trait Pact4sContract { this: Contract =>
 
-  var outDegree = 0
-
+  def getOutDegree(implicit env: Environment): Int = env.getOutDegree(this)
+  
   def persistConfiguration() = {}
 
   protected def annotations: Seq[Annotation] = Seq()

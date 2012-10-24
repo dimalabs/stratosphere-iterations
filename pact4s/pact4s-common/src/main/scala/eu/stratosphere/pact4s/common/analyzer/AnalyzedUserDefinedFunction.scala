@@ -21,19 +21,20 @@ import scala.collection.mutable
 
 trait AnalyzedUDF extends UDF {
 
-  protected case class WriteField(val pos: Int, val isCopy: Boolean, val discard: Boolean)
+  protected case class WriteField(val pos: Int, val isCopy: Boolean, val discard: Option[Boolean])
 
   private var globalized = false
   protected val writeFields: Array[WriteField]
 
   protected def getInitialReadFields(inputLength: Int): Array[Int] = createIdentityMap(inputLength)
-  protected def getInitialWriteFields(outputLength: Int): Array[WriteField] = createIdentityMap(outputLength) map { WriteField(_, false, false) }
+  protected def getInitialWriteFields(outputLength: Int): Array[WriteField] = createIdentityMap(outputLength) map { WriteField(_, false, None) }
 
   override def isGlobalized = globalized
 
   override def getWriteFields = writeFields map {
-    case WriteField(pos, false, false) => pos
-    case _                             => -1
+    case WriteField(pos, false, None)        => pos
+    case WriteField(pos, false, Some(false)) => pos
+    case _                                   => -1
   }
 
   protected def getReadFieldSets: Seq[Array[Int]]
@@ -80,16 +81,6 @@ trait AnalyzedUDF extends UDF {
     writeFields(outputFieldNum) = writeFields(outputFieldNum).copy(isCopy = false)
   }
 
-  protected def markOutputFieldUnused(outputFieldNum: Int) = {
-    assertGlobalized(true)
-    writeFields(outputFieldNum) = writeFields(outputFieldNum).copy(discard = true)
-  }
-
-  protected def markOutputFieldUsed(outputFieldNum: Int) = {
-    assertGlobalized(true)
-    writeFields(outputFieldNum) = writeFields(outputFieldNum).copy(discard = false)
-  }
-
   protected def assertAmbience(outputPosition: Int) = {
     assertGlobalized(true)
 
@@ -104,6 +95,19 @@ trait AnalyzedUDF extends UDF {
       for ((pos, fieldNum) <- readFields.zipWithIndex if pos == oldPosition) {
         readFields(fieldNum) = newPosition
       }
+    }
+  }
+
+  override def discardUnusedOutputFields(used: Set[Int]) = {
+
+    assertGlobalized(true)
+
+    for ((WriteField(pos, isCopy, discard), fieldNum) <- writeFields.zipWithIndex) {
+      val newDiscard = discard match {
+        case None | Some(true) => Some(!used.contains(pos))
+        case Some(false)       => Some(false)
+      }
+      writeFields(fieldNum) = WriteField(pos, isCopy, newDiscard)
     }
   }
 }
@@ -203,6 +207,13 @@ trait AnalyzedUDF1 extends AnalyzedUDF with UDF1 {
       case AmbientFieldBehavior.Forward => ambientFields(position) = true
       case AmbientFieldBehavior.Discard => ambientFields(position) = false
     }
+  }
+  
+  override def discardUnusedOutputFields(used: Set[Int]) = {
+    super.discardUnusedOutputFields(used)
+    
+    for ((pos, forward) <- ambientFields if forward && !used.contains(pos))
+      setAmbientFieldBehavior(pos, AmbientFieldBehavior.Discard)
   }
 }
 
@@ -311,6 +322,13 @@ trait AnalyzedUDF2 extends AnalyzedUDF with UDF2 {
       case AmbientFieldBehavior.Forward => ambientFields(position) = true
       case AmbientFieldBehavior.Discard => ambientFields(position) = false
     }
+  }
+
+  override def discardUnusedOutputFields(used: Set[Int]) = {
+    super.discardUnusedOutputFields(used)
+    
+    for ((pos, forward) <- ambientFields if forward && !used.contains(pos.fold(identity, identity)))
+      setAmbientFieldBehavior(pos, AmbientFieldBehavior.Discard)
   }
 
   private def split(items: Iterable[Either[Int, Int]]) = {

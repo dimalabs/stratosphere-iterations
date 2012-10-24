@@ -25,7 +25,7 @@ import java.util.{ List => JList }
 
 trait GlobalSchemaGenerator {
 
-  def initGlobalSchema(outputs: Seq[DataSink4sContract[_]]) = {
+  def initGlobalSchema(outputs: Seq[DataSink4sContract[_]])(implicit env: Environment) = {
 
     implicit val printer = new SchemaPrinter
 
@@ -44,7 +44,7 @@ trait GlobalSchemaGenerator {
    * @param predeterminedOutputLocations Specifies required positions for the contract's output fields, or None to allocate new positions
    * @return A GlobalizeResult containing the next available position in the global schema and the locations of the contract's output fields
    */
-  private def globalizeContract(freePos: Int, contract: Contract, proxies: Map[Contract, Pact4sContract], predeterminedOutputLocations: Option[Map[Int, Int]])(implicit printer: SchemaPrinter): GlobalizeResult = {
+  private def globalizeContract(freePos: Int, contract: Contract, proxies: Map[Contract, Pact4sContract], predeterminedOutputLocations: Option[Map[Int, Int]])(implicit env: Environment, printer: SchemaPrinter): GlobalizeResult = {
 
     val contract4s = proxies(contract)
     val result = contract4s match {
@@ -86,7 +86,7 @@ trait GlobalSchemaGenerator {
           prepareContract(contract4s)
         }
 
-        GlobalizeResult(newFreePos, fieldSelector.getGlobalFields, Set())
+        GlobalizeResult(newFreePos, fieldSelector.getFields.toMap, Set())
       }
 
       case Iterate4sContract(s0, step, term, placeholder) => {
@@ -132,8 +132,8 @@ trait GlobalSchemaGenerator {
           newFreePos = udf.globalize(leftInputLocations, rightInputLocations, freePos2, predeterminedOutputLocations)
 
           val writeFields = udf.getWriteFields filter { _ >= 0 } toSet
-          val leftKeyFields = leftKey.getGlobalFields.values.toSet diff writeFields
-          val rightKeyFields = rightKey.getGlobalFields.values.toSet diff writeFields
+          val leftKeyFields = leftKey.getFields.map(_._2).toSet diff writeFields
+          val rightKeyFields = rightKey.getFields.map(_._2).toSet diff writeFields
 
           val leftFields = leftInputLocations.values.toSet union leftForwards diff writeFields
           val rightFields = rightInputLocations.values.toSet union rightForwards diff writeFields
@@ -205,8 +205,8 @@ trait GlobalSchemaGenerator {
           newFreePos = udf.globalize(leftInputLocations, rightInputLocations, freePos2, predeterminedOutputLocations)
 
           val writeFields = udf.getWriteFields filter { _ >= 0 } toSet
-          val leftKeyFields = leftKey.getGlobalFields.values.toSet diff writeFields
-          val rightKeyFields = rightKey.getGlobalFields.values.toSet diff writeFields
+          val leftKeyFields = leftKey.getFields.map(_._2).toSet diff writeFields
+          val rightKeyFields = rightKey.getFields.map(_._2).toSet diff writeFields
 
           val leftFields = leftInputLocations.values.toSet union leftForwards diff writeFields
           val rightFields = rightInputLocations.values.toSet union rightForwards diff writeFields
@@ -266,7 +266,7 @@ trait GlobalSchemaGenerator {
           newFreePos = rUDF.globalize(inputLocations, freePos1, predeterminedOutputLocations)
 
           val writeFields = rUDF.getWriteFields filter { _ >= 0 } toSet
-          val keyFields = key.getGlobalFields.values.toSet diff writeFields
+          val keyFields = key.getFields.map(_._2).toSet diff writeFields
           val inputFields = inputLocations.values.toSet union forwards diff writeFields
 
           for (pos <- inputFields diff keyFields)
@@ -281,6 +281,7 @@ trait GlobalSchemaGenerator {
         GlobalizeResult(newFreePos, rUDF.getOutputFields, rUDF.getForwardedFields.toSet)
       }
 
+      // TODO: eliminate this contract from the graph, since it's a no-op
       case Union4sContract(inputs, udt, unionUDF) => {
 
         var newFreePos = freePos
@@ -298,7 +299,7 @@ trait GlobalSchemaGenerator {
               
               // This input contract is a child of multiple contracts, so its
               // output must be physically copied into the expected position.
-              case input: Pact4sContract if input.outDegree > 1 => {
+              case input: Pact4sContract if input.getOutDegree > 1 => {
                 
                 val GlobalizeResult(freePos2, inputLocations, _) = globalizeContract(freePos1, input, proxies, None)
                 

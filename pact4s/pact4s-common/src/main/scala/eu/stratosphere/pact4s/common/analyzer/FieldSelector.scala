@@ -23,10 +23,10 @@ trait FieldSelector extends Serializable {
 
   def isGlobalized: Boolean
   def getFields: Seq[(Int, Int)]
-  def getGlobalFields: Map[Int, Int] = getFields.toMap
 
   def globalize(locations: Map[Int, Int])
   def relocateField(oldPosition: Int, newPosition: Int)
+  def discardUnusedFields(used: Set[Int])
 }
 
 trait FieldSelectorCode[T] extends FieldSelector.EmptyCode[T] with FieldSelector

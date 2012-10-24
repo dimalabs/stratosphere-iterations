@@ -34,6 +34,7 @@ trait UDF extends Serializable {
   def getOutputFields: Map[Int, Int]
 
   def relocateInputField(oldPosition: Int, newPosition: Int)
+  def discardUnusedOutputFields(used: Set[Int])
 }
 
 trait UDF1Code[T] extends UDF.EmptyCode[T] with UDF1 { def userFunction: T }
