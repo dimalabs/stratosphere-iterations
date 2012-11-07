@@ -19,6 +19,9 @@ package eu.stratosphere.pact4s.compiler.util.treeReducers
 
 import eu.stratosphere.pact4s.compiler.util._
 
+/**
+ * Warning: experimental!
+ */
 trait TreeReducers extends TreeReducerImpls with EnvironmentBuilderImpls { this: HasGlobal with TreeGenerators with Loggers =>
 
   object TreeReducerHelpers extends InheritsGlobal with Environments with NonReducibles with Closures with SymbolFactories

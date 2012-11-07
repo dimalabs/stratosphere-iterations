@@ -16,6 +16,7 @@
  */
 
 /**
+ * Warning: experimental!
  * This was the first attempt at a tree reducer. It doesn't handle all kinds of statements. 
  * More importantly, it doesn't properly deal with side effects (eg, assignment).
  */

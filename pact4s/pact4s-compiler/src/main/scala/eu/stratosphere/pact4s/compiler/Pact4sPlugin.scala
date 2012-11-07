@@ -25,10 +25,9 @@ import scala.tools.nsc.plugins.PluginComponent
 import eu.stratosphere.pact4s.compiler.udt._
 import eu.stratosphere.pact4s.compiler.udf._
 import eu.stratosphere.pact4s.compiler.util._
-import eu.stratosphere.pact4s.compiler.util.treeReducers._
 
 class Pact4sPlugin(val global: Global) extends Plugin with Pact4sPluginOptions with HasGlobal
-  with TypingTransformers with TreeGenerators with Loggers with Visualizers with TreeReducers
+  with TypingTransformers with TreeGenerators with Loggers with Visualizers
   with Definitions with UDTDescriptors with UDTAnalyzers
   with UDTGenSiteParticipants with UDTGenSiteSelectors with UDTGenSiteTransformers
   with UDFAnalyzers with SanityCheckers {

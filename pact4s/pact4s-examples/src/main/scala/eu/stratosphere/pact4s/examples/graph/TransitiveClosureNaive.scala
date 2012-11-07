@@ -43,10 +43,10 @@ class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOut
 
   def createClosure = (paths: DataStream[Path]) => {
 
-    val allNewPaths = paths join edges on getTo isEqualTo getFrom map joinPaths
-    val shortestPaths = allNewPaths groupBy getEdge combine { _ minBy { _.dist } }
+    val allNewPaths = paths join edges on { p => p.to } isEqualTo { p => p.from } map joinPaths
+    val shortestPaths = allNewPaths groupBy { p => (p.from, p.to) } combine { _ minBy { _.dist } }
 
-    val delta = paths cogroup shortestPaths on getEdge isEqualTo getEdge flatMap { (oldPaths, newPaths) =>
+    val delta = paths cogroup shortestPaths on { p => (p.from, p.to) } isEqualTo { p => (p.from, p.to) } flatMap { (oldPaths, newPaths) =>
       (oldPaths.toSeq.headOption, newPaths.next) match {
         case (Some(Path(_, _, oldDist)), Path(_, _, newDist)) if oldDist <= newDist => None
         case (_, p) => Some(p)
@@ -63,10 +63,6 @@ class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOut
   def joinPaths = (p1: Path, p2: Path) => (p1, p2) match {
     case (Path(from, _, dist1), Path(_, to, dist2)) => Path(from, to, dist1 + dist2)
   }
-
-  final def getEdge = (p: Path) => (p.from, p.to)
-  final def getFrom = (p: Path) => p.from
-  final def getTo = (p: Path) => p.to
 
   vertices.hints = RecordSize(16) +: PactName("Vertices")
   edges.hints = RecordSize(16) +: PactName("Edges")

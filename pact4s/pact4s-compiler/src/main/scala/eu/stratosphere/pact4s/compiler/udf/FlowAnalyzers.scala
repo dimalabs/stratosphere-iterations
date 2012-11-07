@@ -28,6 +28,7 @@ trait FlowAnalyzers { this: Pact4sPlugin =>
 
     protected object AnalyzedUDF {
 
+      // This is a do-nothing method implementation
       def unapply(tree: Tree): Option[Tree] = tree match {
 
         case Apply(TypeApply(view, tpeTrees), List(fun)) if view.symbol == unanalyzedUDF1 => None

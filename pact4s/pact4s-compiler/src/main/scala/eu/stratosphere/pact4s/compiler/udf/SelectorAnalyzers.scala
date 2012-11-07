@@ -19,18 +19,15 @@ package eu.stratosphere.pact4s.compiler.udf
 
 import eu.stratosphere.pact4s.compiler.Pact4sPlugin
 import eu.stratosphere.pact4s.compiler.util._
-import eu.stratosphere.pact4s.compiler.util.treeReducers._
 
 trait SelectorAnalyzers { this: Pact4sPlugin =>
 
   import global._
   import defs._
-  import TreeReducerHelpers._
 
-  trait SelectorAnalyzer extends UDTGenSiteParticipant { this: TypingTransformer with TreeGenerator with Logger with TreeReducer =>
+  trait SelectorAnalyzer extends UDTGenSiteParticipant { this: TypingTransformer with TreeGenerator with Logger =>
 
     private val logger: Logger = this
-    val snapshot: Environment
 
     protected object FieldSelector {
 
@@ -40,7 +37,7 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
 
           val sels = getUDT(t1.tpe).right.flatMap {
             case (udt, desc) => {
-              val ret = getSelector(fun, desc).right flatMap { sels =>
+              val ret = getSelector(fun).right flatMap { sels =>
 
                 val errs = sels flatMap { sel => chkSelector(desc, sel.head, sel.tail) }
                 Either.cond(errs.isEmpty, sels map { _.tail }, errs)
@@ -77,12 +74,12 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
         case _ => None
       }
 
-      private def getUDT(tpe: Type): Either[List[NonReducible], (Tree, UDTDescriptor)] = {
+      private def getUDT(tpe: Type): Either[List[String], (Tree, UDTDescriptor)] = {
 
         val udt = inferImplicitInst(mkUdtOf(tpe))
         val udtWithDesc = udt flatMap { ref => getUDTDescriptors(unit) get ref.symbol map ((ref, _)) }
 
-        udtWithDesc.toRight(List(NonReducible(ReductionError.NoSource, EmptyTree)))
+        udtWithDesc.toRight(List("Missing UDT[" + tpe + "]"))
       }
 
       private def chkSelector(udt: UDTDescriptor, path: String, sel: List[String]): Option[String] = (udt, sel) match {
@@ -95,139 +92,101 @@ trait SelectorAnalyzers { this: Pact4sPlugin =>
         }
       }
 
-      private def getSelector(tree: Tree, desc: UDTDescriptor): Either[List[String], List[List[String]]] = {
+      private def getSelector(tree: Tree): Either[List[String], List[List[String]]] = tree match {
 
-        try {
-          
-          val env = treeReducer.build(snapshot.copy, curPath.reverse.toList)
+        case Function(List(p), body) => getSelector(body, Map(p.symbol -> Nil)) match {
+          case err @ Left(_) => err
+          case Right(sels)   => Right(sels map { sel => p.name.toString +: sel })
+        }
 
-          treeReducer.reduce(tree, env, true) match {
+        case _ => Left(List("Expected lambda expression literal but found " + tree.getSimpleClassName))
+      }
 
-            case fun @ Closure(_, List(param), _) => {
-              val root = mkRootParams(desc, Seq(param.symbol.name.toString), env)
-              val strRoots = root.toMap map {
-                case (k, v: Environment) => Tag(v) match {
-                  case Some(sel) => sel
-                  case None      => "[" + k.name + " = " + v + "]"
-                }
-                case (k, v) => "[" + k.name + " = " + v + "]"
+      private def getSelector(tree: Tree, roots: Map[Symbol, List[String]]): Either[List[String], List[List[String]]] = tree match {
+
+        case SimpleMatch(body, bindings)                => getSelector(body, roots ++ bindings)
+
+        case Match(_, List(CaseDef(pat, EmptyTree, _))) => Left(List("case pattern is too complex"))
+        case Match(_, List(CaseDef(_, guard, _)))       => Left(List("case pattern is guarded"))
+        case Match(_, _ :: _ :: _)                      => Left(List("match contains more than one case"))
+
+        case TupleCtor(args) => {
+
+          val (errs, sels) = args.map(arg => getSelector(arg, roots)).partition(_.isLeft)
+
+          errs match {
+            case Nil => Right(sels.map(_.right.get).flatten)
+            case _   => Left(errs.map(_.left.get).flatten)
+          }
+        }
+
+        case Apply(Select(New(tpt), _), _) => Left(List("constructor call on non-tuple type " + tpt.tpe))
+
+        case Ident(name) => roots.get(tree.symbol) match {
+          case Some(sel) => Right(List(sel))
+          case None      => Left(List("unexpected identifier " + name))
+        }
+
+        case Select(src, member) => getSelector(src, roots) match {
+          case err @ Left(_)    => err
+          case Right(List(sel)) => Right(List(sel :+ member.toString))
+          case _                => Left(List("unsupported selection"))
+        }
+
+        case _ => Left(List("unsupported construct of kind " + tree.getSimpleClassName))
+
+      }
+
+      private object SimpleMatch {
+
+        def unapply(tree: Tree): Option[(Tree, Map[Symbol, List[String]])] = tree match {
+
+          case Match(arg, List(cd @ CaseDef(CasePattern(bindings), EmptyTree, body))) => Some((body, bindings))
+          case _ => None
+        }
+
+        private object CasePattern {
+
+          def unapply(tree: Tree): Option[Map[Symbol, List[String]]] = tree match {
+
+            case Apply(MethodTypeTree(params), binds) => {
+
+              val exprs = params.zip(binds) map {
+                case (p, CasePattern(inners)) => Some(inners map { case (sym, path) => (sym, p.name.toString +: path) })
+                case _                        => None
               }
 
-              val ret = treeReducer.reduce(Apply(fun, List(root)), env, true)
-              getSelectorFromReduction(ret)
+              if (exprs.forall(_.isDefined))
+                Some(exprs.flatten.flatten.toMap)
+              else
+                None
             }
 
-            case nonFun => Left(List(NonReducible(ReductionError.Unexpected, nonFun).toString))
+            case Ident(_) | Bind(_, Ident(_)) => Some(Map(tree.symbol -> Nil))
+            case Bind(_, CasePattern(inners)) => Some(inners + (tree.symbol -> Nil))
+            case _                            => None
           }
-          
-        } catch {
-          case ex => Left(List(ex.getClass.getName + " " + ex.getMessage()))
+        }
+
+        private object MethodTypeTree {
+          def unapply(tree: Tree): Option[List[Symbol]] = tree match {
+            case _: TypeTree => tree.tpe match {
+              case MethodType(params, _) => Some(params)
+              case _                     => None
+            }
+            case _ => None
+          }
         }
       }
 
-      private def getSelectorFromReduction(tree: Tree): Either[List[String], List[List[String]]] = tree match {
+      private object TupleCtor {
 
-        case err: NonReducible => Left(List(err.toString))
-
-        case env: Environment => {
-
-          val instSym = env.symbol match {
-            case NoSymbol => NoSymbol
-            case sym      => SymbolFactory.makeInstanceOf(sym.owner)
-          }
-
-          Tag(env) match {
-
-            case Some(sel) => Right(List(sel.split('.').toList))
-
-            case None if env.symbol eq instSym => {
-
-              val paramSyms = env.symbol.owner.primaryConstructor.paramss.flatten map { sym => sym.getter(env.symbol.owner) }
-              val (errs, sels) = paramSyms map { sym => getSelectorFromReduction(env(sym)) } partition { _.isLeft }
-              
-              errs match {
-                case Nil => Right(sels map { _.right.get } flatten)
-                case _   => Left(errs map { _.left.get } flatten)
-              }
-            }
-
-            case _ => Left(List(NonReducible(ReductionError.Unexpected, tree).toString))
-          }
+        def unapply(tree: Tree): Option[List[Tree]] = tree match {
+          case Apply(Select(New(tpt), _), args) if isTupleTpe(tpt.tpe) => Some(args)
+          case _                                                       => None
         }
 
-        case _ => Left(List(NonReducible(ReductionError.Unexpected, tree).toString))
-      }
-
-      private def mkRootParams(desc: UDTDescriptor, path: Seq[String], scope: Environment): Environment = desc match {
-
-        case _: PrimitiveDescriptor | _: BoxedPrimitiveDescriptor | _: ListDescriptor | _: RecursiveDescriptor => {
-          val env = Environment.Empty.makeChild
-          Tag(env) = path.mkString(".")
-          TypeOf(env) = desc.tpe.typeSymbol
-          env
-        }
-
-        case CaseClassDescriptor(_, _, ctorSym, _, getters) => {
-          val ctor = Select(New(Ident(ctorSym.owner)), ctorSym)
-          val args = getters map { case FieldAccessor(sym, _, _, desc) => mkRootParams(desc, path :+ sym.name.toString, scope) }
-          val env = treeReducer.reduce(Apply(ctor, args.toList), scope, false) match {
-            case env: Environment => env
-            case _                => throw new UnsupportedOperationException("Couldn't construct instance of class " + ctorSym.owner.name)
-          }
-          Tag(env) = path.mkString(".")
-          TypeOf(env) = desc.tpe.typeSymbol
-          env
-        }
-
-        case BaseClassDescriptor(_, tpe, getters, _) => {
-          val classSym = tpe.typeSymbol
-          val ctorSym = classSym.primaryConstructor
-
-          val ctor = Select(New(Ident(classSym)), ctorSym)
-          val args = ctorSym.paramss map {
-            _ map { param =>
-              getters.find(f => f.sym eq param) match {
-                case None                                 => NonReducible(ReductionError.Synthetic, EmptyTree)
-                case Some(FieldAccessor(sym, _, _, desc)) => mkRootParams(desc, path :+ sym.name.toString, scope)
-              }
-            }
-          }
-
-          val expr = args.foldLeft(ctor: Tree) { (fun, args) => Apply(fun, args) }
-
-          val env = treeReducer.reduce(expr, scope, false) match {
-            case env: Environment => env
-            case _                => throw new UnsupportedOperationException("Couldn't construct instance of class " + classSym.name)
-          }
-
-          val ctorParamSyms = ctorSym.primaryConstructor.paramss.flatten.toSet
-
-          for (FieldAccessor(sym, _, _, getter) <- getters.tail if !ctorParamSyms.contains(sym)) {
-            env.setMember(sym, mkRootParams(getter, path :+ sym.name.toString, scope))
-          }
-
-          Tag(env) = path.mkString(".")
-          TypeOf(env) = desc.tpe.typeSymbol
-          env
-        }
-
-        case OpaqueDescriptor(_, tpe, _) => {
-          val classSym = tpe.typeSymbol
-          val ctorSym = classSym.primaryConstructor
-
-          val ctor = Select(New(Ident(classSym)), ctorSym)
-          val args = ctorSym.paramss map { _ map { _ => NonReducible(ReductionError.Synthetic, EmptyTree) } }
-          val expr = args.foldLeft(ctor: Tree) { (fun, args) => Apply(fun, args) }
-
-          val env = treeReducer.reduce(expr, scope, false) match {
-            case env: Environment => env
-            case _                => throw new UnsupportedOperationException("Couldn't construct instance of class " + classSym.name)
-          }
-
-          Tag(env) = path.mkString(".")
-          TypeOf(env) = desc.tpe.typeSymbol
-          env
-        }
+        private def isTupleTpe(tpe: Type): Boolean = definitions.TupleClass.contains(tpe.typeSymbol)
       }
     }
   }

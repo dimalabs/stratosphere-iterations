@@ -40,17 +40,17 @@ class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput
   val edges = new DataSource(edgesInput, DelimetedDataSourceFormat(parseEdge))
   val output = new DataSink(pathsOutput, DelimetedDataSinkFormat(formatOutput))
 
-  val transitiveClosure = createClosure iterate (s0 = vertices distinctBy getEdge, ws0 = edges)
+  val transitiveClosure = createClosure iterate (s0 = vertices distinctBy { p => (p.from, p.to) }, ws0 = edges)
 
   override def outputs = output <~ transitiveClosure
 
   def createClosure = (c: DataStream[Path], x: DataStream[Path]) => {
 
-    val cNewPaths = x join c on getTo isEqualTo getFrom map joinPaths
-    val c1 = cNewPaths cogroup c on getEdge isEqualTo getEdge map selectShortestDistance
+    val cNewPaths = x join c on { p => p.to } isEqualTo { p => p.from } map joinPaths
+    val c1 = cNewPaths cogroup c on { p => (p.from, p.to) } isEqualTo { p => (p.from, p.to) } map selectShortestDistance
 
-    val xNewPaths = x join x on getTo isEqualTo getFrom map joinPaths
-    val x1 = xNewPaths cogroup c1 on getEdge isEqualTo getEdge flatMap excludeKnownPaths
+    val xNewPaths = x join x on { p => p.to } isEqualTo { p => p.from } map joinPaths
+    val x1 = xNewPaths cogroup c1 on { p => (p.from, p.to) } isEqualTo { p => (p.from, p.to) } flatMap excludeKnownPaths
 
     cNewPaths.hints = PactName("cNewPaths")
     c1.hints = PactName("c1")
@@ -67,10 +67,6 @@ class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput
   def joinPaths = (p1: Path, p2: Path) => (p1, p2) match {
     case (Path(from, _, dist1), Path(_, to, dist2)) => Path(from, to, dist1 + dist2)
   }
-
-  final def getEdge = (p: Path) => (p.from, p.to)
-  final def getFrom = (p: Path) => p.from
-  final def getTo = (p: Path) => p.to
 
   vertices.hints = RecordSize(16) +: PactName("Vertices")
   edges.hints = RecordSize(16) +: PactName("Edges")
