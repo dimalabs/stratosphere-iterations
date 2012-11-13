@@ -54,18 +54,13 @@ class ConnectedComponents(verticesInput: String, edgesInput: String, componentsO
       }
     }
 
-    allNeighbors.hints = PactName("All Neighbors")
-    minNeighbors.hints = PactName("Min Neighbors")
-    s1.hints = PactName("Partial Solution")
-
     (s1, s1)
   }
 
-  vertices.hints = RecordSize(8) +: PactName("Vertices")
-  directedEdges.hints = RecordSize(8) +: PactName("Directed Edges")
-  undirectedEdges.hints = RecordSize(8) +: RecordsEmitted(2.0f) +: PactName("Undirected Edges")
-  components.hints = PactName("Components")
-  output.hints = RecordSize(8) +: PactName("Output")
+  vertices.hints ++= RecordSize(8)
+  directedEdges.hints ++= RecordSize(8)
+  undirectedEdges.hints ++= RecordSize(8) +: RecordsEmitted(2.0f)
+  output.hints ++= RecordSize(8)
 
   def parseVertex = (line: String) => { val v = line.toInt; v -> v }
 

@@ -46,9 +46,9 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
     val nearestCenters = distances groupBy { case (pid, _) => pid } combine { ds => ds.minBy(_._2.distance) } map asPointSum.tupled
     val newCenters = nearestCenters groupBy { case (cid, _) => cid } combine sumPointSums map { case (cid: Int, pSum: PointSum) => cid -> pSum.toPoint() }
 
-    distances.hints = RecordSize(48) +: PactName("Distances")
-    nearestCenters.hints = RecordSize(48) +: PactName("Nearest Centers")
-    newCenters.hints = RecordSize(36) +: PactName("New Centers")
+    distances.hints ++= RecordSize(48)
+    nearestCenters.hints ++= RecordSize(48)
+    newCenters.hints ++= RecordSize(36)
 
     newCenters
   }
@@ -64,9 +64,7 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
 
   def sumPointSums = (dataPoints: Iterator[(Int, PointSum)]) => dataPoints.reduce { (z, v) => z.copy(_2 = z._2 + v._2) }
 
-  dataPoints.hints = PactName("Data Points")
-  clusterPoints.hints = Degree(1) +: PactName("Cluster Points")
-  newClusterPoints.hints = PactName("New Cluster Points")
+  clusterPoints.hints ++= Degree(1)
 
   val PointInputPattern = """(\d+)\|(\d+\.\d+)\|(\d+\.\d+)\|""".r
 

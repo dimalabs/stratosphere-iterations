@@ -44,11 +44,6 @@ class WordCount(textInput: String, wordsOutput: String) extends PactProgram {
 
   override def outputs = output <~ counts
 
-  input.hints = PactName("Input")
-  output.hints = PactName("Output")
-  words.hints = PactName("Words")
-  counts.hints = PactName("Counts")
-
   def formatOutput = (word: String, count: Int) => "%s %d".format(word, count)
 }
 

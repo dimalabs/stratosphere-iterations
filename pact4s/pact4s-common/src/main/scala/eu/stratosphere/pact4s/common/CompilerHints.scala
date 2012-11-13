@@ -45,6 +45,15 @@ case class PactName(val pactName: String) extends CompilerHint[Nothing] {
   override def applyToContract(contract: Contract) = contract.setName(pactName)
 }
 
+object PactName {
+  // this method is called by the compiler plugin's autonamer
+  def withNameIfNoHints[T <: Hintable[_]](that: T, name: String): T = {
+    if (that != null && (that.hints == null || that.hints.isEmpty))
+      that.hints = Seq(PactName(name))
+    that
+  }
+}
+
 case class Degree(val degreeOfParallelism: Int) extends CompilerHint[Nothing] {
   override def applyToContract(contract: Contract) = contract.setDegreeOfParallelism(degreeOfParallelism)
 }

@@ -59,6 +59,8 @@ trait Definitions { this: Pact4sPlugin =>
     lazy val udf1CodeClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDF1Code")
     lazy val udf2CodeClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDF2Code")
 
+    lazy val hintableClass = definitions.getClass("eu.stratosphere.pact4s.common.Hintable")
+
     lazy val pactRecordClass = definitions.getClass("eu.stratosphere.pact.common.type.PactRecord")
     lazy val pactValueClass = definitions.getClass("eu.stratosphere.pact.common.type.Value")
     lazy val pactListBaseClass = definitions.getClass("eu.stratosphere.pact.common.type.base.PactList")

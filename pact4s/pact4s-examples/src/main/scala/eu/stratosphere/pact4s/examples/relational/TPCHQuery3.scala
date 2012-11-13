@@ -61,12 +61,10 @@ class TPCHQuery3(ordersInput: String, lineItemsInput: String, ordersOutput: Stri
 
   override def outputs = output <~ prioritizedOrders
 
-  orders.hints = UniqueKey({ o: Order => o.orderId }) +: PactName("Orders")
-  lineItems.hints = PactName("Line Items")
-  output.hints = PactName("Output")
-  filteredOrders.hints = RecordSize(32) +: RecordsEmitted(0.05f) +: PactName("Filtered Orders")
-  prioritizedItems.hints = RecordSize(64) +: PactName("Prioritized Items")
-  prioritizedOrders.hints = RecordSize(64) +: RecordsEmitted(1f) +: PactName("Prioritized Orders")
+  orders.hints ++= UniqueKey({ o: Order => o.orderId })
+  filteredOrders.hints ++= RecordSize(32) +: RecordsEmitted(0.05f)
+  prioritizedItems.hints ++= RecordSize(64)
+  prioritizedOrders.hints ++= RecordSize(64) +: RecordsEmitted(1f)
 
   case class Order(orderId: Int, status: Char, year: Int, month: Int, day: Int, orderPriority: String, shipPriority: Int)
   case class LineItem(orderId: Int, extendedPrice: Double)

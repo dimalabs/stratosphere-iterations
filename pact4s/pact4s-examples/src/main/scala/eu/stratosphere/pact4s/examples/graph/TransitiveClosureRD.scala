@@ -52,11 +52,6 @@ class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput
     val xNewPaths = x join x on { p => p.to } isEqualTo { p => p.from } map joinPaths
     val x1 = xNewPaths cogroup c1 on { p => (p.from, p.to) } isEqualTo { p => (p.from, p.to) } flatMap excludeKnownPaths
 
-    cNewPaths.hints = PactName("cNewPaths")
-    c1.hints = PactName("c1")
-    xNewPaths.hints = PactName("xNewPaths")
-    x1.hints = PactName("x1")
-
     (c1, x1)
   }
 
@@ -68,10 +63,9 @@ class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput
     case (Path(from, _, dist1), Path(_, to, dist2)) => Path(from, to, dist1 + dist2)
   }
 
-  vertices.hints = RecordSize(16) +: PactName("Vertices")
-  edges.hints = RecordSize(16) +: PactName("Edges")
-  transitiveClosure.hints = PactName("Transitive Closure")
-  output.hints = RecordSize(16) +: PactName("Output")
+  vertices.hints ++= RecordSize(16)
+  edges.hints ++= RecordSize(16)
+  output.hints ++= RecordSize(16)
 
   case class Path(from: Int, to: Int, dist: Int)
 

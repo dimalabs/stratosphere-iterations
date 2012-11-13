@@ -53,10 +53,6 @@ class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOut
       }
     }
 
-    allNewPaths.hints = PactName("All New Paths")
-    shortestPaths.hints = PactName("Shortest Paths")
-    delta.hints = PactName("Delta")
-
     (shortestPaths, delta)
   }
 
@@ -64,10 +60,9 @@ class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOut
     case (Path(from, _, dist1), Path(_, to, dist2)) => Path(from, to, dist1 + dist2)
   }
 
-  vertices.hints = RecordSize(16) +: PactName("Vertices")
-  edges.hints = RecordSize(16) +: PactName("Edges")
-  transitiveClosure.hints = PactName("Transitive Closure")
-  output.hints = RecordSize(16) +: PactName("Output")
+  vertices.hints ++= RecordSize(16)
+  edges.hints ++= RecordSize(16)
+  output.hints ++= RecordSize(16)
 
   case class Path(from: Int, to: Int, dist: Int)
 

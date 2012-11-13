@@ -30,20 +30,21 @@ class Pact4sPlugin(val global: Global) extends Plugin with Pact4sPluginOptions w
   with TypingTransformers with TreeGenerators with Loggers with Visualizers
   with Definitions with UDTDescriptors with UDTAnalyzers
   with UDTGenSiteParticipants with UDTGenSiteSelectors with UDTGenSiteTransformers
-  with UDFAnalyzers with SanityCheckers {
+  with UDFAnalyzers with AutoNamers with SanityCheckers {
 
   import global._
 
   override val name = "pact4s"
   override val description = "Performs analysis and code generation for Pact4s programs."
-  override val components = List[PluginComponent](udtSite, udtCode, udfAna, sanity)
+  override val components = List[PluginComponent](udtSite, udtCode, udfAna, autoNamer, sanity)
   override val optionsHelp = getOptionsHelp
   override val neverInfer = defs.unanalyzed
 
   object udtSite extends Pact4sPhase("UDTSite", refchecks) with UDTGenSiteSelector
   object udtCode extends Pact4sPhase("UDTCode", udtSite) with UDTGenSiteTransformer
   object udfAna extends Pact4sPhase("UDFAna", udtCode) with UDFAnalyzer
-  object sanity extends Pact4sPhase("Sanity", udfAna) with SanityChecker
+  object autoNamer extends Pact4sPhase("Namer", udfAna) with AutoNamer
+  object sanity extends Pact4sPhase("Sanity", autoNamer) with SanityChecker
 
   abstract class Pact4sComponent extends PluginComponent with InheritsGlobal with Transform with Visualize
 
@@ -79,9 +80,9 @@ trait Pact4sPluginOptions { this: Pact4sPlugin =>
 
     for (opt <- options) {
       opt match {
-        case VerbosityPattern(LogLevel(level)) => logger.level = level
+        case VerbosityPattern(LogLevel(level))           => logger.level = level
         case InspectPattern(Component(phase: Visualize)) => phase.visualize = true
-        case _ => error("Unrecognized option -P:%s:%s".format(name, opt))
+        case _                                           => error("Unrecognized option -P:%s:%s".format(name, opt))
       }
     }
   }
