@@ -44,10 +44,10 @@ trait UDTClassGenerators extends UDTSerializerClassGenerators { this: Pact4sPlug
 
     protected def getIndexFields(desc: UDTDescriptor): Seq[UDTDescriptor] = desc match {
       // Flatten product types
-      case CaseClassDescriptor(_, _, _, _, getters)      => getters filterNot { _.isBaseField } flatMap { f => getIndexFields(f.desc) }
+      case CaseClassDescriptor(_, _, _, _, _, getters)      => getters filterNot { _.isBaseField } flatMap { f => getIndexFields(f.desc) }
       // TODO (Joe): Rather than laying out subclass fields sequentially, just reserve enough fields for the largest subclass.
       // This is tricky because subclasses can contain opaque descriptors, so we don't know how many fields we need until runtime.
-      case BaseClassDescriptor(id, _, getters, subTypes) => (getters flatMap { f => getIndexFields(f.desc) }) ++ (subTypes flatMap getIndexFields)
+      case BaseClassDescriptor(id, _, _, getters, subTypes) => (getters flatMap { f => getIndexFields(f.desc) }) ++ (subTypes flatMap getIndexFields)
       case _                                             => Seq(desc)
     }
 

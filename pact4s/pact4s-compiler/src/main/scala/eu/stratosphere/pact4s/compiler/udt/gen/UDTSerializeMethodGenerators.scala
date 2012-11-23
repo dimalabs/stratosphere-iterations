@@ -95,9 +95,9 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
         Seq(mkIf(chk, Block((upd.toSeq ++ stats): _*)))
       }
 
-      case CaseClassDescriptor(_, tpe, _, _, getters) => {
+      case CaseClassDescriptor(_, tpe, _, _, _, getters) => {
         val chk = env.mkChkNotNull(source, tpe)
-        val stats = getters filterNot { _.isBaseField } flatMap { case FieldAccessor(sym, _, _, desc) => genSerialize(desc, Select(source, sym), target, env.copy(chkNull = true)) }
+        val stats = getters filterNot { _.isBaseField } flatMap { case FieldAccessor(sym, _, _, _, desc) => genSerialize(desc, Select(source, sym), target, env.copy(chkNull = true)) }
 
         stats match {
           case Nil => Seq()
@@ -105,9 +105,9 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
         }
       }
 
-      case BaseClassDescriptor(id, tpe, Seq(tagField, baseFields @ _*), subTypes) => {
+      case BaseClassDescriptor(id, tpe, _, Seq(tagField, baseFields @ _*), subTypes) => {
         val chk = env.mkChkNotNull(source, tpe)
-        val fields = baseFields flatMap { (f => genSerialize(f.desc, Select(source, f.sym), target, env.copy(chkNull = true))) }
+        val fields = baseFields flatMap { (f => genSerialize(f.desc, Select(source, f.getter), target, env.copy(chkNull = true))) }
         val cases = subTypes.zipWithIndex.toList map {
           case (dSubType, i) => {
 

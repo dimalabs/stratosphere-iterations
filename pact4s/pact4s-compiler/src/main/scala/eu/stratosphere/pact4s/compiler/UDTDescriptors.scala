@@ -31,7 +31,7 @@ trait UDTDescriptors { this: Pact4sPlugin =>
     def flatten: Seq[UDTDescriptor]
     def getters: Seq[FieldAccessor] = Seq()
 
-    def select(member: String): Option[UDTDescriptor] = getters find { _.sym.name.toString == member } map { _.desc }
+    def select(member: String): Option[UDTDescriptor] = getters find { _.getter.name.toString == member } map { _.desc }
 
     def findById(id: Int): Option[UDTDescriptor] = flatten.find { _.id == id }
 
@@ -82,12 +82,12 @@ trait UDTDescriptors { this: Pact4sPlugin =>
     }
   }
 
-  case class BaseClassDescriptor(id: Int, tpe: Type, override val getters: Seq[FieldAccessor], subTypes: Seq[UDTDescriptor]) extends UDTDescriptor {
+  case class BaseClassDescriptor(id: Int, tpe: Type, mutable: Boolean, override val getters: Seq[FieldAccessor], subTypes: Seq[UDTDescriptor]) extends UDTDescriptor {
 
     override def flatten = this +: ((getters flatMap { _.desc.flatten }) ++ (subTypes flatMap { _.flatten }))
   }
 
-  case class CaseClassDescriptor(id: Int, tpe: Type, ctor: Symbol, ctorTpe: Type, override val getters: Seq[FieldAccessor]) extends UDTDescriptor {
+  case class CaseClassDescriptor(id: Int, tpe: Type, mutable: Boolean, ctor: Symbol, ctorTpe: Type, override val getters: Seq[FieldAccessor]) extends UDTDescriptor {
 
     override val isPrimitiveProduct = !getters.isEmpty && getters.forall(_.desc.isPrimitiveProduct)
 
@@ -99,12 +99,12 @@ trait UDTDescriptors { this: Pact4sPlugin =>
     // Equality of the tpe and ctor fields implies equality of ctorTpe anyway.
     override def hashCode = (id, tpe, ctor, getters).hashCode
     override def equals(that: Any) = that match {
-      case CaseClassDescriptor(thatId, thatTpe, thatCtor, _, thatGetters) => (id, tpe, ctor, getters).equals(thatId, thatTpe, thatCtor, thatGetters)
+      case CaseClassDescriptor(thatId, thatTpe, thatMutable, thatCtor, _, thatGetters) => (id, tpe, mutable, ctor, getters).equals(thatId, thatTpe, thatMutable, thatCtor, thatGetters)
       case _ => false
     }
   }
 
-  case class FieldAccessor(sym: Symbol, tpe: Type, isBaseField: Boolean, desc: UDTDescriptor)
+  case class FieldAccessor(getter: Symbol, setter:Symbol, tpe: Type, isBaseField: Boolean, desc: UDTDescriptor)
 
   case class OpaqueDescriptor(id: Int, tpe: Type, ref: () => Tree) extends UDTDescriptor {
 

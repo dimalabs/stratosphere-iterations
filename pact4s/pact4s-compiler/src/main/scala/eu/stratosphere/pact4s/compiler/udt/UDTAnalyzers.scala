@@ -78,7 +78,7 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
 
         val tagField = {
           val (intTpe, intDefault, intWrapper) = PrimitiveType.intPrimitive
-          FieldAccessor(NoSymbol, NullaryMethodType(intTpe), true, PrimitiveDescriptor(cache.newId, intTpe, intDefault, intWrapper))
+          FieldAccessor(NoSymbol, NoSymbol, NullaryMethodType(intTpe), true, PrimitiveDescriptor(cache.newId, intTpe, intDefault, intWrapper))
         }
 
         val subTypes = tpe.typeSymbol.children flatMap { d =>
@@ -108,42 +108,50 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
           case Nil => {
 
             val (tParams, tArgs) = tpe.typeConstructor.typeParams.zip(tpe.typeArgs).unzip
-            val baseMembers = tpe.members.reverse filter { f => f.isGetter } map { f => (f, normTpe(f.tpe.instantiateTypeParams(tParams, tArgs).asSeenFrom(tpe.prefix, f.owner.owner))) }
+            val baseMembers = tpe.members.reverse filter { f => f.isGetter } map {
+              f => (f, f.setter(tpe.typeSymbol), normTpe(f.tpe.instantiateTypeParams(tParams, tArgs).asSeenFrom(tpe.prefix, f.owner.owner)))
+            }
 
             val subMembers = subTypes map {
-              case BaseClassDescriptor(_, _, getters, _)    => getters
-              case CaseClassDescriptor(_, _, _, _, getters) => getters
+              case BaseClassDescriptor(_, _, _, getters, _)    => getters
+              case CaseClassDescriptor(_, _, _, _, _, getters) => getters
               case _                                        => Seq()
             }
 
             val baseFields = baseMembers flatMap {
-              case (bSym, bTpe) => {
-                val accessors = subMembers map { _ find { sf => sf.sym.name == bSym.name && sf.tpe.resultType <:< bTpe.resultType } }
+              case (bGetter, bSetter, bTpe) => {
+                val accessors = subMembers map { _ find { sf => sf.getter.name == bGetter.name && sf.tpe.resultType <:< bTpe.resultType } }
                 accessors.forall { _.isDefined } match {
-                  case true  => Some(FieldAccessor(bSym, bTpe, true, analyze(bTpe.resultType)))
+                  case true  => Some(FieldAccessor(bGetter, bSetter, bTpe, true, analyze(bTpe.resultType)))
                   case false => None
                 }
               }
             }
+            
+            val mutable = (baseFields forall { f => f.setter != NoSymbol }) &&
+            		(subTypes forall {
+            			case BaseClassDescriptor(_, _, mutable, _, _) => mutable
+            			case CaseClassDescriptor(_, _, mutable, _, _, _) => mutable
+            		})
 
             def wireBaseFields(desc: UDTDescriptor): UDTDescriptor = {
 
               def updateField(field: FieldAccessor) = {
-                baseFields find { bf => bf.sym.name == field.sym.name } match {
-                  case Some(FieldAccessor(_, _, _, desc)) => field.copy(isBaseField = true, desc = desc)
+                baseFields find { bf => bf.getter.name == field.getter.name } match {
+                  case Some(FieldAccessor(_, _, _, _, desc)) => field.copy(isBaseField = true, desc = desc)
                   case None                               => field
                 }
               }
 
               desc match {
-                case desc @ BaseClassDescriptor(_, _, getters, subTypes) => desc.copy(getters = getters map updateField, subTypes = subTypes map wireBaseFields)
-                case desc @ CaseClassDescriptor(_, _, _, _, getters) => desc.copy(getters = getters map updateField)
+                case desc @ BaseClassDescriptor(_, _, _, getters, subTypes) => desc.copy(getters = getters map updateField, subTypes = subTypes map wireBaseFields)
+                case desc @ CaseClassDescriptor(_, _, _, _, _, getters) => desc.copy(getters = getters map updateField)
                 case _ => desc
               }
             }
 
             //Debug.report("BaseClass " + tpe + " has shared fields: " + (baseFields.map { m => m.sym.name + ": " + m.tpe }))
-            BaseClassDescriptor(id, tpe, tagField +: baseFields, subTypes map wireBaseFields)
+            BaseClassDescriptor(id, tpe, mutable, tagField +: baseFields, subTypes map wireBaseFields)
           }
         }
 
@@ -158,23 +166,26 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
           case false => {
 
             val (tParams, tArgs) = tpe.typeConstructor.typeParams.zip(tpe.typeArgs).unzip
-            val getters = tpe.typeSymbol.caseFieldAccessors map { f => (f, f.tpe.instantiateTypeParams(tParams, tArgs).asSeenFrom(tpe.prefix, f.owner.owner)) }
+            val getters = tpe.typeSymbol.caseFieldAccessors map {
+              f => (f, f.setter(tpe.typeSymbol), f.tpe.instantiateTypeParams(tParams, tArgs).asSeenFrom(tpe.prefix, f.owner.owner))
+            }
 
-            val fields = getters map { case (fSym, fTpe) => FieldAccessor(fSym, fTpe, false, analyze(fTpe.resultType)) }
+            val fields = getters map { case (fgetter, fsetter, fTpe) => FieldAccessor(fgetter, fsetter, fTpe, false, analyze(fTpe.resultType)) }
+            val mutable = fields forall { f => f.setter != NoSymbol }
 
             fields filter { _.desc.isInstanceOf[UnsupportedDescriptor] } match {
 
               case errs @ _ :: _ => {
 
-                val msgs = errs flatMap { f => (f: @unchecked) match { case FieldAccessor(fSym, _, _, UnsupportedDescriptor(_, fTpe, errors)) => errors map { err => "Field " + fSym.name + ": " + fTpe + " - " + err } } }
+                val msgs = errs flatMap { f => (f: @unchecked) match { case FieldAccessor(fgetter, _, _, _, UnsupportedDescriptor(_, fTpe, errors)) => errors map { err => "Field " + fgetter.name + ": " + fTpe + " - " + err } } }
                 UnsupportedDescriptor(id, tpe, msgs)
               }
 
               case Nil => {
 
-                findCaseConstructor(tpe, getters.map(_._2.resultType), tParams, tArgs) match {
+                findCaseConstructor(tpe, getters.map(_._3.resultType), tParams, tArgs) match {
                   case Left(err)              => UnsupportedDescriptor(id, tpe, Seq(err))
-                  case Right((ctor, ctorTpe)) => CaseClassDescriptor(id, tpe, ctor, ctorTpe, fields)
+                  case Right((ctor, ctorTpe)) => CaseClassDescriptor(id, tpe, mutable, ctor, ctorTpe, fields)
                 }
               }
             }

@@ -90,10 +90,10 @@ trait UDTDeserializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClas
         Seq(mkIf(chk, Block(stats: _*), mkNull))
       }
 
-      case CaseClassDescriptor(_, tpe, _, _, getters) => {
+      case CaseClassDescriptor(_, tpe, _, _, _, getters) => {
 
         val fields = getters filterNot { _.isBaseField } map {
-          case FieldAccessor(_, _, _, desc) => desc.id -> mkVal(env.methodSym, "v" + desc.id, 0, false, desc.tpe) { _ =>
+          case FieldAccessor(_, _, _, _, desc) => desc.id -> mkVal(env.methodSym, "v" + desc.id, 0, false, desc.tpe) { _ =>
             mkSingle(genDeserialize(desc, source, env, scope))
           }
         }
@@ -103,7 +103,7 @@ trait UDTDeserializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClas
         val stats = fields map { _._2 }
 
         val args = getters map {
-          case FieldAccessor(_, fTpe, _, desc) => {
+          case FieldAccessor(_, _, fTpe, _, desc) => {
             val sym = newScope(desc.id)
             maybeMkAsInstanceOf(Ident(sym), sym.tpe, fTpe.resultType)
           }
@@ -114,10 +114,10 @@ trait UDTDeserializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClas
         stats :+ ret
       }
 
-      case BaseClassDescriptor(_, tpe, Seq(tagField, baseFields @ _*), subTypes) => {
+      case BaseClassDescriptor(_, tpe, _, Seq(tagField, baseFields @ _*), subTypes) => {
 
         val fields = baseFields map {
-          case FieldAccessor(_, _, _, desc) => desc.id -> mkVal(env.methodSym, "v" + desc.id, 0, false, desc.tpe) { _ =>
+          case FieldAccessor(_, _, _, _, desc) => desc.id -> mkVal(env.methodSym, "v" + desc.id, 0, false, desc.tpe) { _ =>
             val special = desc match {
               case d @ PrimitiveDescriptor(id, _, _, _) if id == tagField.desc.id => d.copy(default = Literal(-1))
               case _ => desc
