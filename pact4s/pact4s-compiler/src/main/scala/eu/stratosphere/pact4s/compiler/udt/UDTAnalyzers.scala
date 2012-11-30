@@ -113,7 +113,7 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
             }
 
             val subMembers = subTypes map {
-              case BaseClassDescriptor(_, _, _, getters, _)    => getters
+              case BaseClassDescriptor(_, _, getters, _)    => getters
               case CaseClassDescriptor(_, _, _, _, _, getters) => getters
               case _                                        => Seq()
             }
@@ -127,12 +127,6 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
                 }
               }
             }
-            
-            val mutable = (baseFields forall { f => f.setter != NoSymbol }) &&
-            		(subTypes forall {
-            			case BaseClassDescriptor(_, _, mutable, _, _) => mutable
-            			case CaseClassDescriptor(_, _, mutable, _, _, _) => mutable
-            		})
 
             def wireBaseFields(desc: UDTDescriptor): UDTDescriptor = {
 
@@ -144,14 +138,14 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
               }
 
               desc match {
-                case desc @ BaseClassDescriptor(_, _, _, getters, subTypes) => desc.copy(getters = getters map updateField, subTypes = subTypes map wireBaseFields)
+                case desc @ BaseClassDescriptor(_, _, getters, subTypes) => desc.copy(getters = getters map updateField, subTypes = subTypes map wireBaseFields)
                 case desc @ CaseClassDescriptor(_, _, _, _, _, getters) => desc.copy(getters = getters map updateField)
                 case _ => desc
               }
             }
 
             //Debug.report("BaseClass " + tpe + " has shared fields: " + (baseFields.map { m => m.sym.name + ": " + m.tpe }))
-            BaseClassDescriptor(id, tpe, mutable, tagField +: baseFields, subTypes map wireBaseFields)
+            BaseClassDescriptor(id, tpe, tagField +: baseFields, subTypes map wireBaseFields)
           }
         }
 

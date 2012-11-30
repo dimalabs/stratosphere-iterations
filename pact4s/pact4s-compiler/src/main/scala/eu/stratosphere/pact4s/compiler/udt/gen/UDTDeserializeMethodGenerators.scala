@@ -114,7 +114,7 @@ trait UDTDeserializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClas
         stats :+ ret
       }
 
-      case BaseClassDescriptor(_, tpe, _, Seq(tagField, baseFields @ _*), subTypes) => {
+      case BaseClassDescriptor(_, tpe, Seq(tagField, baseFields @ _*), subTypes) => {
 
         val fields = baseFields map {
           case FieldAccessor(_, _, _, _, desc) => desc.id -> mkVal(env.methodSym, "v" + desc.id, 0, false, desc.tpe) { _ =>

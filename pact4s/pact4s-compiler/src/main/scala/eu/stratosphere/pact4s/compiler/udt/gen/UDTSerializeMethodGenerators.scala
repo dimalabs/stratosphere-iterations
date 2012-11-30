@@ -105,7 +105,7 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
         }
       }
 
-      case BaseClassDescriptor(id, tpe, _, Seq(tagField, baseFields @ _*), subTypes) => {
+      case BaseClassDescriptor(id, tpe, Seq(tagField, baseFields @ _*), subTypes) => {
         val chk = env.mkChkNotNull(source, tpe)
         val fields = baseFields flatMap { (f => genSerialize(f.desc, Select(source, f.getter), target, env.copy(chkNull = true))) }
         val cases = subTypes.zipWithIndex.toList map {

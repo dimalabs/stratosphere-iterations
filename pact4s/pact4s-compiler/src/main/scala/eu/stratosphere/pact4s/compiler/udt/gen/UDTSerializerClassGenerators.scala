@@ -61,7 +61,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
         case ListDescriptor(id, _, _, _, _, elem: PrimitiveDescriptor) => Seq((id, 1, elem.wrapper.tpe))
         case ListDescriptor(id, _, _, _, _, elem: BoxedPrimitiveDescriptor) => Seq((id, 1, elem.wrapper.tpe))
         case ListDescriptor(id, _, _, _, _, elem) => (id, 1, pactRecordClass.tpe) +: getListTypes(elem)
-        case BaseClassDescriptor(_, _, _, getters, subTypes) => (getters flatMap { f => getListTypes(f.desc) }) ++ (subTypes flatMap getListTypes)
+        case BaseClassDescriptor(_, _, getters, subTypes) => (getters flatMap { f => getListTypes(f.desc) }) ++ (subTypes flatMap getListTypes)
         case CaseClassDescriptor(_, _, _, _, _, getters) => getters flatMap { f => getListTypes(f.desc) }
         case _ => Seq()
       }
@@ -129,7 +129,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
         case ListDescriptor(_, _, _, _, _, elem: OpaqueDescriptor)    => Seq(elem)
         case ListDescriptor(_, _, _, _, _, elem)                      => getBoxedDescriptors(elem)
         case CaseClassDescriptor(_, _, _, _, _, getters)                 => getters filterNot { _.isBaseField } flatMap { f => getBoxedDescriptors(f.desc) }
-        case BaseClassDescriptor(id, _, _, getters, subTypes)            => (getters flatMap { f => getBoxedDescriptors(f.desc) }) ++ (subTypes flatMap getBoxedDescriptors)
+        case BaseClassDescriptor(id, _, getters, subTypes)            => (getters flatMap { f => getBoxedDescriptors(f.desc) }) ++ (subTypes flatMap getBoxedDescriptors)
         case RecursiveDescriptor(_, _, refId)                         => desc.findById(refId).map(_.mkRoot).toSeq
         case _                                                        => Seq()
       }
@@ -168,7 +168,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
           listField +: elemFields
         }
         case CaseClassDescriptor(_, _, _, _, _, getters)     => getters filterNot { _.isBaseField } flatMap { f => getFieldTypes(f.desc) }
-        case BaseClassDescriptor(_, _, _, getters, subTypes) => (getters flatMap { f => getFieldTypes(f.desc) }) ++ (subTypes flatMap getFieldTypes)
+        case BaseClassDescriptor(_, _, getters, subTypes) => (getters flatMap { f => getFieldTypes(f.desc) }) ++ (subTypes flatMap getFieldTypes)
         case _                                            => Seq()
       }
 
@@ -198,7 +198,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
         case PrimitiveDescriptor(id, _, _, _)            => Seq((path, mkList(List(env.mkSelectIdx(id)))))
         case BoxedPrimitiveDescriptor(id, _, _, _, _, _) => Seq((path, mkList(List(env.mkSelectIdx(id)))))
 
-        case BaseClassDescriptor(_, _, _, Seq(tag, getters @ _*), _) => {
+        case BaseClassDescriptor(_, _, Seq(tag, getters @ _*), _) => {
           val tagCase = Seq((path :+ "getClass", mkList(List(env.mkSelectIdx(tag.desc.id)))))
           val fieldCases = getters flatMap { f => mkCases(f.desc, path :+ f.getter.name.toString) }
           tagCase ++ fieldCases
