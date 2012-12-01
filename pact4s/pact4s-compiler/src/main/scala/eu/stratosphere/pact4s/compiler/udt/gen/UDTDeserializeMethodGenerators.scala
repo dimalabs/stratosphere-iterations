@@ -90,6 +90,32 @@ trait UDTDeserializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClas
         Seq(mkIf(chk, Block(stats: _*), mkNull))
       }
 
+      // we have a mutable UDT
+      case CaseClassDescriptor(_, tpe, true, _, _, getters) => {
+
+        val fields = getters filterNot { _.isBaseField } map {
+          case FieldAccessor(_, _, _, _, desc) => desc.id -> mkVal(env.methodSym, "v" + desc.id, 0, false, desc.tpe) { _ =>
+            mkSingle(genDeserialize(desc, source, env, scope))
+          }
+        }
+
+        val newScope = scope ++ (fields map { case (id, tree) => id -> tree.symbol })
+
+        val stats = fields map { _._2 }
+
+        val setterStats = getters map {
+          case FieldAccessor(_, setter, fTpe, _, fDesc) => {
+            val sym = newScope(fDesc.id)
+            val castVal = maybeMkAsInstanceOf(Ident(sym), sym.tpe, fTpe.resultType)
+            env.mkCallSetMutableField(desc.id, setter, castVal)
+          }
+        }
+
+        val ret = env.mkSelectMutableUdtInst(desc.id)
+
+        (stats ++ setterStats) :+ ret
+      }
+
       case CaseClassDescriptor(_, tpe, _, _, _, getters) => {
 
         val fields = getters filterNot { _.isBaseField } map {
