@@ -61,11 +61,11 @@ trait UDTGenSiteSelectors { this: Pact4sPlugin =>
       private def analyze(tparams: List[Tree]): Unit = tparams foreach { t => analyze(defs.unwrapIter(t.tpe)) }
 
       private def collectInferences(desc: UDTDescriptor): Seq[Tree] = desc match {
-        case OpaqueDescriptor(_, _, ref)              => Seq(ref())
-        case ListDescriptor(_, _, _, _, _, elem)      => collectInferences(elem)
-        case BaseClassDescriptor(_, _, _, subTypes)   => subTypes flatMap { collectInferences(_) }
+        case OpaqueDescriptor(_, _, ref) => Seq(ref())
+        case ListDescriptor(_, _, _, _, _, elem) => collectInferences(elem)
+        case BaseClassDescriptor(_, _, _, subTypes) => subTypes flatMap { collectInferences(_) }
         case CaseClassDescriptor(_, _, _, _, _, getters) => getters flatMap { f => collectInferences(f.desc) }
-        case _                                        => Seq()
+        case _ => Seq()
       }
 
       private def curSitePath = curPath filter {
@@ -84,19 +84,19 @@ trait UDTGenSiteSelectors { this: Pact4sPlugin =>
 
           case Some((oldPath, newPath)) => {
             //verbosely[Boolean] { _ => "Updated GenSite[" + desc.tpe + "] " + posString(oldPath.head.pos) + " -> " + posString(newPath.head.pos) } {
-              genSites(oldPath.head) -= desc
-              genSites(newPath.head) += desc
-              genSitePaths(desc) -= oldPath
-              genSitePaths(desc) += newPath
-              true
+            genSites(oldPath.head) -= desc
+            genSites(newPath.head) += desc
+            genSitePaths(desc) -= oldPath
+            genSitePaths(desc) += newPath
+            true
             //}
           }
 
           case None => {
             //verbosely[Boolean] { _ => "Added GenSite[" + desc.tpe + "] " + posString(curSitePath.head.pos) + " - " + desc.toString } {
-              genSites(curSitePath.head) += desc
-              genSitePaths(desc) += curSitePath
-              true
+            genSites(curSitePath.head) += desc
+            genSitePaths(desc) += curSitePath
+            true
             //}
           }
         }

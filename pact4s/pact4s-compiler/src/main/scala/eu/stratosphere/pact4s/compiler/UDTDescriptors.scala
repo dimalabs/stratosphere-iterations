@@ -104,12 +104,12 @@ trait UDTDescriptors { this: Pact4sPlugin =>
     }
   }
 
-  case class FieldAccessor(getter: Symbol, setter:Symbol, tpe: Type, isBaseField: Boolean, desc: UDTDescriptor)
+  case class FieldAccessor(getter: Symbol, setter: Symbol, tpe: Type, isBaseField: Boolean, desc: UDTDescriptor)
 
   case class OpaqueDescriptor(id: Int, tpe: Type, ref: () => Tree) extends UDTDescriptor {
 
     private val refString = ref().toString
-    
+
     override val isPrimitiveProduct = true
     override def flatten = Seq(this)
 

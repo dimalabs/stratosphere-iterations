@@ -24,12 +24,15 @@ import eu.stratosphere.pact4s.compiler.util.Counter
 
 trait UDTAnalyzers { this: Pact4sPlugin =>
 
+  // This value is controlled by the udtRecycling compiler option
+  var enableMutableUDTs = false
+
   import global._
   import defs._
 
   trait UDTAnalyzer { this: TypingVisitor with Logger =>
 
-    private val seen = collection.mutable.Set[(Type, Boolean)]()
+    //private val seen = collection.mutable.Set[(Type, Boolean)]()
 
     def getUDTDescriptor(tpe: Type): UDTDescriptor = {
       //if (seen.add(normTpe(tpe), false))
@@ -84,15 +87,15 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
         val subTypes = tpe.typeSymbol.children flatMap { d =>
 
           val dTpe = // verbosely[Type] { dTpe => d.tpe + " <: " + tpe + " instantiated as " + dTpe + " (" + (if (dTpe <:< tpe) "Valid" else "Invalid") + " subtype)" } 
-          {
-            val tArgs = (tpe.typeConstructor.typeParams, tpe.typeArgs).zipped.toMap
-            val dArgs = d.typeParams map { dp =>
-              val tArg = tArgs.keySet.find { tp => dp == tp.tpe.asSeenFrom(d.tpe, tpe.typeSymbol).typeSymbol }
-              tArg map { tArgs(_) } getOrElse dp.tpe
-            }
+            {
+              val tArgs = (tpe.typeConstructor.typeParams, tpe.typeArgs).zipped.toMap
+              val dArgs = d.typeParams map { dp =>
+                val tArg = tArgs.keySet.find { tp => dp == tp.tpe.asSeenFrom(d.tpe, tpe.typeSymbol).typeSymbol }
+                tArg map { tArgs(_) } getOrElse dp.tpe
+              }
 
-            normTpe(appliedType(d.tpe, dArgs))
-          }
+              normTpe(appliedType(d.tpe, dArgs))
+            }
 
           if (dTpe <:< tpe)
             Some(analyze(dTpe))
@@ -113,9 +116,9 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
             }
 
             val subMembers = subTypes map {
-              case BaseClassDescriptor(_, _, getters, _)    => getters
+              case BaseClassDescriptor(_, _, getters, _) => getters
               case CaseClassDescriptor(_, _, _, _, _, getters) => getters
-              case _                                        => Seq()
+              case _ => Seq()
             }
 
             val baseFields = baseMembers flatMap {
@@ -133,7 +136,7 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
               def updateField(field: FieldAccessor) = {
                 baseFields find { bf => bf.getter.name == field.getter.name } match {
                   case Some(FieldAccessor(_, _, _, _, desc)) => field.copy(isBaseField = true, desc = desc)
-                  case None                               => field
+                  case None                                  => field
                 }
               }
 
@@ -165,7 +168,10 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
             }
 
             val fields = getters map { case (fgetter, fsetter, fTpe) => FieldAccessor(fgetter, fsetter, fTpe, false, analyze(fTpe.resultType)) }
-            val mutable = fields forall { f => f.setter != NoSymbol }
+
+            val mutable = maybeVerbosely(identity[Boolean])(_ => "Detected recyclable type: " + tpe) {
+              enableMutableUDTs && (fields forall { f => f.setter != NoSymbol })
+            }
 
             fields filter { _.desc.isInstanceOf[UnsupportedDescriptor] } match {
 

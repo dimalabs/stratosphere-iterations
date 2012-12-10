@@ -61,12 +61,13 @@ trait Pact4sPluginOptions { this: Pact4sPlugin =>
   protected def getOptionsHelp: Option[String] = {
 
     val items = Seq(
+      ("udtRecycling:<value>", "Specifies whether deserialization may reuse UDT object instances. (on, off) default:off"),
       ("verbosity:<value>", "Set the output verbosity to <value>. (error, warn, debug, inspect) default:warn"),
       ("inspect:<phase>", "Show trees after <phase>. (none, " + components.mkString(", ") + ") default:none")
     )
 
     val optName = "  -P:" + name + ":%s"
-    val optLine = "%-30s%s"
+    val optLine = "%-30s%s" 
     val options = items map { case (opt, desc) => optLine.format(optName.format(opt), desc) } mkString ("\n")
 
     Some(options)
@@ -74,15 +75,18 @@ trait Pact4sPluginOptions { this: Pact4sPlugin =>
 
   override def processOptions(options: List[String], error: String => Unit): Unit = {
 
+    val UDTRecyclingPattern = "udtRecycling:(.+)".r
     val VerbosityPattern = "verbosity:(.+)".r
     val InspectPattern = "inspect:(.+)".r
     object Component { def unapply(name: String): Option[PluginComponent] = components.find(_.toString.toLowerCase == name.toLowerCase) }
 
     for (opt <- options) {
       opt match {
+        case UDTRecyclingPattern("on")                   => enableMutableUDTs = true
+        case UDTRecyclingPattern("off")                  => enableMutableUDTs = false
         case VerbosityPattern(LogLevel(level))           => logger.level = level
         case InspectPattern(Component(phase: Visualize)) => phase.visualize = true
-        case _                                           => error("Unrecognized option -P:%s:%s".format(name, opt))
+        case _ => error("Unrecognized option -P:%s:%s".format(name, opt))
       }
     }
   }

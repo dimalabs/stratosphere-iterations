@@ -26,6 +26,17 @@ import eu.stratosphere.pact.common.`type`.base._
 
 import scala.collection.JavaConversions._
 
+class MutableTest {
+  case class MyOtherString(var value: String)
+  abstract sealed class MyValue
+  case class MyString(var value: String, var foo: MyOtherString) extends MyValue
+  case class MyInt(var value: Int) extends MyValue
+  
+  val udt1 = implicitly[UDT[MyOtherString]]
+  val udt2 = implicitly[UDT[MyInt]]
+  val udt3 = implicitly[UDT[MyValue]]
+}
+
 class GenericTest[T] {
 
   val testFun: UDT[T] => UDT[(Int, T)] = { implicit udtEv: UDT[T] => implicitly[UDT[(Int, T)]] }

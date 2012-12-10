@@ -30,12 +30,6 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
 
       mkClass(owner, unit.freshTypeName("UDTSerializerImpl"), Flags.FINAL, List(mkUdtSerializerOf(desc.tpe), definitions.SerializableClass.tpe)) { classSym =>
 
-        val mutableUdts = desc.flatten.toList flatMap {
-          case cc @ CaseClassDescriptor(_, _, true, _, _, _) => Some(cc)
-          case _ => None
-        }
-        val mutableUdtInsts = mutableUdts map { u => mkMutableUdtInst(classSym, u) }
-
         val (listImpls, listImplTypes) = mkListImplClasses(classSym, desc)
 
         val indexMapIter = Select(Apply(Select(Select(Ident("scala"), "Predef"), "intArrayOps"), List(Ident("indexMap"))), "iterator")
@@ -50,22 +44,18 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
 
         val (wrapperFields, wrappers) = mkPactWrappers(classSym, desc, listImplTypes)
 
-        val helpers = mutableUdtInsts ++ listImpls ++ fields ++ wrapperFields ++ mkReadObject(classSym, wrappers, mutableUdts) ++ init
+        val mutableUdts = desc.flatten.toList flatMap {
+          case cc @ CaseClassDescriptor(_, _, true, _, _, _) => Some(cc)
+          case _ => None
+        } distinct
+
+        val mutableUdtInsts = mutableUdts map { u => mkMutableUdtInst(classSym, u) }
+
+        val helpers = listImpls ++ fields ++ wrapperFields ++ mutableUdtInsts ++ mkReadObject(classSym, wrappers, mutableUdts) ++ init
         val methods = mkGetFieldIndex(classSym, desc) :: mkSerialize(classSym, desc, listImplTypes) ++ mkDeserialize(classSym, desc, listImplTypes)
 
         helpers ++ methods
       }
-    }
-
-    private def mkMutableUdtInst(holderClassSym: Symbol, desc: CaseClassDescriptor): Tree = {
-      val args = desc.getters map {
-        case FieldAccessor(_, _, fTpe, _, _) => {
-          mkDefault(fTpe.typeSymbol)
-        }
-      }
-
-      val ctor = New(TypeTree(desc.tpe), List(args.toList))
-      mkVar(holderClassSym, "mutableUdtInst" + desc.id, 0, false, desc.tpe) { _ => ctor }
     }
 
     private def mkListImplClasses(udtSerClassSym: Symbol, desc: UDTDescriptor): (List[Tree], Map[Int, Type]) = {
@@ -145,12 +135,12 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
       def getBoxedDescriptors(d: UDTDescriptor): Seq[UDTDescriptor] = d match {
         case ListDescriptor(_, _, _, _, _, elem: BaseClassDescriptor) => elem +: getBoxedDescriptors(elem)
         case ListDescriptor(_, _, _, _, _, elem: CaseClassDescriptor) => elem +: getBoxedDescriptors(elem)
-        case ListDescriptor(_, _, _, _, _, elem: OpaqueDescriptor)    => Seq(elem)
-        case ListDescriptor(_, _, _, _, _, elem)                      => getBoxedDescriptors(elem)
-        case CaseClassDescriptor(_, _, _, _, _, getters)                 => getters filterNot { _.isBaseField } flatMap { f => getBoxedDescriptors(f.desc) }
-        case BaseClassDescriptor(id, _, getters, subTypes)            => (getters flatMap { f => getBoxedDescriptors(f.desc) }) ++ (subTypes flatMap getBoxedDescriptors)
-        case RecursiveDescriptor(_, _, refId)                         => desc.findById(refId).map(_.mkRoot).toSeq
-        case _                                                        => Seq()
+        case ListDescriptor(_, _, _, _, _, elem: OpaqueDescriptor) => Seq(elem)
+        case ListDescriptor(_, _, _, _, _, elem) => getBoxedDescriptors(elem)
+        case CaseClassDescriptor(_, _, _, _, _, getters) => getters filterNot { _.isBaseField } flatMap { f => getBoxedDescriptors(f.desc) }
+        case BaseClassDescriptor(id, _, getters, subTypes) => (getters flatMap { f => getBoxedDescriptors(f.desc) }) ++ (subTypes flatMap getBoxedDescriptors)
+        case RecursiveDescriptor(_, _, refId) => desc.findById(refId).map(_.mkRoot).toSeq
+        case _ => Seq()
       }
 
       val fieldsAndInits = getBoxedDescriptors(desc).distinct.toList flatMap { d =>
@@ -172,7 +162,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
       (fields.flatten, inits.flatten)
     }
 
-    private def mkPactWrappers(udtSerClassSym: Symbol, desc: UDTDescriptor, listImpls: Map[Int, Type]): (List[Tree], List[(Int, Type)])  = {
+    private def mkPactWrappers(udtSerClassSym: Symbol, desc: UDTDescriptor, listImpls: Map[Int, Type]): (List[Tree], List[(Int, Type)]) = {
 
       def getFieldTypes(desc: UDTDescriptor): Seq[(Int, Type)] = desc match {
         case PrimitiveDescriptor(id, _, _, wrapper)            => Seq((id, wrapper.tpe))
@@ -186,9 +176,9 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
           }
           listField +: elemFields
         }
-        case CaseClassDescriptor(_, _, _, _, _, getters)     => getters filterNot { _.isBaseField } flatMap { f => getFieldTypes(f.desc) }
+        case CaseClassDescriptor(_, _, _, _, _, getters) => getters filterNot { _.isBaseField } flatMap { f => getFieldTypes(f.desc) }
         case BaseClassDescriptor(_, _, getters, subTypes) => (getters flatMap { f => getFieldTypes(f.desc) }) ++ (subTypes flatMap getFieldTypes)
-        case _                                            => Seq()
+        case _ => Seq()
       }
 
       getFieldTypes(desc) toList match {
@@ -197,6 +187,17 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
           val fields = types map { case (id, tpe) => mkVar(udtSerClassSym, "w" + id, Flags.PRIVATE, true, tpe) { _ => New(TypeTree(tpe), List(List())) } }
           (fields, types)
       }
+    }
+
+    private def mkMutableUdtInst(holderClassSym: Symbol, desc: CaseClassDescriptor): Tree = {
+      val args = desc.getters map {
+        case FieldAccessor(_, _, fTpe, _, _) => {
+          mkDefault(fTpe.typeSymbol)
+        }
+      }
+
+      val ctor = New(TypeTree(desc.tpe), List(args.toList))
+      mkVar(holderClassSym, "mutableUdtInst" + desc.id, Flags.PRIVATE, true, desc.tpe) { _ => ctor }
     }
 
     private def mkReadObject(udtSerClassSym: Symbol, wrappers: List[(Int, Type)], mutableUdts: List[CaseClassDescriptor]): List[Tree] = {
@@ -213,11 +214,11 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
       }
 
       val readObject = mkMethod(udtSerClassSym, "readObject", Flags.PRIVATE, List(("in", objectInputStreamClass.tpe)), definitions.UnitClass.tpe) { _ =>
-        val first = Apply(Select(Ident("in"), "defaultReadObject"), Nil)
-        val rest = wrappers map { case (id, tpe) => Assign(Ident("w" + id), New(TypeTree(tpe), List(List()))) }
-        val rest2 = mutableUdts map { mkUdtInit(_) }
+        val default = Apply(Select(Ident("in"), "defaultReadObject"), Nil)
+        val initWrappers = wrappers map { case (id, tpe) => Assign(Ident("w" + id), New(TypeTree(tpe), List(List()))) }
+        val initMutables = mutableUdts map { mkUdtInit(_) }
         val ret = mkUnit
-        Block(((first +: rest) :+ ret): _*)
+        Block(((default +: (initWrappers ++ initMutables)) :+ ret): _*)
       }
       List(readObject)
     }
@@ -257,24 +258,24 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
 
         case _ => Seq()
       }
-      
+
       def mkPat(unapplyDummy: Symbol, path: Seq[String]): Tree = {
-        
+
         val seqUnapply = TypeApply(mkSelect("scala", "collection", "Seq", "unapplySeq"), List(TypeTree(stringTpe)))
         val fun = Apply(seqUnapply, List(mkIdent(unapplyDummy)))
-        
+
         val args = path map {
           case null => Bind("rest", Star(Ident("_")))
-          case s => Literal(s)
+          case s    => Literal(s)
         }
-        
+
         UnApply(fun, args.toList)
       }
 
       mkMethod(udtSerClassSym, "getFieldIndex", Flags.OVERRIDE | Flags.FINAL, List(("selection", mkSeqOf(stringTpe))), mkListOf(intTpe)) { methodSym =>
 
         val unapplyDummy = methodSym.newValue(curPos, nme.SELECTOR_DUMMY) setFlag Flags.SYNTHETIC setInfo mkSeqOf(stringTpe)
-        
+
         val cases = mkCases(desc, Seq()) map { case (path, idxs) => CaseDef(mkPat(unapplyDummy, path), EmptyTree, idxs) }
         val errCase = CaseDef(Ident("_"), EmptyTree, Apply(Select(This(udtSerClassSym), "invalidSelection"), List(Ident("selection"))))
         Match(Ident("selection"), (cases :+ errCase).toList)
@@ -289,7 +290,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
       def mkSelectIdx(fieldId: Int): Tree = Select(This(udtSerClassSym), idxPrefix + "Idx" + fieldId)
       def mkSelectSerializer(fieldId: Int): Tree = Select(This(udtSerClassSym), idxPrefix + "Ser" + fieldId)
       def mkSelectWrapper(fieldId: Int): Tree = Select(This(udtSerClassSym), "w" + fieldId)
-      def mkSelectMutableUdtInst(udtId: Int): Tree = Select(Select(This(udtSerClassSym), "mutableUdtInstHolder"), "mutableUdtInst" + udtId)
+      def mkSelectMutableUdtInst(udtId: Int): Tree = Select(This(udtSerClassSym), "mutableUdtInst" + udtId)
 
       def mkCallSetMutableField(udtId: Int, setter: Symbol, source: Tree): Tree = Apply(Select(mkSelectMutableUdtInst(udtId), setter), List(source))
       def mkCallSerialize(refId: Int, source: Tree, target: Tree): Tree = Apply(Select(This(udtSerClassSym), "serialize" + refId), List(source, target))
