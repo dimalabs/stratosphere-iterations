@@ -54,8 +54,6 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
 
         val normed = normTpe(tpe)
 
-        // TODO (Joe): Fix issues with Nothing type
-
         cache.getOrElseUpdate(normed) { id =>
           //maybeVerbosely[UDTDescriptor](_ => seen.add(normed, true)) { d => "Analyzed UDT[" + tpe + " ~> " + normed + "] - " + d.getClass.getName } 
           {

@@ -17,26 +17,22 @@
 
 package eu.stratosphere.pact4s.common.contracts
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-trait Reduce4sContract[In, Out] extends Pact4sOneInputContract { this: ReduceContract =>
+trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputKeyedContract[Key, In, Out] { this: ReduceContract =>
 
-  val keySelector: FieldSelector
-  val inputUDT: UDT[In]
-  val outputUDT: UDT[Out]
-  val combineUDF: UDF1
-  val reduceUDF: UDF1
-  val userCombineFunction: Option[Iterator[In] => In]
-  val userReduceFunction: Iterator[In] => Out
+  val combineUDF: UDF1[In, In]
+  val userCombineCode: Option[Iterator[In] => In]
+  val userReduceCode: Iterator[In] => Out
 
-  private def combinableAnnotation = userCombineFunction map { _ => Annotations.getCombinable() } toSeq
+  private def combinableAnnotation = userCombineCode map { _ => Annotations.getCombinable() } toSeq
   //private def getAllReadFields = (combineUDF.getReadFields ++ reduceUDF.getReadFields).distinct.toArray
 
   override def annotations = combinableAnnotation ++ Seq(
-    Annotations.getConstantFields(reduceUDF.getForwardedFields),
+    Annotations.getConstantFields(udf.getForwardIndexArray),
     Annotations.getOutCardBounds(Annotations.CARD_UNBOUNDED, Annotations.CARD_INPUTCARD)
   /*
     Annotations.getReads(getAllReadFields),
@@ -48,15 +44,19 @@ trait Reduce4sContract[In, Out] extends Pact4sOneInputContract { this: ReduceCon
 
   override def persistConfiguration() = {
 
-    val combineDeserializer = userCombineFunction map { _ => inputUDT.getSerializer(combineUDF.getReadFields) }
-    val combineSerializer = userCombineFunction map { _ => inputUDT.getSerializer(combineUDF.getWriteFields) }
-    val combineForward = userCombineFunction map { _ => combineUDF.getForwardedFields }
+    val combineDeserializer = userCombineCode map { _ => combineUDF.getInputDeserializer }
+    val combineSerializer = userCombineCode map { _ => combineUDF.getOutputSerializer }
 
-    val reduceDeserializer = inputUDT.getSerializer(reduceUDF.getReadFields)
-    val reduceSerializer = outputUDT.getSerializer(reduceUDF.getWriteFields)
-    val reduceForward = reduceUDF.getForwardedFields
+    val reduceDeserializer = udf.getInputDeserializer
+    val reduceSerializer = udf.getOutputSerializer
+    
+    val forward = udf.getForwardIndexArray
 
-    val stubParameters = new ReduceParameters(combineDeserializer, combineSerializer, combineForward, userCombineFunction, reduceDeserializer, reduceSerializer, reduceForward, userReduceFunction)
+    val stubParameters = new ReduceParameters(
+      combineDeserializer, combineSerializer, userCombineCode, 
+      reduceDeserializer, reduceSerializer, userReduceCode,
+      forward
+    )
     stubParameters.persist(this)
   }
 }
@@ -65,5 +65,5 @@ object Reduce4sContract {
 
   def newBuilder[In, Out] = ReduceContract.builder(classOf[Reduce4sStub[In, Out]])
 
-  def unapply(c: Reduce4sContract[_, _]) = Some((c.singleInput, c.keySelector, c.inputUDT, c.outputUDT, c.combineUDF, c.reduceUDF))
+  def unapply(c: Reduce4sContract[_, _, _]) = Some(c.singleInput)
 }

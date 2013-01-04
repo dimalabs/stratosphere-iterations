@@ -18,7 +18,7 @@
 package eu.stratosphere.pact4s.examples.compilerTests
 
 import eu.stratosphere.pact4s.common._
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.operators._
 
 import eu.stratosphere.pact.common.`type`._
@@ -80,12 +80,12 @@ class BlockTest {
   }
 
   val udtTestInst1 = {
-    val x = implicitly[analyzer.UDT[(Int, Int, (String, Array[Int]))]]
+    val x = implicitly[analysis.UDT[(Int, Int, (String, Array[Int]))]]
     val y = new DataSource("", DelimetedDataSourceFormat({ s: String => (s, s, (s.toInt, s)) }))
-    implicitly[analyzer.UDT[(Int, Int, (Int, String))]]
+    implicitly[analysis.UDT[(Int, Int, (Int, String))]]
     val z = new DataSource("", DelimetedDataSourceFormat({ s: String => (s, s, (s, s)) }))
-    implicitly[analyzer.UDT[(Int, Int, (Int, Int))]]
-    implicitly[analyzer.UDT[(Int, Int, (String, String))]]
+    implicitly[analysis.UDT[(Int, Int, (Int, Int))]]
+    implicitly[analysis.UDT[(Int, Int, (String, String))]]
   }
 
   val udtTestInst2 = new DataSource("", DelimetedDataSourceFormat({ s: String => (s, s, (s.toInt, s)) }))

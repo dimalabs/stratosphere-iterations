@@ -17,35 +17,35 @@
 
 package eu.stratosphere.pact4s.examples.compilerTests
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 
 class KeyTest {
 
-  def toFS[T1: UDT, R](fun: FieldSelectorCode[T1 => R]) = fun
+  def toKS[T1: UDT, R](fun: KeySelector[T1 => R]) = fun
 
   abstract sealed class TestBase { val baseField: String }
   case class TestSub1(baseField: String, subField: Int) extends TestBase
   case class TestSub2(baseField: String, subField: Double) extends TestBase
 
-  object SimpleTests {
-    val testID = toFS[(Int, Int, Int), (Int, Int, Int)] { x => x }
-    val testAtomic = toFS[(Int, Int, Int), Int] { x => x._2 }
-    val testComposite = toFS[(Int, Int, Int), (Int, Int)] { x => (x._3, x._1) }
-    val testAtomicComplex = toFS[((Int, Int), (Int, Int)), (Int, Int)] { x => x._2 }
-    val testCompositeComplex = toFS[((Int, Int), (Int, Int)), ((Int, Int), (Int, Int))] { x => (x._2, x._1) }
-    val testCompositeComplexDeep = toFS[((Int, Int), (Int, Int)), (Int, (Int, Int))] { x: ((Int, Int), (Int, Int)) => (x._1._2, x._2) }
-    val testBase = toFS[TestBase, String] { x => x.baseField }
+  object SelectTests {
+    val testID = toKS[(Int, Int, Int), (Int, Int, Int)] { x => x }
+    val testAtomic = toKS[(Int, Int, Int), Int] { x => x._2 }
+    val testComposite = toKS[(Int, Int, Int), (Int, Int)] { x => (x._3, x._1) }
+    val testAtomicComplex = toKS[((Int, Int), (Int, Int)), (Int, Int)] { x => x._2 }
+    val testCompositeComplex = toKS[((Int, Int), (Int, Int)), ((Int, Int), (Int, Int))] { x => (x._2, x._1) }
+    val testCompositeComplexDeep = toKS[((Int, Int), (Int, Int)), (Int, (Int, Int))] { x => (x._1._2, x._2) }
+    val testBase = toKS[TestBase, String] { x => x.baseField }
   }
 
   object MatchTests {
-    val testID = toFS[(Int, Int, Int), (Int, Int, Int)] { case x => x }
-    val testAtomic = toFS[(Int, Int, Int), Int] { case (_, b, _) => b }
-    val testComposite = toFS[(Int, Int, Int), (Int, Int)] { case (a, _, c) => (c, a) }
-    val testAtomicComplex = toFS[((Int, Int), (Int, Int)), (Int, Int)] { case ((a, b), c @ (d, e)) => c }
-    val testCompositeComplex = toFS[((Int, Int), (Int, Int)), ((Int, Int), (Int, Int))] { case (a, b) => (b, a) }
-    val testCompositeComplexDeepPat = toFS[((Int, Int), (Int, Int)), (Int, (Int, Int))] { case ((_, b), c) => (b, c) }
-    val testCompositeComplexDeepMix = toFS[((Int, Int), (Int, Int)), (Int, (Int, Int))] { case (ab, c) => (ab._2, c) }
-    val testBase = toFS[TestBase, String] { case x => x.baseField }
+    val testID = toKS[(Int, Int, Int), (Int, Int, Int)] { case x => x }
+    val testAtomic = toKS[(Int, Int, Int), Int] { case (_, b, _) => b }
+    val testComposite = toKS[(Int, Int, Int), (Int, Int)] { case (a, _, c) => (c, a) }
+    val testAtomicComplex = toKS[((Int, Int), (Int, Int)), (Int, Int)] { case ((a, b), c @ (d, e)) => c }
+    val testCompositeComplex = toKS[((Int, Int), (Int, Int)), ((Int, Int), (Int, Int))] { case (a, b) => (b, a) }
+    val testCompositeComplexDeepPat = toKS[((Int, Int), (Int, Int)), (Int, (Int, Int))] { case ((_, b), c) => (b, c) }
+    val testCompositeComplexDeepMix = toKS[((Int, Int), (Int, Int)), (Int, (Int, Int))] { case (ab, c) => (ab._2, c) }
+    val testBase = toKS[TestBase, String] { case x => x.baseField }
   }
 } 
 

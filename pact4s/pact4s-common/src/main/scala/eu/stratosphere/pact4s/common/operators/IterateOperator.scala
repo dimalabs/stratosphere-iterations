@@ -18,7 +18,7 @@
 package eu.stratosphere.pact4s.common.operators
 
 import eu.stratosphere.pact4s.common._
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact4s.common.stubs._
 
@@ -60,7 +60,9 @@ class IterateOperator[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStrea
 
     override def createContract = {
 
-      val contract = new Iteration with Iterate4sContract[SolutionItem]
+      val contract = new Iteration with Iterate4sContract[SolutionItem] {
+        override val udf = new UDF0[SolutionItem]
+      }
 
       val solutionInput = new DataStream[SolutionItem] {
         override def createContract = contract.getPartialSolution()
@@ -70,7 +72,8 @@ class IterateOperator[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStrea
 
       contract.setInitialPartialSolution(s0.getContract)
       contract.setNextPartialSolution(output.getContract)
-      contract.setTerminationCriterion(term.getContract)
+      
+      if (term != null) contract.setTerminationCriterion(term.getContract)
 
       contract
     }
@@ -79,16 +82,17 @@ class IterateOperator[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStrea
 
 class WorksetIterateOperator[SolutionItem: UDT, WorksetItem: UDT](stepFunction: (DataStream[SolutionItem], DataStream[WorksetItem]) => (DataStream[SolutionItem], DataStream[WorksetItem])) extends Serializable {
 
-  def iterate(s0: DistinctDataStream[SolutionItem], ws0: DataStream[WorksetItem]) = new DataStream[SolutionItem] {
+  def iterate[SolutionKey](s0: DistinctDataStream[SolutionItem, SolutionKey], ws0: DataStream[WorksetItem]) = new DataStream[SolutionItem] {
 
     override def createContract = {
 
-      val keyFields = s0.keySelector.getFields
-      val keyFieldTypes = implicitly[UDT[SolutionItem]].getKeySet(keyFields map { _._1 })
+      val keyFields = s0.keySelector.selectedFields
+      val keyTypes = implicitly[UDT[SolutionItem]].getKeySet(keyFields map { _.localPos })
+      val keyPositions = keyFields map { _ => -1 } toArray
 
-      val contract = new WorksetIteration with WorksetIterate4sContract[SolutionItem, WorksetItem] {
-
-        override val keySelector = s0.keySelector
+      val contract = new WorksetIteration(keyTypes, keyPositions) with WorksetIterate4sContract[SolutionKey, SolutionItem, WorksetItem] {
+        override val key = s0.keySelector
+        override val udf = new UDF0[SolutionItem]
       }
 
       val solutionInput = new DataStream[SolutionItem] {
@@ -112,8 +116,8 @@ class WorksetIterateOperator[SolutionItem: UDT, WorksetItem: UDT](stepFunction: 
 }
 
 class DistinctByOperator[T: UDT](stream: DataStream[T]) extends Serializable {
-  def distinctBy[Key](keySelector: FieldSelectorCode[T => Key]) = new DistinctDataStream(stream, keySelector)
+  def distinctBy[Key](keySelector: KeySelector[T => Key]) = new DistinctDataStream(stream, keySelector)
 }
 
-case class DistinctDataStream[T: UDT](stream: DataStream[T], keySelector: FieldSelector)
+case class DistinctDataStream[T, Key](stream: DataStream[T], keySelector: KeySelector[T => Key])
 

@@ -17,7 +17,7 @@
 
 package eu.stratosphere.pact4s.common.udts
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 
 import scala.collection.GenTraversableOnce
 import scala.collection.generic.CanBuildFrom

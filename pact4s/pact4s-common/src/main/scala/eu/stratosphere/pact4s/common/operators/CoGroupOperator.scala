@@ -18,7 +18,7 @@
 package eu.stratosphere.pact4s.common.operators
 
 import eu.stratosphere.pact4s.common._
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact4s.common.stubs._
 
@@ -28,39 +28,29 @@ class CoGroupOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) extends Serial
 
   def cogroup[RightIn: UDT](rightInput: DataStream[RightIn]) = new Serializable {
 
-    def on[Key](leftKeySelector: FieldSelectorCode[LeftIn => Key]) = new Serializable {
+    def on[Key](leftKeySelector: KeySelector[LeftIn => Key]) = new Serializable {
 
-      def isEqualTo(rightKeySelector: FieldSelectorCode[RightIn => Key]) = new Serializable {
+      def isEqualTo(rightKeySelector: KeySelector[RightIn => Key]) = new Serializable {
 
-        def map[Out: UDT](mapFunction: UDF2Code[(Iterator[LeftIn], Iterator[RightIn]) => Out]) = createStream(Left(mapFunction))
+        def map[Out: UDT](mapFunction: (Iterator[LeftIn], Iterator[RightIn]) => Out) = createStream(Left(mapFunction))
 
-        def flatMap[Out: UDT](mapFunction: UDF2Code[(Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]) = createStream(Right(mapFunction))
+        def flatMap[Out: UDT](mapFunction: (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]) = createStream(Right(mapFunction))
 
-        private def createStream[Out: UDT](mapFunction: Either[UDF2Code[(Iterator[LeftIn], Iterator[RightIn]) => Out], UDF2Code[(Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]]): DataStream[Out] = new DataStream[Out] {
+        private def createStream[Out: UDT](mapFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]): DataStream[Out] = new DataStream[Out] {
 
           override def createContract = {
 
-            val leftKeyFieldSelector: FieldSelector = leftKeySelector
-            val rightKeyFieldSelector: FieldSelector = rightKeySelector
-            val leftKeyFields = leftKeyFieldSelector.getFields
-            val rightKeyFields = rightKeyFieldSelector.getFields
-            val keyFieldTypes = implicitly[UDT[LeftIn]].getKeySet(leftKeyFields map { _._1 })
-
             val builder = CoGroup4sContract.newBuilder.input1(leftInput.getContract).input2(rightInput.getContract)
             
-            for ((keyType, (_, leftKey), (_, rightKey)) <- (keyFieldTypes, leftKeyFields, rightKeyFields).zipped.toList) {
-              builder.keyField(keyType, leftKey, rightKey)
-            }
+            val keyTypes = implicitly[UDT[LeftIn]].getKeySet(leftKeySelector.selectedFields map { _.localPos })
+            keyTypes.foreach { builder.keyField(_, -1, -1) } // global indexes haven't been computed yet...
             
-            new CoGroupContract(builder) with CoGroup4sContract[LeftIn, RightIn, Out] {
+            new CoGroupContract(builder) with CoGroup4sContract[Key, LeftIn, RightIn, Out] {
 
-              override val leftKeySelector = leftKeyFieldSelector
-              override val rightKeySelector = rightKeyFieldSelector
-              override val leftUDT = implicitly[UDT[LeftIn]]
-              override val rightUDT = implicitly[UDT[RightIn]]
-              override val outputUDT = implicitly[UDT[Out]]
-              override val coGroupUDF = mapFunction.fold(fun => fun: UDF2, fun => fun: UDF2)
-              override val userFunction = mapFunction.fold(fun => Left(fun.userFunction), fun => Right(fun.userFunction))
+              override val leftKey = leftKeySelector
+              override val rightKey = rightKeySelector
+              override val udf = new UDF2[LeftIn, RightIn, Out] 
+              override val userCode = mapFunction
             }
           }
         }

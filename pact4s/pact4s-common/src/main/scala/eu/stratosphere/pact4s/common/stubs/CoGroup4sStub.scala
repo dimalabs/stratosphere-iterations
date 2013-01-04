@@ -19,7 +19,7 @@ package eu.stratosphere.pact4s.common.stubs
 
 import java.util.{ Iterator => JIterator }
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 
 import eu.stratosphere.pact.common.stubs._
 import eu.stratosphere.pact.common.`type`.PactRecord

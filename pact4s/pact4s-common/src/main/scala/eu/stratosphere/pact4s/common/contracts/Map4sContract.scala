@@ -19,22 +19,19 @@ package eu.stratosphere.pact4s.common.contracts
 
 import java.lang.annotation.Annotation
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-trait Map4sContract[In, Out] extends Pact4sOneInputContract { this: MapContract =>
+trait Map4sContract[In, Out] extends Pact4sOneInputContract[In, Out] { this: MapContract =>
 
-  val inputUDT: UDT[In]
-  val outputUDT: UDT[Out]
-  val mapUDF: UDF1
-  val userFunction: Either[In => Out, In => Iterator[Out]]
+  val userCode: Either[In => Out, In => Iterator[Out]]
 
-  private def outCardBound = userFunction.fold({ _ => Annotations.CARD_INPUTCARD }, { _ => Annotations.CARD_UNKNOWN })
+  private def outCardBound = userCode.fold({ _ => Annotations.CARD_INPUTCARD }, { _ => Annotations.CARD_UNKNOWN })
 
   override def annotations = Seq(
-    Annotations.getConstantFieldsExcept(mapUDF.getWriteFields ++ mapUDF.getDiscardedFields),
+    Annotations.getConstantFields(udf.getForwardIndexArray),
     Annotations.getOutCardBounds(outCardBound, outCardBound)
   /*
     Annotations.getReads(mapUDF.getReadFields),
@@ -46,11 +43,12 @@ trait Map4sContract[In, Out] extends Pact4sOneInputContract { this: MapContract 
 
   override def persistConfiguration() = {
 
-    val deserializer = inputUDT.getSerializer(mapUDF.getReadFields)
-    val serializer = outputUDT.getSerializer(mapUDF.getWriteFields)
-    val discard = mapUDF.getDiscardedFields
-
-    val stubParameters = new MapParameters(deserializer, serializer, discard, userFunction)
+    val stubParameters = new MapParameters(
+      udf.getInputDeserializer, 
+      udf.getOutputSerializer, 
+      udf.getDiscardIndexArray, 
+      userCode
+    )
     stubParameters.persist(this)
   }
 }
@@ -59,5 +57,5 @@ object Map4sContract {
 
   def newBuilder[In, Out] = MapContract.builder(classOf[Map4sStub[In, Out]])
 
-  def unapply(c: Map4sContract[_, _]) = Some((c.singleInput, c.inputUDT, c.outputUDT, c.mapUDF))
+  def unapply(c: Map4sContract[_, _]) = Some(c.singleInput)
 }

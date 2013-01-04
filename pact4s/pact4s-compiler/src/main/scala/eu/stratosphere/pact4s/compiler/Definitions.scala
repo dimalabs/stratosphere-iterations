@@ -31,33 +31,29 @@ trait Definitions { this: Pact4sPlugin =>
     lazy val canBuildFromClass = definitions.getClass("scala.collection.generic.CanBuildFrom")
     lazy val builderClass = definitions.getClass("scala.collection.mutable.Builder")
     lazy val objectInputStreamClass = definitions.getClass("java.io.ObjectInputStream")
-    lazy val liftMethod = definitions.getMember(definitions.getModule("scala.reflect.Code"), "lift")
+    lazy val codeLiftMethod = definitions.getMember(definitions.getModule("scala.reflect.Code"), "lift")
 
-    lazy val unanalyzedUdt = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.UDT"), "unanalyzedUDT")
-    lazy val unanalyzedFieldSelector = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.FieldSelector"), "unanalyzedFieldSelector")
-    lazy val unanalyzedFieldSelectorCode = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.FieldSelector"), "unanalyzedFieldSelectorCode")
-    lazy val unanalyzedUDF1 = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.UDF"), "unanalyzedUDF1")
-    lazy val unanalyzedUDF1Code = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.UDF"), "unanalyzedUDF1Code")
-    lazy val unanalyzedUDF2 = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.UDF"), "unanalyzedUDF2")
-    lazy val unanalyzedUDF2Code = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analyzer.UDF"), "unanalyzedUDF2Code")
+    lazy val unanalyzedUdt = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analysis.UDT"), "unanalyzedUDT")
+    lazy val unanalyzedFieldSelector = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analysis.FieldSelector"), "unanalyzedFieldSelector")
+    lazy val unanalyzedFieldSelectorCode = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analysis.FieldSelector"), "unanalyzedFieldSelectorCode")
+    lazy val unanalyzedKeySelector = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analysis.KeySelector"), "unanalyzedKeySelector")
+    lazy val unanalyzedKeySelectorCode = definitions.getMember(definitions.getModule("eu.stratosphere.pact4s.common.analysis.KeySelector"), "unanalyzedKeySelectorCode")
 
-    lazy val unanalyzed = Set(unanalyzedUdt, unanalyzedFieldSelector, unanalyzedFieldSelectorCode, unanalyzedUDF1, unanalyzedUDF1Code, unanalyzedUDF2, unanalyzedUDF2Code)
+    lazy val unanalyzed = Set(unanalyzedUdt, unanalyzedFieldSelector, unanalyzedFieldSelectorCode, unanalyzedKeySelector, unanalyzedKeySelectorCode)
 
-    object Unlifted {
+    object CodeLifted {
       def unapply(tree: Tree): Option[Symbol] = unapply(tree.symbol)
       def unapply(sym: Symbol): Option[Symbol] = sym match {
         case `unanalyzedFieldSelectorCode` => Some(unanalyzedFieldSelector)
-        case `unanalyzedUDF1Code`          => Some(unanalyzedUDF1)
-        case `unanalyzedUDF2Code`          => Some(unanalyzedUDF2)
+        case `unanalyzedKeySelectorCode`   => Some(unanalyzedKeySelector)
         case _                             => None
       }
     }
 
-    lazy val udtClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDT")
-    lazy val udtSerializerClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDTSerializer")
-    lazy val fieldSelectorCodeClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.FieldSelectorCode")
-    lazy val udf1CodeClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDF1Code")
-    lazy val udf2CodeClass = definitions.getClass("eu.stratosphere.pact4s.common.analyzer.UDF2Code")
+    lazy val udtClass = definitions.getClass("eu.stratosphere.pact4s.common.analysis.UDT")
+    lazy val udtSerializerClass = definitions.getClass("eu.stratosphere.pact4s.common.analysis.UDTSerializer")
+    lazy val fieldSelectorClass = definitions.getClass("eu.stratosphere.pact4s.common.analysis.FieldSelector")
+    lazy val keySelectorClass = definitions.getClass("eu.stratosphere.pact4s.common.analysis.KeySelector")
 
     lazy val hintableClass = definitions.getClass("eu.stratosphere.pact4s.common.Hintable")
 
@@ -103,9 +99,8 @@ trait Definitions { this: Pact4sPlugin =>
     def mkUdtSerializerOf(tpe: Type) = appliedType(udtSerializerClass.tpe, List(tpe))
     def mkPactListOf(tpe: Type) = appliedType(pactListBaseClass.tpe, List(tpe))
 
-    def mkFieldSelectorCodeOf(tpeT1: Type, tpeR: Type) = appliedType(fieldSelectorCodeClass.tpe, List(definitions.functionType(List(tpeT1), tpeR)))
-    def mkUDF1CodeOf(tpeT1: Type, tpeR: Type) = appliedType(udf1CodeClass.tpe, List(definitions.functionType(List(tpeT1), tpeR)))
-    def mkUDF2CodeOf(tpeT1: Type, tpeT2: Type, tpeR: Type) = appliedType(udf2CodeClass.tpe, List(definitions.functionType(List(tpeT1, tpeT2), tpeR)))
+    def mkFieldSelectorOf(tpeT1: Type, tpeR: Type) = appliedType(fieldSelectorClass.tpe, List(definitions.functionType(List(tpeT1), tpeR)))
+    def mkKeySelectorOf(tpeT1: Type, tpeR: Type) = appliedType(keySelectorClass.tpe, List(definitions.functionType(List(tpeT1), tpeR)))
 
     def mkSeqOf(tpe: Type) = appliedType(definitions.SeqClass.tpe, List(tpe))
     def mkListOf(tpe: Type) = appliedType(definitions.ListClass.tpe, List(tpe))
@@ -113,12 +108,14 @@ trait Definitions { this: Pact4sPlugin =>
     def mkClassOf(tpe: Type) = gen.mkClassOf(tpe)
     def mkFunctionType(tpes: Type*): Type = definitions.functionType(tpes.init.toList, tpes.last)
 
+    /*
     def unwrapIter(tpe: Type): Type = isIter(tpe) match {
       case true  => tpe.typeArgs.head
       case false => tpe
     }
 
     def isIter(tpe: Type): Boolean = tpe.typeSymbol == iteratorClass
+    */
 
     def mkExistentialType(owner: Symbol, tpe: Type, upperBound: Type): Type = {
       val exVar = owner.newAbstractType(newTypeName("_$1")) setInfo TypeBounds.upper(upperBound)

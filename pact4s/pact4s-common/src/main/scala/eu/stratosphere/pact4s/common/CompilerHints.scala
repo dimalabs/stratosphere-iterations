@@ -17,20 +17,23 @@
 
 package eu.stratosphere.pact4s.common
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 
 import eu.stratosphere.pact.common.contract.Contract
 import eu.stratosphere.pact.common.contract.DataDistribution
 import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.pact.common.util.FieldSet
 
-trait Hintable[T] {
+trait HasHints[T] {
+  
+  def getHints: Seq[CompilerHint[T]]
+  def getGenericHints = getHints filter { classOf[CompilerHint[Nothing]].isInstance(_) } map { _.asInstanceOf[CompilerHint[Nothing]] }
+}
+
+trait Hintable[T] extends HasHints[T] {
 
   var hints: Seq[CompilerHint[T]] = Seq()
-
   def getHints = hints
-
-  def getGenericHints = getHints filter { classOf[CompilerHint[Nothing]].isInstance(_) } map { _.asInstanceOf[CompilerHint[Nothing]] }
 }
 
 abstract class CompilerHint[+T] {
@@ -66,11 +69,11 @@ case class RecordsEmitted(val avgNumRecords: Float) extends CompilerHint[Nothing
   override def applyToContract(contract: Contract) = contract.getCompilerHints().setAvgRecordsEmittedPerStubCall(avgNumRecords)
 }
 
-case class UniqueKey[T: UDT, Key](val keySelector: FieldSelectorCode[T => Key]) extends CompilerHint[T] {
+case class UniqueKey[T: UDT, Key](val keySelector: KeySelector[T => Key]) extends CompilerHint[T] {
 
   override def applyToContract(contract: Contract) = {
 
-    val fieldSet = new FieldSet(AnalyzedFieldSelector.toIndexMap(keySelector))
+    val fieldSet = new FieldSet(keySelector.selectedFields.map(_.globalPos.getValue).toArray)
     val hints = contract.getCompilerHints()
 
     val fieldSets = hints.getUniqueFields()
@@ -81,13 +84,11 @@ case class UniqueKey[T: UDT, Key](val keySelector: FieldSelectorCode[T => Key]) 
   }
 }
 
-case class KeyCardinality[T: UDT, Key](val keySelector: FieldSelectorCode[T => Key], val numDistinctKeys: Long, val avgNumRecordsPerKey: Option[Long] = None) extends CompilerHint[T] {
-
-  //def this(keySelector: FieldSelectorCode[T => Key], numDistinctKeys: Long, avgNumRecordsPerKey: Long) = this(keySelector, numDistinctKeys, Some(avgNumRecordsPerKey))
+case class KeyCardinality[T: UDT, Key](val keySelector: KeySelector[T => Key], val numDistinctKeys: Long, val avgNumRecordsPerKey: Option[Long] = None) extends CompilerHint[T] {
 
   override def applyToContract(contract: Contract) = {
 
-    val fieldSet = new FieldSet(AnalyzedFieldSelector.toIndexMap(keySelector))
+    val fieldSet = new FieldSet(keySelector.selectedFields.map(_.globalPos.getValue).toArray)
     val hints = contract.getCompilerHints()
     hints.setDistinctCount(fieldSet, numDistinctKeys)
 

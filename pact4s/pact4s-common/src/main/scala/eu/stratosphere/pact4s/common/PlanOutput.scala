@@ -19,7 +19,7 @@ package eu.stratosphere.pact4s.common
 
 import java.net.URI
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts.Pact4sContractFactory
 import eu.stratosphere.pact4s.common.contracts.DataSink4sContract
 
@@ -28,7 +28,7 @@ import eu.stratosphere.pact.common.generic.io.OutputFormat
 import eu.stratosphere.pact.common.contract.FileDataSink
 import eu.stratosphere.pact.common.contract.GenericDataSink
 
-class PlanOutput[In: UDT](val source: DataStream[In], val sink: DataSink[In]) extends Pact4sContractFactory with Serializable {
+class PlanOutput[In: UDT](val source: DataStream[In], val sink: DataSink[In]) extends HasHints[In] with Pact4sContractFactory with Serializable {
 
   override def getHints = sink.getHints
 
@@ -39,8 +39,7 @@ class PlanOutput[In: UDT](val source: DataStream[In], val sink: DataSink[In]) ex
 
       case "file" | "hdfs" => new FileDataSink(sink.format.stub.asInstanceOf[Class[FileOutputFormat]], uri.toString, source.getContract) with DataSink4sContract[In] {
 
-        override val inputUDT = sink.format.inputUDT
-        override val fieldSelector = sink.format.fieldSelector
+        override val udf = sink.format.udf
 
         override def persistConfiguration() = sink.format.persistConfiguration(this.getParameters())
       }

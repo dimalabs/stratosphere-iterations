@@ -35,16 +35,7 @@ trait UDTGenSiteSelectors { this: Pact4sPlugin =>
 
         tree match {
 
-          // Analyze unanalyzed Udts
           case TypeApply(s: Select, List(t)) if s.symbol == defs.unanalyzedUdt => analyze(t.tpe)
-
-          // Analyze UDF type parameters
-          case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedFieldSelector => analyze(t1.tpe)
-          case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedFieldSelectorCode => analyze(t1.tpe)
-          case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF1 => analyze(tps)
-          case Apply(TypeApply(unanalyzed, tps @ List(t1, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF1Code => analyze(tps)
-          case Apply(TypeApply(unanalyzed, tps @ List(t1, t2, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF2 => analyze(tps)
-          case Apply(TypeApply(unanalyzed, tps @ List(t1, t2, r)), List(_)) if unanalyzed.symbol == defs.unanalyzedUDF2Code => analyze(tps)
 
           case _ =>
         }
@@ -58,14 +49,12 @@ trait UDTGenSiteSelectors { this: Pact4sPlugin =>
         case desc                              => if (updateGenSite(desc)) collectInferences(desc) foreach { apply(_) }
       }
 
-      private def analyze(tparams: List[Tree]): Unit = tparams foreach { t => analyze(defs.unwrapIter(t.tpe)) }
-
       private def collectInferences(desc: UDTDescriptor): Seq[Tree] = desc match {
-        case OpaqueDescriptor(_, _, ref) => Seq(ref())
-        case ListDescriptor(_, _, _, _, _, elem) => collectInferences(elem)
-        case BaseClassDescriptor(_, _, _, subTypes) => subTypes flatMap { collectInferences(_) }
+        case OpaqueDescriptor(_, _, ref)                 => Seq(ref())
+        case ListDescriptor(_, _, _, _, _, elem)         => collectInferences(elem)
+        case BaseClassDescriptor(_, _, _, subTypes)      => subTypes flatMap { collectInferences(_) }
         case CaseClassDescriptor(_, _, _, _, _, getters) => getters flatMap { f => collectInferences(f.desc) }
-        case _ => Seq()
+        case _                                           => Seq()
       }
 
       private def curSitePath = curPath filter {

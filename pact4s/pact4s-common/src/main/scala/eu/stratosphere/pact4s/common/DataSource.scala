@@ -20,7 +20,7 @@ package eu.stratosphere.pact4s.common
 import java.io.DataInput
 import java.net.URI
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts.DataSource4sContract
 import eu.stratosphere.pact4s.common.stubs._
 
@@ -42,16 +42,14 @@ class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends D
 
       case "file" | "hdfs" => new FileDataSource(format.stub.asInstanceOf[Class[FileInputFormat]], uri.toString) with DataSource4sContract[Out] {
 
-        override val outputUDT = format.outputUDT
-        override val fieldSelector = format.fieldSelector
+        override val udf = format.udf
 
         override def persistConfiguration() = format.persistConfiguration(this.getParameters())
       }
 
       case "ext" => new GenericDataSource(format.stub.asInstanceOf[Class[InputFormat[_, _]]]) with DataSource4sContract[Out] {
 
-        override val outputUDT = format.outputUDT
-        override val fieldSelector = format.fieldSelector
+        override val udf = format.udf
 
         override def persistConfiguration() = format.persistConfiguration(this.getParameters())
       }
@@ -70,8 +68,7 @@ class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends D
 abstract class DataSourceFormat[Out: UDT] extends Serializable {
 
   val stub: Class[_ <: InputFormat[_, _]]
-  val outputUDT: UDT[Out] = implicitly[UDT[Out]]
-  val fieldSelector = AnalyzedFieldSelector(implicitly[UDT[Out]])
+  val udf = new UDF0[Out]
 
   def persistConfiguration(config: Configuration) = {}
 }
@@ -84,9 +81,7 @@ case class BinaryDataSourceFormat[Out: UDT](val readFunction: DataInput => Out, 
 
   override def persistConfiguration(config: Configuration) {
 
-    val serializer = outputUDT.getSerializer(AnalyzedFieldSelector.toIndexMap(fieldSelector))
-
-    val stubParameters = BinaryInputParameters(serializer, readFunction)
+    val stubParameters = BinaryInputParameters(udf.getOutputSerializer, readFunction)
     stubParameters.persist(config)
 
     if (blockSize.isDefined)
@@ -114,9 +109,7 @@ case class DelimetedDataSourceFormat[Out: UDT](val readFunction: (Array[Byte], I
 
   override def persistConfiguration(config: Configuration) {
 
-    val serializer = outputUDT.getSerializer(AnalyzedFieldSelector.toIndexMap(fieldSelector))
-
-    val stubParameters = DelimetedInputParameters(serializer, readFunction)
+    val stubParameters = DelimetedInputParameters(udf.getOutputSerializer, readFunction)
     stubParameters.persist(config)
 
     if (delimeter.isDefined)
@@ -143,7 +136,7 @@ case class RecordDataSourceFormat[Out: UDT](val recordDelimeter: Option[String] 
 
   override def persistConfiguration(config: Configuration) {
 
-    val fields = outputUDT.fieldTypes
+    val fields = udf.outputUDT.fieldTypes
 
     config.setInteger(RecordInputFormat.NUM_FIELDS_PARAMETER, fields.length)
 
@@ -164,7 +157,7 @@ case class RecordDataSourceFormat[Out: UDT](val recordDelimeter: Option[String] 
     classOf[PactString] -> classOf[VarLengthStringParser])
 }
 
-case class TextDataSourceFormat(val charSetName: Option[String] = None) extends DataSourceFormat[String] {
+case class TextDataSourceFormat(val charSetName: Option[String] = None) extends DataSourceFormat[String]()(UDT.StringUDT) {
 
   def this(charSetName: String) = this(Some(charSetName))
 
@@ -181,9 +174,7 @@ case class FixedLengthDataSourceFormat[Out: UDT](val readFunction: (Array[Byte],
   override val stub = classOf[FixedLengthInput4sStub[Out]]
 
   override def persistConfiguration(config: Configuration) {
-    val serializer = outputUDT.getSerializer(AnalyzedFieldSelector.toIndexMap(fieldSelector))
-
-    val stubParameters = FixedLengthInputParameters(serializer, readFunction)
+    val stubParameters = FixedLengthInputParameters(udf.getOutputSerializer, readFunction)
     stubParameters.persist(config)
 
     config.setInteger(FixedLengthInputFormat.RECORDLENGTH_PARAMETER_KEY, recordLength)
@@ -197,9 +188,7 @@ case class ExternalProcessFixedLengthDataSourceFormat[Out: UDT](val readFunction
   override val stub = classOf[ExternalProcessFixedLengthInput4sStub[Out]]
 
   override def persistConfiguration(config: Configuration) {
-    val serializer = outputUDT.getSerializer(AnalyzedFieldSelector.toIndexMap(fieldSelector))
-
-    val stubParameters = ExternalProcessFixedLengthInputParameters(serializer, externalProcessCommand, numSplits, readFunction)
+    val stubParameters = ExternalProcessFixedLengthInputParameters(udf.getOutputSerializer, externalProcessCommand, numSplits, readFunction)
     stubParameters.persist(config)
 
     config.setInteger(ExternalProcessFixedLengthInputFormat.RECORDLENGTH_PARAMETER_KEY, recordLength)
@@ -208,3 +197,4 @@ case class ExternalProcessFixedLengthDataSourceFormat[Out: UDT](val readFunction
       config.setString(ExternalProcessInputFormat.ALLOWEDEXITCODES_PARAMETER_KEY, exitCodes.get.mkString(","))
   }
 }
+

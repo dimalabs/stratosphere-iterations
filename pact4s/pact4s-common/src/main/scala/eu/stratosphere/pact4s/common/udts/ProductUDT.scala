@@ -19,7 +19,7 @@ package eu.stratosphere.pact4s.common.udts
 
 import ProductFactories._
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 
 import java.io.ObjectInputStream
 import eu.stratosphere.pact.common.`type`.PactRecord

@@ -23,17 +23,41 @@ import java.util.{ List => JList }
 
 import scala.collection.JavaConversions._
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 
 import eu.stratosphere.pact.common.contract._
 import eu.stratosphere.pact.common.io._
 import eu.stratosphere.pact.common.generic.io._
 
-trait Pact4sContract { this: Contract =>
+trait Pact4sContract[Out] { this: Contract =>
 
-  def getOutDegree(implicit env: Environment): Int = env.getOutDegree(this)
-  
-  def persistConfiguration() = {}
+  def getUDF: UDF[Out]
+  def getKeys: Seq[KeySelector[_]] = Seq()
+
+  def persistConfiguration(classLoader: ClassLoader): Unit = {
+
+    this.getParameters().setClassLoader(classLoader)
+
+    def setKeys(getKeyColumnNumbers: Int => Array[Int]): Unit = {
+      for ((key, inputNum) <- getKeys.zipWithIndex) {
+        val source = key.selectedFields.toSerializerIndexArray
+        val target = getKeyColumnNumbers(inputNum)
+        assert(source.length == target.length, "Attempt to write " + source.length + " key indexes to an array of size " + target.length)
+        System.arraycopy(source, 0, target, 0, source.length)
+      }
+    }
+
+    this match {
+      case contract: AbstractPact[_]  => setKeys(contract.getKeyColumnNumbers)
+      case contract: WorksetIteration => setKeys(contract.getKeyColumnNumbers)
+      case _ if getKeys.size > 0      => throw new UnsupportedOperationException("Attempted to set keys on a contract that doesn't support them")
+      case _                          =>
+    }
+
+    this.persistConfiguration()
+  }
+
+  protected def persistConfiguration(): Unit = {}
 
   protected def annotations: Seq[Annotation] = Seq()
 
@@ -43,64 +67,70 @@ trait Pact4sContract { this: Contract =>
 }
 
 object Pact4sContract {
-  implicit def toContract(c: Pact4sContract): Contract = c.asInstanceOf[Contract]
+  implicit def toContract(c: Pact4sContract[_]): Contract = c.asInstanceOf[Contract]
+  type OneInput = { def getInputs(): JList[Contract]; def setInput(c: Contract) }
+  type TwoInput = { def getFirstInputs(): JList[Contract]; def setFirstInput(c: Contract); def getSecondInputs(): JList[Contract]; def setSecondInput(c: Contract) }
 }
 
-trait Pact4sOneInputContract extends Pact4sContract with Pact4sOneInputContract.OneInput { this: Contract =>
+trait Pact4sOneInputContract[In, Out] extends Pact4sContract[Out] { this: Contract with Pact4sContract.OneInput =>
+
+  val udf: UDF1[In, Out]
+  override def getUDF = udf
 
   def singleInput = this.getInputs().get(0)
-  def singleInput_=(input: Pact4sContract) = this.setInput(input)
+  def singleInput_=(value: Pact4sContract[In]) = this.setInput(value)
 }
 
-object Pact4sOneInputContract {
+trait Pact4sOneInputKeyedContract[Key, In, Out] extends Pact4sOneInputContract[In, Out] { this: Contract with Pact4sContract.OneInput =>
 
-  trait OneInput { def getInputs(): JList[Contract]; def setInput(c: Contract) }
-
-  def unapply(c: Pact4sOneInputContract) = Some(c.singleInput)
+  val key: KeySelector[In => Key]
+  override def getKeys = Seq(key)
 }
 
-trait Pact4sTwoInputContract extends Pact4sContract with Pact4sTwoInputContract.TwoInput { this: Contract =>
+trait Pact4sTwoInputContract[LeftIn, RightIn, Out] extends Pact4sContract[Out] { this: Contract with Pact4sContract.TwoInput =>
+
+  val udf: UDF2[LeftIn, RightIn, Out]
+  override def getUDF = udf
+
   def leftInput = this.getFirstInputs().get(0)
-  def leftInput_=(left: Pact4sContract) = this.setFirstInput(left)
+  def leftInput_=(left: Pact4sContract[LeftIn]) = this.setFirstInput(left)
 
   def rightInput = this.getSecondInputs().get(0)
-  def rightInput_=(right: Pact4sContract) = this.setSecondInput(right)
+  def rightInput_=(right: Pact4sContract[RightIn]) = this.setSecondInput(right)
 }
 
-object Pact4sTwoInputContract {
+trait Pact4sTwoInputKeyedContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContract[LeftIn, RightIn, Out] { this: Contract with Pact4sContract.TwoInput =>
 
-  trait TwoInput { def getFirstInputs(): JList[Contract]; def setFirstInput(c: Contract); def getSecondInputs(): JList[Contract]; def setSecondInput(c: Contract) }
-
-  def unapply(c: Pact4sTwoInputContract) = Some((c.leftInput, c.rightInput))
+  val leftKey: KeySelector[LeftIn => Key]
+  val rightKey: KeySelector[RightIn => Key]
+  override def getKeys = Seq(leftKey, rightKey)
 }
 
-trait NoOp4sContract extends Pact4sOneInputContract { this: Contract => }
+trait NoOp4sContract[T] extends Pact4sContract[T] { this: Contract =>
 
-object NoOp4sContract {
-  def unapply(c: NoOp4sContract) = Some(c.getInputs())
+  val udf: UDF0[T]
+  override def getUDF = udf
 }
 
-trait DataSource4sContract[Out] extends Pact4sContract { this: GenericDataSource[_ <: InputFormat[_, _]] =>
-
-  val outputUDT: UDT[Out]
-  val fieldSelector: FieldSelector
+trait NoOp4sKeyedContract[Key, T] extends NoOp4sContract[T] { this: Contract =>
+  val key: KeySelector[T => Key]
+  override def getKeys = Seq(key)
 }
 
-object DataSource4sContract {
+trait DataSource4sContract[Out] extends Pact4sContract[Out] { this: GenericDataSource[_ <: InputFormat[_, _]] =>
 
-  def unapply(c: DataSource4sContract[_]) = Some((c.outputUDT, c.fieldSelector))
+  val udf: UDF0[Out]
+  override def getUDF = udf
 }
 
-trait DataSink4sContract[In] extends Pact4sOneInputContract { this: GenericDataSink =>
+trait DataSink4sContract[In] extends Pact4sOneInputContract[In, Nothing] { this: GenericDataSink =>
 
-  val inputUDT: UDT[In]
-  val fieldSelector: FieldSelector
 }
 
 object DataSink4sContract {
   implicit def toGenericSink(s: DataSink4sContract[_]): GenericDataSink = s.asInstanceOf[GenericDataSink]
   implicit def toGenericSinks(s: Seq[DataSink4sContract[_]]): JCollection[GenericDataSink] = s.map(_.asInstanceOf[GenericDataSink])
 
-  def unapply(c: DataSink4sContract[_]) = Some((c.singleInput, c.inputUDT, c.fieldSelector))
+  def unapply(c: DataSink4sContract[_]) = Some(c.singleInput)
 }
 

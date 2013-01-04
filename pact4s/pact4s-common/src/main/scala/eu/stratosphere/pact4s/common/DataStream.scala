@@ -17,7 +17,7 @@
 
 package eu.stratosphere.pact4s.common
 
-import eu.stratosphere.pact4s.common.analyzer.UDT
+import eu.stratosphere.pact4s.common.analysis.UDT
 import eu.stratosphere.pact4s.common.contracts.Pact4sContractFactory
 import eu.stratosphere.pact4s.common.contracts.Pact4sContract
 

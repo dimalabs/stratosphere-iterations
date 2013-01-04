@@ -23,27 +23,27 @@ import scala.tools.nsc.plugins.Plugin
 import scala.tools.nsc.plugins.PluginComponent
 
 import eu.stratosphere.pact4s.compiler.udt._
-import eu.stratosphere.pact4s.compiler.udf._
+import eu.stratosphere.pact4s.compiler.selector._
 import eu.stratosphere.pact4s.compiler.util._
 
 class Pact4sPlugin(val global: Global) extends Plugin with Pact4sPluginOptions with HasGlobal
   with TypingTransformers with TreeGenerators with Loggers with Visualizers
   with Definitions with UDTDescriptors with UDTAnalyzers
   with UDTGenSiteParticipants with UDTGenSiteSelectors with UDTGenSiteTransformers
-  with UDFAnalyzers with AutoNamers with SanityCheckers {
+  with SelectorAnalyzers with AutoNamers with SanityCheckers {
 
   import global._
 
   override val name = "pact4s"
   override val description = "Performs analysis and code generation for Pact4s programs."
-  override val components = List[PluginComponent](udtSite, udtCode, udfAna, autoNamer, sanity)
+  override val components = List[PluginComponent](udtSite, udtCode, selAna, autoNamer, sanity)
   override val optionsHelp = getOptionsHelp
   override val neverInfer = defs.unanalyzed
 
   object udtSite extends Pact4sPhase("UDTSite", refchecks) with UDTGenSiteSelector
   object udtCode extends Pact4sPhase("UDTCode", udtSite) with UDTGenSiteTransformer
-  object udfAna extends Pact4sPhase("UDFAna", udtCode) with UDFAnalyzer
-  object autoNamer extends Pact4sPhase("Namer", udfAna) with AutoNamer
+  object selAna extends Pact4sPhase("SelAna", udtCode) with SelectorAnalyzer
+  object autoNamer extends Pact4sPhase("Namer", selAna) with AutoNamer
   object sanity extends Pact4sPhase("Sanity", autoNamer) with SanityChecker
 
   abstract class Pact4sComponent extends PluginComponent with InheritsGlobal with Transform with Visualize

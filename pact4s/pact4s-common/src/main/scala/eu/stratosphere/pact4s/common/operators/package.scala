@@ -19,7 +19,7 @@ package eu.stratosphere.pact4s.common
 
 import scala.collection.TraversableOnce
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 
 package object operators {
 

@@ -20,7 +20,7 @@ package eu.stratosphere.pact4s.common.stubs
 import java.io.DataOutput
 import java.io.OutputStream
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 
 import eu.stratosphere.pact.common.io._
 import eu.stratosphere.pact.common.`type`.PactRecord

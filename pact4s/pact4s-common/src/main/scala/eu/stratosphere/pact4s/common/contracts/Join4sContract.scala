@@ -17,24 +17,18 @@
 
 package eu.stratosphere.pact4s.common.contracts
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContract { this: MatchContract =>
+trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputKeyedContract[Key, LeftIn, RightIn, Out] { this: MatchContract =>
 
-  val leftKeySelector: FieldSelector
-  val rightKeySelector: FieldSelector
-  val leftUDT: UDT[LeftIn]
-  val rightUDT: UDT[RightIn]
-  val outputUDT: UDT[Out]
-  val joinUDF: UDF2
-  val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
+  val userCode: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
 
   override def annotations = Seq(
-    Annotations.getConstantFieldsFirstExcept(joinUDF.getWriteFields ++ joinUDF.getDiscardedFields._1),
-    Annotations.getConstantFieldsSecondExcept(joinUDF.getWriteFields ++ joinUDF.getDiscardedFields._2)
+    Annotations.getConstantFieldsFirst(udf.getLeftForwardIndexArray),
+    Annotations.getConstantFieldsSecond(udf.getRightForwardIndexArray)
   /*
     Annotations.getReadsFirst(joinUDF.getReadFields._1),
     Annotations.getReadsSecond(joinUDF.getReadFields._2),
@@ -48,13 +42,11 @@ trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputContract {
 
   override def persistConfiguration() = {
 
-    val leftDeserializer = leftUDT.getSerializer(joinUDF.getReadFields._1)
-    val leftDiscard = joinUDF.getDiscardedFields._1
-    val rightDeserializer = rightUDT.getSerializer(joinUDF.getReadFields._2)
-    val rightDiscard = joinUDF.getDiscardedFields._2
-    val serializer = outputUDT.getSerializer(joinUDF.getWriteFields)
-
-    val stubParameters = new JoinParameters(leftDeserializer, leftDiscard, rightDeserializer, rightDiscard, serializer, userFunction)
+    val stubParameters = new JoinParameters(
+      udf.getLeftInputDeserializer, udf.getLeftDiscardIndexArray, 
+      udf.getRightInputDeserializer, udf.getRightDiscardIndexArray, 
+      udf.getOutputSerializer, userCode
+    )
     stubParameters.persist(this)
   }
 }
@@ -63,5 +55,5 @@ object Join4sContract {
 
   def newBuilder[LeftIn, RightIn, Out] = MatchContract.builder(classOf[Join4sStub[LeftIn, RightIn, Out]])
 
-  def unapply(c: Join4sContract[_, _, _, _]) = Some((c.leftInput, c.rightInput, c.leftKeySelector, c.rightKeySelector, c.leftUDT, c.rightUDT, c.outputUDT, c.joinUDF))
+  def unapply(c: Join4sContract[_, _, _, _]) = Some((c.leftInput, c.rightInput))
 }

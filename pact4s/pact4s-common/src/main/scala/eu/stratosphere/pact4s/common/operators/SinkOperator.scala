@@ -18,7 +18,7 @@
 package eu.stratosphere.pact4s.common.operators
 
 import eu.stratosphere.pact4s.common._
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 
 class SinkToSourceOperator[In: UDT](sink: DataSink[In]) extends Serializable {
 

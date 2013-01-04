@@ -15,12 +15,10 @@
  * ********************************************************************************************************************
  */
 
-package eu.stratosphere.pact4s.common.analyzer
+package eu.stratosphere.pact4s.common.analysis
 
 import scala.collection.GenTraversableOnce
 import scala.collection.generic.CanBuildFrom
-
-import eu.stratosphere.pact4s.common.udts._
 
 import eu.stratosphere.pact.common.`type`.{ Key => PactKey }
 import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
@@ -63,7 +61,7 @@ trait UDT[T] extends Serializable {
 
 abstract class UDTSerializer[T] extends Serializable {
 
-  protected[analyzer] def init(): Unit = ()
+  protected[analysis] def init(): Unit = ()
   
   protected def invalidSelection(selection: Seq[String]) = {
     val sel = selection match {
@@ -88,6 +86,10 @@ trait UDTLowPriorityImplicits {
 }
 
 object UDT extends UDTLowPriorityImplicits {
+  
+  // UDTs needed by library code
+  val NothingUDT = new eu.stratosphere.pact4s.common.udts.NothingUDT
+  val StringUDT = new eu.stratosphere.pact4s.common.udts.StringUDT
 
   /*
   implicit val booleanUdt = new BooleanUDT

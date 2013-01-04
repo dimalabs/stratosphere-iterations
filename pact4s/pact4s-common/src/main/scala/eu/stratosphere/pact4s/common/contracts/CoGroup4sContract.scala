@@ -17,24 +17,18 @@
 
 package eu.stratosphere.pact4s.common.contracts
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-trait CoGroup4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { this: CoGroupContract =>
+trait CoGroup4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputKeyedContract[Key, LeftIn, RightIn, Out] { this: CoGroupContract =>
 
-  val leftKeySelector: FieldSelector
-  val rightKeySelector: FieldSelector
-  val leftUDT: UDT[LeftIn]
-  val rightUDT: UDT[RightIn]
-  val outputUDT: UDT[Out]
-  val coGroupUDF: UDF2
-  val userFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]
+  val userCode: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]
 
   override def annotations = Seq(
-    Annotations.getConstantFieldsFirst(coGroupUDF.getForwardedFields._1),
-    Annotations.getConstantFieldsSecond(coGroupUDF.getForwardedFields._2)
+    Annotations.getConstantFieldsFirst(udf.getLeftForwardIndexArray),
+    Annotations.getConstantFieldsSecond(udf.getRightForwardIndexArray)
   /*
     Annotations.getReadsFirst(coGroupUDF.getReadFields._1),
     Annotations.getReadsSecond(coGroupUDF.getReadFields._2),
@@ -48,13 +42,11 @@ trait CoGroup4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { t
 
   override def persistConfiguration() = {
 
-    val leftDeserializer = leftUDT.getSerializer(coGroupUDF.getReadFields._1)
-    val leftForward = coGroupUDF.getForwardedFields._1
-    val rightDeserializer = rightUDT.getSerializer(coGroupUDF.getReadFields._2)
-    val rightForward = coGroupUDF.getForwardedFields._2
-    val serializer = outputUDT.getSerializer(coGroupUDF.getWriteFields)
-
-    val stubParameters = CoGroupParameters(leftDeserializer, leftForward, rightDeserializer, leftForward, serializer, userFunction)
+    val stubParameters = CoGroupParameters(
+      udf.getLeftInputDeserializer, udf.getLeftForwardIndexArray,
+      udf.getRightInputDeserializer, udf.getRightForwardIndexArray,
+      udf.getOutputSerializer, userCode
+    )
     stubParameters.persist(this)
   }
 }
@@ -63,5 +55,5 @@ object CoGroup4sContract {
 
   def newBuilder[LeftIn, RightIn, Out] = CoGroupContract.builder(classOf[CoGroup4sStub[LeftIn, RightIn, Out]])
 
-  def unapply(c: CoGroup4sContract[_, _, _]) = Some((c.leftInput, c.rightInput, c.leftKeySelector, c.rightKeySelector, c.leftUDT, c.rightUDT, c.outputUDT, c.coGroupUDF))
+  def unapply(c: CoGroup4sContract[_, _, _, _]) = Some((c.leftInput, c.rightInput))
 }

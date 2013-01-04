@@ -17,22 +17,18 @@
 
 package eu.stratosphere.pact4s.common.contracts
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.contract._
 
-trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { this: CrossContract =>
+trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract[LeftIn, RightIn, Out] { this: CrossContract =>
 
-  val leftUDT: UDT[LeftIn]
-  val rightUDT: UDT[RightIn]
-  val outputUDT: UDT[Out]
-  val crossUDF: UDF2
-  val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
+  val userCode: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
 
   override def annotations = Seq(
-    Annotations.getConstantFieldsFirstExcept(crossUDF.getWriteFields ++ crossUDF.getDiscardedFields._1),
-    Annotations.getConstantFieldsSecondExcept(crossUDF.getWriteFields ++ crossUDF.getDiscardedFields._2)
+    Annotations.getConstantFieldsFirst(udf.getLeftForwardIndexArray),
+    Annotations.getConstantFieldsSecond(udf.getRightForwardIndexArray)
   /*
     Annotations.getReadsFirst(crossUDF.getReadFields._1),
     Annotations.getReadsSecond(crossUDF.getReadFields._2),
@@ -46,13 +42,11 @@ trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract { thi
 
   override def persistConfiguration() = {
 
-    val leftDeserializer = leftUDT.getSerializer(crossUDF.getReadFields._1)
-    val leftDiscard = crossUDF.getDiscardedFields._1
-    val rightDeserializer = rightUDT.getSerializer(crossUDF.getReadFields._2)
-    val rightDiscard = crossUDF.getDiscardedFields._2
-    val serializer = outputUDT.getSerializer(crossUDF.getWriteFields)
-
-    val stubParameters = new CrossParameters(leftDeserializer, leftDiscard, rightDeserializer, rightDiscard, serializer, userFunction)
+    val stubParameters = new CrossParameters(
+      udf.getLeftInputDeserializer, udf.getLeftDiscardIndexArray, 
+      udf.getRightInputDeserializer, udf.getRightDiscardIndexArray, 
+      udf.getOutputSerializer, userCode
+    )
     stubParameters.persist(this)
   }
 }
@@ -61,5 +55,5 @@ object Cross4sContract {
 
   def newBuilder[LeftIn, RightIn, Out] = CrossContract.builder(classOf[Cross4sStub[LeftIn, RightIn, Out]])
 
-  def unapply(c: Cross4sContract[_, _, _]) = Some((c.leftInput, c.rightInput, c.leftUDT, c.rightUDT, c.outputUDT, c.crossUDF))
+  def unapply(c: Cross4sContract[_, _, _]) = Some((c.leftInput, c.rightInput))
 }

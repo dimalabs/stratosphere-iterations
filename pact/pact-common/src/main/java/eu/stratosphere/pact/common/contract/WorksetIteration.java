@@ -1,6 +1,7 @@
 package eu.stratosphere.pact.common.contract;
 
 import eu.stratosphere.pact.common.plan.Visitor;
+import eu.stratosphere.pact.common.type.Key;
 
 /**
  * @author Stephan Ewen
@@ -27,6 +28,16 @@ public class WorksetIteration extends Contract
 
 	private final Contract worksetPlaceholder = new PlaceholderContract();
 
+	/**
+	 * The classes that represent the solution key data types.
+	 */
+	private final Class<? extends Key>[] keyClasses;
+
+	/**
+	 * The positions of the keys in the solution tuple.
+	 */
+	private final int[] keyFields;
+
 	private Contract initialPartialSolution = null;
 
 	private Contract initialWorkset = null;
@@ -35,15 +46,26 @@ public class WorksetIteration extends Contract
 
 	private Contract nextWorkset = null;
 
-	public WorksetIteration() {
+	public WorksetIteration(Class<? extends Key>[] keyTypes, int[] keyPositions) {
 		super("WorksetIteration");
+		this.keyClasses = keyTypes;
+		this.keyFields = keyPositions;
 	}
 
 	/**
 	 * @param name
 	 */
-	public WorksetIteration(String name) {
+	public WorksetIteration(Class<? extends Key>[] keyTypes, int[] keyPositions, String name) {
 		super(name);
+		this.keyClasses = keyTypes;
+		this.keyFields = keyPositions;
+	}
+
+	public int[] getKeyColumnNumbers(int inputNum) {
+		if (inputNum == 0) {
+			return this.keyFields;
+		}
+		else throw new IndexOutOfBoundsException();
 	}
 
 	public Contract getPartialSolution()

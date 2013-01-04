@@ -113,7 +113,7 @@ trait UDTGenSiteTransformers extends UDTClassGenerators { this: Pact4sPlugin =>
 
       private def mkUdtInst(owner: Symbol, desc: UDTDescriptor): List[Tree] = {
 
-        //verbosely[List[Tree]] { case l => "Generated " + l.head.symbol.fullName + "[" + desc.tpe + "] @ " + owner } 
+        verbosely[List[Tree]] { case l => "Generated " + l.head.symbol.fullName + "[" + desc.tpe + "] @ " + owner } 
         {
 
           val privateFlag = if (owner.isClass) Flags.PRIVATE else 0

@@ -18,7 +18,7 @@
 package eu.stratosphere.pact4s.common.operators
 
 import eu.stratosphere.pact4s.common._
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact4s.common.stubs._
 
@@ -26,35 +26,22 @@ import eu.stratosphere.pact.common.contract._
 
 class MapOperator[In: UDT](input: DataStream[In]) extends Serializable {
 
-  def map[Out: UDT](mapFunction: UDF1Code[In => Out]) = createStream(Left(mapFunction))
+  def map[Out: UDT](mapFunction: In => Out) = createStream(Left(mapFunction), new UDF1[In, Out])
 
-  def flatMap[Out: UDT](mapFunction: UDF1Code[In => Iterator[Out]]) = createStream(Right(mapFunction))
+  def flatMap[Out: UDT](mapFunction: In => Iterator[Out]) = createStream(Right(mapFunction), new UDF1[In, Out])
 
-  def filter(predicate: UDF1Code[In => Boolean]) = {
-    val pred = predicate.userFunction
-    val fun = predUdfToMapUdf(predicate) { x => if (pred(x)) Iterator.single(x) else Iterator.empty }
-    input flatMap fun
+  def filter(predicate: In => Boolean) = {
+    
+    val udf = new UDF1[In, In]
+    for (i <- udf.inputFields.map(_.localPos))
+      udf.markFieldCopied(i, i)
+      
+    val fun = { x: In => if (predicate(x)) Iterator.single(x) else Iterator.empty }
+    
+    createStream(Right(fun), udf)
   }
 
-  private def predUdfToMapUdf(predicateUDF: UDF1)(mapFunction: In => Iterator[In]): UDF1Code[In => Iterator[In]] = {
-
-    val numFields = implicitly[UDT[In]].numFields
-
-    val udf = new UDF1Code[In => Iterator[In]] with AnalyzedUDF1 {
-      override val userFunction = mapFunction
-      override val readFields = getInitialReadFields(numFields)
-      override val writeFields = getInitialWriteFields(numFields)
-    }
-
-    for (i <- 0 until numFields) {
-      if (predicateUDF.getReadFields(i) < 0) udf.markInputFieldUnread(i)
-      udf.markInputFieldCopied(i, i)
-    }
-
-    udf
-  }
-
-  private def createStream[Out: UDT](mapFunction: Either[UDF1Code[In => Out], UDF1Code[In => Iterator[Out]]]): DataStream[Out] = new DataStream[Out] {
+  private def createStream[Out: UDT](mapFunction: Either[In => Out, In => Iterator[Out]], mapUDF: UDF1[In, Out]): DataStream[Out] = new DataStream[Out] {
 
     override def createContract = {
 
@@ -62,10 +49,8 @@ class MapOperator[In: UDT](input: DataStream[In]) extends Serializable {
       
       new MapContract(builder) with Map4sContract[In, Out] {
 
-        override val inputUDT = implicitly[UDT[In]]
-        override val outputUDT = implicitly[UDT[Out]]
-        override val mapUDF = mapFunction.fold(fun => fun: UDF1, fun => fun: UDF1)
-        override val userFunction = mapFunction.fold(fun => Left(fun.userFunction), fun => Right(fun.userFunction))
+        override val udf = mapUDF
+        override val userCode = mapFunction
       }
     }
   }

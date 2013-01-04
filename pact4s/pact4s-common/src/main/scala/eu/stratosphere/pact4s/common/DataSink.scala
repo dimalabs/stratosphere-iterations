@@ -20,7 +20,7 @@ package eu.stratosphere.pact4s.common
 import java.io.DataOutput
 import java.io.OutputStream
 
-import eu.stratosphere.pact4s.common.analyzer._
+import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.stubs._
 
 import eu.stratosphere.pact.common.io._
@@ -32,42 +32,31 @@ class DataSink[In: UDT](val url: String, val format: DataSinkFormat[In]) extends
 abstract class DataSinkFormat[In: UDT] extends Serializable {
 
   val stub: Class[_ <: OutputFormat[_]]
-  val inputUDT: UDT[In]
-  val fieldSelector: FieldSelector
+  val udf = new UDF1[In, Nothing]()(implicitly[UDT[In]], UDT.NothingUDT)
 
   def persistConfiguration(config: Configuration) = {}
 }
 
-case class RawDataSinkFormat[In: UDT, F >: (In, OutputStream) => Unit <% UDF2](val writeFunction: (In, OutputStream) => Unit) extends DataSinkFormat[In] {
+case class RawDataSinkFormat[In: UDT](val writeFunction: (In, OutputStream) => Unit) extends DataSinkFormat[In] {
 
   override val stub = classOf[RawOutput4sStub[In]]
 
-  override val inputUDT = implicitly[UDT[In]]
-  override val fieldSelector = AnalyzedFieldSelector.fromIndexMap(implicitly[UDT[In]], writeFunction.getReadFields._1)
-
   override def persistConfiguration(config: Configuration) {
 
-    val deserializer = inputUDT.getSerializer(AnalyzedFieldSelector.toIndexMap(fieldSelector))
-
-    val stubParameters = RawOutputParameters(deserializer, writeFunction)
+    val stubParameters = RawOutputParameters(udf.getInputDeserializer, writeFunction)
     stubParameters.persist(config)
   }
 }
 
-case class BinaryDataSinkFormat[In: UDT, F >: (In, DataOutput) => Unit <% UDF2](val writeFunction: (In, DataOutput) => Unit, val blockSize: Option[Long] = None) extends DataSinkFormat[In] {
+case class BinaryDataSinkFormat[In: UDT](val writeFunction: (In, DataOutput) => Unit, val blockSize: Option[Long] = None) extends DataSinkFormat[In] {
 
   def this(writeFunction: (In, DataOutput) => Unit, blockSize: Long) = this(writeFunction, Some(blockSize))
 
   override val stub = classOf[BinaryOutput4sStub[In]]
 
-  override val inputUDT = implicitly[UDT[In]]
-  override val fieldSelector = AnalyzedFieldSelector.fromIndexMap(implicitly[UDT[In]], writeFunction.getReadFields._1)
-
   override def persistConfiguration(config: Configuration) {
 
-    val deserializer = inputUDT.getSerializer(AnalyzedFieldSelector.toIndexMap(fieldSelector))
-
-    val stubParameters = BinaryOutputParameters(deserializer, writeFunction)
+    val stubParameters = BinaryOutputParameters(udf.getInputDeserializer, writeFunction)
     stubParameters.persist(config)
 
     if (blockSize.isDefined)
@@ -81,27 +70,19 @@ case class SequentialDataSinkFormat[In: UDT](val blockSize: Option[Long] = None)
 
   override val stub = classOf[SequentialOutputFormat]
 
-  override val inputUDT = implicitly[UDT[In]]
-  override val fieldSelector = AnalyzedFieldSelector(implicitly[UDT[In]])
-
   override def persistConfiguration(config: Configuration) {
     if (blockSize.isDefined)
       config.setLong(BinaryOutputFormat.BLOCK_SIZE_PARAMETER_KEY, blockSize.get)
   }
 }
 
-case class DelimetedDataSinkFormat[In: UDT](val writeFunction: UDF2Code[(In, Array[Byte]) => Int], val delimeter: Option[String] = None) extends DataSinkFormat[In] {
+case class DelimetedDataSinkFormat[In: UDT](val writeFunction: (In, Array[Byte]) => Int, val delimeter: Option[String] = None) extends DataSinkFormat[In] {
 
   override val stub = classOf[DelimetedOutput4sStub[In]]
 
-  override val inputUDT = implicitly[UDT[In]]
-  override val fieldSelector = AnalyzedFieldSelector.fromIndexMap(implicitly[UDT[In]], writeFunction.getReadFields._1)
-
   override def persistConfiguration(config: Configuration) {
 
-    val deserializer = inputUDT.getSerializer(AnalyzedFieldSelector.toIndexMap(fieldSelector))
-
-    val stubParameters = DelimetedOutputParameters(deserializer, writeFunction.userFunction)
+    val stubParameters = DelimetedOutputParameters(udf.getInputDeserializer, writeFunction)
     stubParameters.persist(config)
 
     if (delimeter.isDefined)
@@ -111,17 +92,16 @@ case class DelimetedDataSinkFormat[In: UDT](val writeFunction: UDF2Code[(In, Arr
 
 object DelimetedDataSinkFormat {
 
-  def apply[In: UDT](formatFunction: UDF1Code[In => String]): DelimetedDataSinkFormat[In] = forString(formatFunction, null)
-  def apply[In: UDT](formatFunction: UDF1Code[In => String], delimeter: String): DelimetedDataSinkFormat[In] = forString(formatFunction, delimeter)
+  def apply[In: UDT](formatFunction: In => String): DelimetedDataSinkFormat[In] = forString(formatFunction, null)
+  def apply[In: UDT](formatFunction: In => String, delimeter: String): DelimetedDataSinkFormat[In] = forString(formatFunction, delimeter)
 
-  private def forString[In: UDT](formatFunction: UDF1Code[In => String], delimeter: String): DelimetedDataSinkFormat[In] = {
+  def apply[In: UDT](formatFunction: (In, StringBuilder) => Unit): DelimetedDataSinkFormat[In] = forStringBuilder(formatFunction, null)
+  def apply[In: UDT](formatFunction: (In, StringBuilder) => Unit, delimeter: String): DelimetedDataSinkFormat[In] = forStringBuilder(formatFunction, delimeter)
 
-    val fun = formatFunction.userFunction
-    val reads = formatFunction.getReadFields
-    val numFields = implicitly[UDT[In]].numFields
+  private def forString[In: UDT](formatFunction: In => String, delimeter: String): DelimetedDataSinkFormat[In] = {
 
-    val userFun = (source: In, target: Array[Byte]) => {
-      val str = fun(source)
+    val writeFunction = (source: In, target: Array[Byte]) => {
+      val str = formatFunction(source)
       val data = str.getBytes
       if (data.length <= target.length) {
         System.arraycopy(data, 0, target, 0, data.length);
@@ -131,33 +111,16 @@ object DelimetedDataSinkFormat {
       }
     }
 
-    val writeFunction = new UDF2Code[(In, Array[Byte]) => Int] with AnalyzedUDF2 {
-      override def userFunction = userFun
-      override val leftReadFields = getInitialReadFields(numFields)
-      override val rightReadFields = getInitialReadFields(0)
-      override val writeFields = getInitialWriteFields(0)
-    }
-
-    for (i <- 0 until numFields if reads(i) < 0) {
-      writeFunction.markInputFieldUnread(Left(i))
-    }
-
     new DelimetedDataSinkFormat(writeFunction, maybeDelim(delimeter))
   }
 
-  def apply[In: UDT](formatFunction: UDF2Code[(In, StringBuilder) => Unit]): DelimetedDataSinkFormat[In] = forStringBuilder(formatFunction, null)
-  def apply[In: UDT](formatFunction: UDF2Code[(In, StringBuilder) => Unit], delimeter: String): DelimetedDataSinkFormat[In] = forStringBuilder(formatFunction, delimeter)
-
-  private def forStringBuilder[In: UDT](formatFunction: UDF2Code[(In, StringBuilder) => Unit], delimeter: String): DelimetedDataSinkFormat[In] = {
-
-    val fun = formatFunction.userFunction
-    val reads = formatFunction.getReadFields._1
-    val numFields = implicitly[UDT[In]].numFields
+  private def forStringBuilder[In: UDT](formatFunction: (In, StringBuilder) => Unit, delimeter: String): DelimetedDataSinkFormat[In] = {
 
     val stringBuilder = new StringBuilder
-    val userFun = (source: In, target: Array[Byte]) => {
+
+    val writeFunction = (source: In, target: Array[Byte]) => {
       stringBuilder.clear
-      fun(source, stringBuilder)
+      formatFunction(source, stringBuilder)
 
       val data = stringBuilder.toString.getBytes
       if (data.length <= target.length) {
@@ -166,17 +129,6 @@ object DelimetedDataSinkFormat {
       } else {
         -data.length;
       }
-    }
-
-    val writeFunction = new UDF2Code[(In, Array[Byte]) => Int] with AnalyzedUDF2 {
-      override def userFunction = userFun
-      override val leftReadFields = getInitialReadFields(numFields)
-      override val rightReadFields = getInitialReadFields(0)
-      override val writeFields = getInitialWriteFields(0)
-    }
-
-    for (i <- 0 until numFields if reads(i) < 0) {
-      writeFunction.markInputFieldUnread(Left(i))
     }
 
     new DelimetedDataSinkFormat(writeFunction, maybeDelim(delimeter))
@@ -191,12 +143,9 @@ case class RecordDataSinkFormat[In: UDT](val recordDelimeter: Option[String] = N
 
   override val stub = classOf[RecordOutputFormat]
 
-  override val inputUDT = implicitly[UDT[In]]
-  override val fieldSelector = AnalyzedFieldSelector(implicitly[UDT[In]])
-
   override def persistConfiguration(config: Configuration) {
 
-    val fields = inputUDT.fieldTypes
+    val fields = udf.inputUDT.fieldTypes
 
     config.setInteger(RecordOutputFormat.NUM_FIELDS_PARAMETER, fields.length)
 
