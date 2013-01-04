@@ -31,12 +31,13 @@ class RepeatOperator[SolutionItem: UDT](stepFunction: DataStream[SolutionItem] =
   // this will at least get small example programs up and running.
   def ^(numIterations: Int): DataStream[SolutionItem] => DataStream[SolutionItem] = Function.chain(List.fill(numIterations)(stepFunction))
 
-  /*
-  def ^(numIterations: Int): DataStream[SolutionItem] => DataStream[SolutionItem] = (initialSolution: DataStream[SolutionItem]) => new DataStream[SolutionItem] {
+  def iterateN(numIterations: Int) = (initialSolution: DataStream[SolutionItem]) => new DataStream[SolutionItem] with OutputHintable[SolutionItem] {
 
     override def createContract = {
 
-      val contract = new Iteration with Iterate4sContract[SolutionItem]
+      val contract = new Iteration with Iterate4sContract[SolutionItem] {
+        override val udf = new UDF0[SolutionItem]
+      }
 
       val solutionInput = new DataStream[SolutionItem] {
         override def createContract = contract.getPartialSolution()
@@ -48,17 +49,19 @@ class RepeatOperator[SolutionItem: UDT](stepFunction: DataStream[SolutionItem] =
       contract.setNextPartialSolution(output.getContract)
       contract.setNumberOfIteration(numIterations)
 
+      applyHints(contract)
       contract
     }
   }
-  */
 }
 
 class IterateOperator[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStream[SolutionItem] => (DataStream[SolutionItem], DataStream[DeltaItem])) extends Serializable {
 
-  def iterate(s0: DataStream[SolutionItem]) = new DataStream[SolutionItem] {
+  def iterate(s0: DataStream[SolutionItem]) = new DataStream[SolutionItem] with OutputHintable[SolutionItem] {
 
     override def createContract = {
+
+      val outer = this
 
       val contract = new Iteration with Iterate4sContract[SolutionItem] {
         override val udf = new UDF0[SolutionItem]
@@ -72,9 +75,10 @@ class IterateOperator[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStrea
 
       contract.setInitialPartialSolution(s0.getContract)
       contract.setNextPartialSolution(output.getContract)
-      
+
       if (term != null) contract.setTerminationCriterion(term.getContract)
 
+      applyHints(contract)
       contract
     }
   }
@@ -82,7 +86,7 @@ class IterateOperator[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStrea
 
 class WorksetIterateOperator[SolutionItem: UDT, WorksetItem: UDT](stepFunction: (DataStream[SolutionItem], DataStream[WorksetItem]) => (DataStream[SolutionItem], DataStream[WorksetItem])) extends Serializable {
 
-  def iterate[SolutionKey](s0: DistinctDataStream[SolutionItem, SolutionKey], ws0: DataStream[WorksetItem]) = new DataStream[SolutionItem] {
+  def iterate[SolutionKey](s0: DistinctDataStream[SolutionItem, SolutionKey], ws0: DataStream[WorksetItem]) = new DataStream[SolutionItem] with OutputHintable[SolutionItem] {
 
     override def createContract = {
 
@@ -91,7 +95,7 @@ class WorksetIterateOperator[SolutionItem: UDT, WorksetItem: UDT](stepFunction: 
       val keyPositions = keyFields map { _ => -1 } toArray
 
       val contract = new WorksetIteration(keyTypes, keyPositions) with WorksetIterate4sContract[SolutionKey, SolutionItem, WorksetItem] {
-        override val key = s0.keySelector
+        override val key = s0.keySelector.copy()
         override val udf = new UDF0[SolutionItem]
       }
 
@@ -110,6 +114,7 @@ class WorksetIterateOperator[SolutionItem: UDT, WorksetItem: UDT](stepFunction: 
       contract.setPartialSolutionDelta(delta.getContract)
       contract.setNextWorkset(nextWorkset.getContract)
 
+      applyHints(contract)
       contract
     }
   }

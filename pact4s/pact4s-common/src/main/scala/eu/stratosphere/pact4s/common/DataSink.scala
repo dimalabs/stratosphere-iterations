@@ -27,7 +27,7 @@ import eu.stratosphere.pact.common.io._
 import eu.stratosphere.pact.common.generic.io._
 import eu.stratosphere.nephele.configuration.Configuration
 
-class DataSink[In: UDT](val url: String, val format: DataSinkFormat[In]) extends Hintable[In] with Serializable
+class DataSink[In: UDT](val url: String, val format: DataSinkFormat[In]) extends OneInputHintable[In, Nothing] with Serializable
 
 abstract class DataSinkFormat[In: UDT] extends Serializable {
 

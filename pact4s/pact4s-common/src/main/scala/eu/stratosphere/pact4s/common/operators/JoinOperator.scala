@@ -36,22 +36,25 @@ class JoinOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) extends Serializa
 
         def flatMap[Out: UDT](mapFunction: (LeftIn, RightIn) => Iterator[Out]) = createStream(Right(mapFunction))
 
-        private def createStream[Out: UDT](mapFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]): DataStream[Out] = new DataStream[Out] {
+        private def createStream[Out: UDT](mapFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]) = new DataStream[Out] with TwoInputHintable[LeftIn, RightIn, Out] {
 
           override def createContract = {
 
             val builder = Join4sContract.newBuilder.input1(leftInput.getContract).input2(rightInput.getContract)
-            
+
             val keyTypes = implicitly[UDT[LeftIn]].getKeySet(leftKeySelector.selectedFields map { _.localPos })
             keyTypes.foreach { builder.keyField(_, -1, -1) } // global indexes haven't been computed yet...
-            
-            new MatchContract(builder) with Join4sContract[Key, LeftIn, RightIn, Out] {
 
-              override val leftKey = leftKeySelector
-              override val rightKey = rightKeySelector
+            val contract = new MatchContract(builder) with Join4sContract[Key, LeftIn, RightIn, Out] {
+
+              override val leftKey = leftKeySelector.copy()
+              override val rightKey = rightKeySelector.copy()
               override val udf = new UDF2[LeftIn, RightIn, Out]
               override val userCode = mapFunction
             }
+
+            applyHints(contract)
+            contract
           }
         }
       }

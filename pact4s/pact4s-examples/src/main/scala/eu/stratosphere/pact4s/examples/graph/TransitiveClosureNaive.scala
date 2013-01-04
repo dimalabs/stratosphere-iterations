@@ -60,9 +60,9 @@ class TransitiveClosureNaive(verticesInput: String, edgesInput: String, pathsOut
     case (Path(from, _, dist1), Path(_, to, dist2)) => Path(from, to, dist1 + dist2)
   }
 
-  vertices.hints ++= RecordSize(16)
-  edges.hints ++= RecordSize(16)
-  output.hints ++= RecordSize(16)
+  vertices.avgBytesPerRecord(16)
+  edges.avgBytesPerRecord(16)
+  output.avgBytesPerRecord(16)
 
   case class Path(from: Int, to: Int, dist: Int)
 

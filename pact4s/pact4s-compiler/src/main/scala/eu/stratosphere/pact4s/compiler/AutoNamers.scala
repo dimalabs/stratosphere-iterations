@@ -43,7 +43,7 @@ trait AutoNamers { this: Pact4sPlugin =>
 
         case _: Apply if canAutoName(tree.tpe) => safely(tree, false)(err => "Error applying name " + currentName.value + " to expression " + tree.toString) {
           localTyper.typed {
-            val fun = mkSelect("eu", "stratosphere", "pact4s", "common", "PactName", "withNameIfNoHints") setPos tree.pos
+            val fun = mkSelect("eu", "stratosphere", "pact4s", "common", "Hintable", "withNameIfNotSet") setPos tree.pos
             val tFun = TypeApply(fun, List(TypeTree(tree.tpe) setPos tree.pos)) setPos tree.pos
             val nameArg = Literal(currentName.value) setPos tree.pos
             Apply(fun, List(super.apply(tree), nameArg)) setPos tree.pos

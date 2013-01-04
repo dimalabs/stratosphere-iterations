@@ -18,106 +18,191 @@
 package eu.stratosphere.pact4s.common
 
 import eu.stratosphere.pact4s.common.analysis._
+import eu.stratosphere.pact4s.common.contracts._
 
 import eu.stratosphere.pact.common.contract.Contract
 import eu.stratosphere.pact.common.contract.DataDistribution
 import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.pact.common.util.FieldSet
 
-trait HasHints[T] {
-  
-  def getHints: Seq[CompilerHint[T]]
-  def getGenericHints = getHints filter { classOf[CompilerHint[Nothing]].isInstance(_) } map { _.asInstanceOf[CompilerHint[Nothing]] }
+trait Hintable extends Serializable {
+
+  private var _name: Option[String] = None
+
+  def name = _name getOrElse null
+  def name_=(value: String) = _name = Option(value)
+  def name(value: String): this.type = { _name = Option(value); this }
+
+  def applyHints(contract: Pact4sContract[_]): Unit = {
+    _name.foreach(contract.setName)
+  }
 }
 
-trait Hintable[T] extends HasHints[T] {
-
-  var hints: Seq[CompilerHint[T]] = Seq()
-  def getHints = hints
-}
-
-abstract class CompilerHint[+T] {
-  def applyToContract(contract: Contract)
-}
-
-object CompilerHint {
-  implicit def hint2SeqHint[T](h: CompilerHint[T]): Seq[CompilerHint[T]] = Seq(h)
-}
-
-case class PactName(val pactName: String) extends CompilerHint[Nothing] {
-  override def applyToContract(contract: Contract) = contract.setName(pactName)
-}
-
-object PactName {
+object Hintable {
   // this method is called by the compiler plugin's autonamer
-  def withNameIfNoHints[T <: Hintable[_]](that: T, name: String): T = {
-    if (that != null && (that.hints == null || that.hints.isEmpty))
-      that.hints = Seq(PactName(name))
+  def withNameIfNotSet[T <: Hintable](that: T, name: String): T = {
+    if (that != null && that.name == null)
+      that.name = name
     that
   }
 }
 
-case class Degree(val degreeOfParallelism: Int) extends CompilerHint[Nothing] {
-  override def applyToContract(contract: Contract) = contract.setDegreeOfParallelism(degreeOfParallelism)
-}
+trait OutputHintable[Out] extends Hintable {
 
-case class RecordSize(val avgSizeInBytes: Float) extends CompilerHint[Nothing] {
-  override def applyToContract(contract: Contract) = contract.getCompilerHints().setAvgBytesPerRecord(avgSizeInBytes)
-}
+  private case class KeyCardinality(key: KeySelector[_ <: Function1[Out, _]], isUnique: Boolean, distinctCount: Option[Long], avgNumRecords: Option[Float])
 
-case class RecordsEmitted(val avgNumRecords: Float) extends CompilerHint[Nothing] {
-  override def applyToContract(contract: Contract) = contract.getCompilerHints().setAvgRecordsEmittedPerStubCall(avgNumRecords)
-}
+  private var _degreeOfParallelism: Option[Int] = None
+  private var _avgBytesPerRecord: Option[Float] = None
+  private var _avgRecordsEmittedPerCall: Option[Float] = None
+  private var _cardinalities: List[KeyCardinality] = List[KeyCardinality]()
 
-case class UniqueKey[T: UDT, Key](val keySelector: KeySelector[T => Key]) extends CompilerHint[T] {
+  def degreeOfParallelism = _degreeOfParallelism getOrElse -1
+  def degreeOfParallelism_=(value: Int) = _degreeOfParallelism = Some(value)
+  def degreeOfParallelism(value: Int): this.type = { _degreeOfParallelism = Some(value); this }
 
-  override def applyToContract(contract: Contract) = {
+  def avgBytesPerRecord = _avgBytesPerRecord getOrElse -1f
+  def avgBytesPerRecord_=(value: Float) = _avgBytesPerRecord = Some(value)
+  def avgBytesPerRecord(value: Float): this.type = { _avgBytesPerRecord = Some(value); this }
 
-    val fieldSet = new FieldSet(keySelector.selectedFields.map(_.globalPos.getValue).toArray)
-    val hints = contract.getCompilerHints()
+  def avgRecordsEmittedPerCall = _avgRecordsEmittedPerCall getOrElse -1f
+  def avgRecordsEmittedPerCall_=(value: Float) = _avgRecordsEmittedPerCall = Some(value)
+  def avgRecordsEmittedPerCall(value: Float): this.type = { _avgRecordsEmittedPerCall = Some(value); this }
 
-    val fieldSets = hints.getUniqueFields()
-    if (fieldSets == null)
-      hints.setUniqueField(fieldSet)
-    else
-      fieldSets.add(fieldSet)
+  def uniqueKey[Key](key: KeySelector[Out => Key], distinctCount: Long = -1): this.type = {
+    val optDistinctCount = if (distinctCount >= 0) Some(distinctCount) else None
+    _cardinalities = KeyCardinality(key, true, optDistinctCount, None) :: _cardinalities
+    this
+  }
+
+  def cardinality[Key](key: KeySelector[Out => Key], distinctCount: Long = -1, avgNumRecords: Float = -1): this.type = {
+    val optDistinctCount = if (distinctCount >= 0) Some(distinctCount) else None
+    val optAvgNumRecords = if (avgNumRecords >= 0) Some(avgNumRecords) else None
+    _cardinalities = KeyCardinality(key, false, optDistinctCount, optAvgNumRecords) :: _cardinalities
+    this
+  }
+
+  override def applyHints(contract: Pact4sContract[_]): Unit = {
+
+    super.applyHints(contract)
+    val hints = contract.getCompilerHints
+
+    _degreeOfParallelism.foreach(contract.setDegreeOfParallelism)
+    _avgBytesPerRecord.foreach(hints.setAvgBytesPerRecord)
+    _avgRecordsEmittedPerCall.foreach(hints.setAvgRecordsEmittedPerStubCall)
+
+    hints.setUniqueField(null: java.util.Set[FieldSet])
+    hints.getDistinctCounts().clear()
+    hints.getAvgNumRecordsPerDistinctFields().clear()
+
+    val udf = contract.getUDF.asInstanceOf[UDF[Out]]
+
+    _cardinalities.foreach { card =>
+
+      val keyFieldSet: FieldSet = {
+        val copy = card.key.copy()
+        udf.attachOutputsToInputs(copy.inputFields)
+        copy.selectedFields
+      }
+
+      card match {
+
+        case card @ KeyCardinality(_, true, distinctCount, None) => {
+          val fieldSets = hints.getUniqueFields()
+          if (fieldSets == null)
+            hints.setUniqueField(keyFieldSet)
+          else
+            fieldSets.add(keyFieldSet)
+
+          distinctCount.foreach(hints.setDistinctCount(keyFieldSet, _))
+        }
+
+        case card @ KeyCardinality(_, false, distinctCount, avgNumRecords) => {
+          distinctCount.foreach(hints.setDistinctCount(keyFieldSet, _))
+          avgNumRecords.foreach(hints.setAvgNumRecordsPerDistinctFields(keyFieldSet, _))
+        }
+      }
+    }
   }
 }
 
-case class KeyCardinality[T: UDT, Key](val keySelector: KeySelector[T => Key], val numDistinctKeys: Long, val avgNumRecordsPerKey: Option[Long] = None) extends CompilerHint[T] {
+trait InputHintable[In, Out] extends Serializable {
 
-  override def applyToContract(contract: Contract) = {
+  private case class UnreadFields(fields: FieldSelector[_ <: Function1[In, _]], negate: Boolean)
+  private case class CopiedFields(from: FieldSelector[_ <: Function1[In, _]], to: FieldSelector[_ <: Function1[Out, _]])
 
-    val fieldSet = new FieldSet(keySelector.selectedFields.map(_.globalPos.getValue).toArray)
-    val hints = contract.getCompilerHints()
-    hints.setDistinctCount(fieldSet, numDistinctKeys)
+  private var _unread: List[UnreadFields] = List[UnreadFields]()
+  private var _copied: List[CopiedFields] = List[CopiedFields]()
 
-    if (avgNumRecordsPerKey.isDefined)
-      hints.setAvgNumRecordsPerDistinctFields(fieldSet, avgNumRecordsPerKey.get)
+  def ignores[Fields](fields: FieldSelector[In => Fields]): Unit = {
+    _unread = UnreadFields(fields, false) :: _unread
+  }
+
+  def usesOnly[Fields](fields: FieldSelector[In => Fields]): Unit = {
+    _unread = UnreadFields(fields, true) :: _unread
+  }
+
+  def preserves[Fields](from: FieldSelector[In => Fields]) = new {
+    def as(to: FieldSelector[Out => Fields]): Unit = {
+      _copied = CopiedFields(from, to) :: _copied
+    }
+  }
+
+  protected def applyInputHints(markUnread: Int => Unit, markCopied: (Int, Int) => Unit): Unit = {
+
+    _unread.foreach { unread =>
+
+      val fieldSet = unread.fields.selectedFields.map(_.localPos).toSet
+      val unreadFields = unread.negate match {
+        // selected fields are unread
+        case false => fieldSet
+        // selected fields are read => all other fields are unread
+        case true  => unread.fields.inputFields.map(_.localPos).toSet.diff(fieldSet)
+      }
+
+      unreadFields.foreach(markUnread(_))
+    }
+
+    _copied.foreach {
+      case CopiedFields(from, to) => {
+        val pairs = from.selectedFields.map(_.localPos).zip(to.selectedFields.map(_.localPos))
+        pairs.foreach(markCopied.tupled)
+      }
+    }
   }
 }
 
-// TODO: Ask Fabian why CompilerHints.setInputDistributionClass was deprecated (has it been replaced by something else?)
-/*
-case class InputDistribution(dataDistribution: Class[_ <: InputDataDistribution[_]]) extends CompilerHint[Nothing] {
-  override def applyToContract(contract: Contract) = contract.getCompilerHints().setInputDistributionClass(dataDistribution)
+trait OneInputHintable[In, Out] extends InputHintable[In, Out] with OutputHintable[Out] {
+
+  override def applyHints(contract: Pact4sContract[_]): Unit = {
+
+    super.applyHints(contract)
+
+    val udf = contract.getUDF.asInstanceOf[UDF1[In, Out]]
+    applyInputHints(udf.markInputFieldUnread _, udf.markFieldCopied _)
+  }
 }
-*/
 
-abstract class InputDataDistribution[Key: UDT] extends DataDistribution {
+trait TwoInputHintable[LeftIn, RightIn, Out] extends OutputHintable[Out] {
 
-  def getBucketUpperBound(bucketNum: Int, totalBuckets: Int): Key
+  object left extends InputHintable[LeftIn, Out] {
+    protected[TwoInputHintable] def applyInputHints(udf: UDF2[LeftIn, RightIn, Out]): Unit = {
+      applyInputHints({ pos => udf.markInputFieldUnread(Left(pos)) }, { (from, to) => udf.markFieldCopied(Left(from), to) })
+    }
+  }
 
-  final override def getBucketBoundary(bucketNum: Int, totalBuckets: Int): PactRecord = {
+  object right extends InputHintable[RightIn, Out] {
+    protected[TwoInputHintable] def applyInputHints(udf: UDF2[LeftIn, RightIn, Out]): Unit = {
+      applyInputHints({ pos => udf.markInputFieldUnread(Right(pos)) }, { (from, to) => udf.markFieldCopied(Right(from), to) })
+    }
+  }
 
-    val key = getBucketUpperBound(bucketNum, totalBuckets)
-    val record = new PactRecord
+  override def applyHints(contract: Pact4sContract[_]): Unit = {
 
-    val udt = implicitly[UDT[Key]]
-    val serializer = udt.getSerializer((0 until udt.fieldTypes.length).toArray)
-    serializer.serialize(key, record)
+    super.applyHints(contract)
 
-    record
+    val udf = contract.getUDF.asInstanceOf[UDF2[LeftIn, RightIn, Out]]
+    left.applyInputHints(udf)
+    right.applyInputHints(udf)
   }
 }
 

@@ -17,7 +17,7 @@ import scala.reflect.Code
  * @param selection The selected fields
  */
 class FieldSelector[T <: Function1[_, _]](udtIn: UDT[_], selection: List[Int]) extends FieldSelector.EmptyCode[T] with Serializable {
-  
+
   /**
    * Selects T.* via UDT[T].getFieldIndexes(Seq(Seq()))
    */
@@ -30,6 +30,8 @@ class FieldSelector[T <: Function1[_, _]](udtIn: UDT[_], selection: List[Int]) e
 
   for (field <- inputFields.diff(selectedFields))
     field.isUsed = false
+  
+  def copy() = new FieldSelector[T](udtIn, selection)
 }
 
 /**
@@ -48,6 +50,8 @@ class KeySelector[T <: Function1[_, _]](udtIn: UDT[_], selection: List[Int]) ext
   def this(udtIn: UDT[_]) = this(udtIn, udtIn.getFieldIndexes(Seq(Seq())))
 
   def this(udtIn: UDT[_], selection: Seq[Seq[String]]) = this(udtIn, udtIn.getFieldIndexes(selection))
+  
+  override def copy() = new KeySelector[T](udtIn, selection)
 }
 
 /**
@@ -59,9 +63,9 @@ class KeySelector[T <: Function1[_, _]](udtIn: UDT[_], selection: List[Int]) ext
  *
  * Because the function definition requires a parameter of type FieldSelector[T => R] and not T => R,
  * type inference will fail for the parameter x of the lambda expression at the call site. But if the
- * definition's parameter type inherits from Code[T => R], then the argument at the call site will be 
- * type-checked as the function type T => R, thereby allowing type inference to succeed. Note that this 
- * works for FieldSelector[T => R] but not FieldSelector[T, R] (the first generic parameter must be the 
+ * definition's parameter type inherits from Code[T => R], then the argument at the call site will be
+ * type-checked as the function type T => R, thereby allowing type inference to succeed. Note that this
+ * works for FieldSelector[T => R] but not FieldSelector[T, R] (the first generic parameter must be the
  * function type).
  *
  * This comes with a drawback, however. Code[T => R] is the user-facing hook for scala's experimental

@@ -20,7 +20,7 @@ package eu.stratosphere.pact4s.common.contracts
 import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact.common.contract._
 
-trait Iterate4sContract[SolutionItem] extends NoOp4sContract[SolutionItem] { this: Iteration =>
+trait Iterate4sContract[SolutionItem] extends HigherOrder4sContract[SolutionItem] { this: Iteration =>
 
 }
 
@@ -32,7 +32,7 @@ object Iterate4sContract {
   }
 }
 
-trait WorksetIterate4sContract[SolutionKey, SolutionItem, WorksetItem] extends NoOp4sKeyedContract[SolutionKey, SolutionItem] { this: WorksetIteration =>
+trait WorksetIterate4sContract[SolutionKey, SolutionItem, WorksetItem] extends HigherOrder4sKeyedContract[SolutionKey, SolutionItem] { this: WorksetIteration =>
 
 }
 

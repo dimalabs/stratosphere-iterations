@@ -1,5 +1,6 @@
 package eu.stratosphere.pact4s.common.contracts
 
+import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.stubs._
 
@@ -21,8 +22,8 @@ trait Copy4sContract[In] extends Pact4sOneInputContract[In, In] { this: MapContr
   override def persistConfiguration() = {
 
     val stubParameters = new CopyParameters(
-      udf.inputFields.toSerializerIndexArray, 
-      udf.outputFields.toSerializerIndexArray, 
+      udf.inputFields.toSerializerIndexArray,
+      udf.outputFields.toSerializerIndexArray,
       udf.getDiscardIndexArray
     )
     stubParameters.persist(this)
@@ -32,10 +33,14 @@ trait Copy4sContract[In] extends Pact4sOneInputContract[In, In] { this: MapContr
 object Copy4sContract {
 
   def newBuilder = MapContract.builder(classOf[Copy4sStub])
-  
-  def apply[In](source: Contract, udt: UDT[In]): Copy4sContract[In] = {
+
+  def apply[In](source: Pact4sContract[In]): Copy4sContract[In] = {
     new MapContract(Copy4sContract.newBuilder.input(source)) with Copy4sContract[In] {
-      override val udf = new UDF1[In, In]()(udt, udt)
+      
+      override val udf = new UDF1[In, In]()(source.getUDF.outputUDT, source.getUDF.outputUDT)
+      
+      this.setName("Copy " + source.getName())
+      this.getCompilerHints().setAvgBytesPerRecord(source.getCompilerHints().getAvgBytesPerRecord())
     }
   }
 

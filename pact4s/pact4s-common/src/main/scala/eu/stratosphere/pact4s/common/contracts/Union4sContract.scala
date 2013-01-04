@@ -7,6 +7,7 @@ import eu.stratosphere.pact.common.contract._
 
 trait Union4sContract[T] extends NoOp4sContract[T] { this: MapContract =>
 
+  
 }
 
 object Union4sContract {

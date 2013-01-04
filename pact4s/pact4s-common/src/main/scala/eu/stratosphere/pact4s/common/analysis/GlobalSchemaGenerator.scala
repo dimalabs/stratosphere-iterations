@@ -42,9 +42,9 @@ trait GlobalSchemaGenerator {
 
         val freePos1 = globalizeContract(contract4s, proxies, fixedOutputs, freePos)
 
-        eliminateUnionNoOps(contract4s)
+        eliminateNoOps(contract4s)
         contract4s.persistConfiguration(this.getClass.getClassLoader)
-        
+
         schemaPrinter.value.printSchema(contract, proxies)
 
         freePos1
@@ -144,12 +144,10 @@ trait GlobalSchemaGenerator {
         // the expected position. Otherwise, the output fields must be physically copied.
         for (idx <- 0 until inputs.size()) {
           val input = inputs.get(idx)
-          val inputUDF = proxies.getOrElse(input, input.asInstanceOf[Pact4sContract[_]]).getUDF
+          val input4s = proxies.getOrElse(input, input.asInstanceOf[Pact4sContract[_]])
 
-          if (inputUDF.outputFields.isGlobalized) {
-            val copier = Copy4sContract(input, inputUDF.outputUDT)
-            copier.setName("Union Copy (" + input.getName() + ", " + contract.getName + ")")
-            inputs.set(idx, copier)
+          if (input4s.getUDF.outputFields.isGlobalized) {
+            inputs.set(idx, Copy4sContract(input4s))
           }
         }
 
@@ -167,13 +165,13 @@ trait GlobalSchemaGenerator {
     }
   }
 
-  private def eliminateUnionNoOps(contract: Contract): Unit = {
+  private def eliminateNoOps(contract: Contract): Unit = {
 
     def elim(children: JList[Contract]): Unit = {
 
       val newChildren = children flatMap {
-        case Union4sContract(grandChildren) => grandChildren
-        case child                          => List(child)
+        case NoOp4sContract(grandChildren) => grandChildren
+        case child                         => List(child)
       }
 
       children.clear()

@@ -23,6 +23,7 @@ import java.util.{ List => JList }
 
 import scala.collection.JavaConversions._
 
+import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.analysis._
 
 import eu.stratosphere.pact.common.contract._
@@ -112,7 +113,25 @@ trait NoOp4sContract[T] extends Pact4sContract[T] { this: Contract =>
   override def getUDF = udf
 }
 
-trait NoOp4sKeyedContract[Key, T] extends NoOp4sContract[T] { this: Contract =>
+object NoOp4sContract {
+
+  def unapply(contract: Contract): Option[Seq[Contract]] = contract match {
+    case _: NoOp4sContract[_] => contract match {
+      case c: SingleInputContract[_] => Some(c.getInputs())
+      case c: DualInputContract[_]   => Some(c.getFirstInputs() ++ c.getSecondInputs())
+      case _                         => Some(Seq())
+    }
+    case _ => None
+  }
+}
+
+trait HigherOrder4sContract[Out] extends Pact4sContract[Out] { this: Contract =>
+
+  val udf: UDF0[Out]
+  override def getUDF = udf
+}
+
+trait HigherOrder4sKeyedContract[Key, T] extends HigherOrder4sContract[T] { this: Contract =>
   val key: KeySelector[T => Key]
   override def getKeys = Seq(key)
 }

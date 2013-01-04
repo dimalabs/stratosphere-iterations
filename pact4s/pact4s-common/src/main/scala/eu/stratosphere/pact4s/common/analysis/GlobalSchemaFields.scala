@@ -1,5 +1,7 @@
 package eu.stratosphere.pact4s.common.analysis
 
+import eu.stratosphere.pact.common.util.{ FieldSet => PactFieldSet }
+
 abstract sealed class Field extends Serializable {
   val localPos: Int
   val globalPos: GlobalPos
@@ -21,23 +23,48 @@ class FieldSet[+FieldType <: Field] private (private val fields: Seq[FieldType])
 
   def apply(localPos: Int): FieldType = fields.find(_.localPos == localPos).get
 
-  def select(selection: Seq[Int]): FieldSet[FieldType] = new FieldSet[FieldType](selection map apply)
+  def select(selection: Seq[Int]): FieldSet[FieldType] = {
+    val outer = this
+    new FieldSet[FieldType](selection map apply) {
+      override def setGlobalized() = outer.setGlobalized()
+      override def isGlobalized = outer.isGlobalized
+      override val pactFieldSet = outer.pactFieldSet
+    }
+  }
 
   def toSerializerIndexArray: Array[Int] = fields map {
     case field if field.isUsed => field.globalPos.getValue
     case _                     => -1
   } toArray
+
+  protected val pactFieldSet = new PactFieldSet with Serializable {
+    import scala.collection.JavaConversions._
+
+    private def getIndexes = fields.filter(_.isUsed).map(_.globalPos.getValue: java.lang.Integer).distinct
+
+    override def iterator() = getIndexes.toIterator
+    override def size() = getIndexes.length
+    override def isEmpty() = getIndexes.isEmpty
+    override def contains(value: Object) = getIndexes.contains(value)
+
+    override def add(value: java.lang.Integer): Boolean = throw new UnsupportedOperationException
+    override def remove(value: Object): Boolean = throw new UnsupportedOperationException
+    override def clear(): Unit = throw new UnsupportedOperationException
+    override def clone(): Object = this
+  }
 }
 
 object FieldSet {
 
   def newInputSet(numFields: Int): FieldSet[InputField] = new FieldSet((0 until numFields) map { InputField(_) })
   def newOutputSet(numFields: Int): FieldSet[OutputField] = new FieldSet((0 until numFields) map { OutputField(_) })
-  
+
   def newInputSet[T: UDT](): FieldSet[InputField] = newInputSet(implicitly[UDT[T]].numFields)
   def newOutputSet[T: UDT](): FieldSet[OutputField] = newOutputSet(implicitly[UDT[T]].numFields)
 
   implicit def toSeq[FieldType <: Field](fieldSet: FieldSet[FieldType]): Seq[FieldType] = fieldSet.fields
+
+  implicit def toPactFieldSet(fieldSet: FieldSet[_]): PactFieldSet = fieldSet.pactFieldSet
 }
 
 class GlobalPos extends Serializable {
@@ -67,12 +94,12 @@ class GlobalPos extends Serializable {
   def setIndex(index: Int) = {
     assert(pos == null || pos.isLeft, "Cannot convert a position reference to an index")
     pos = Left(index)
-  } 
+  }
 
   def setReference(target: GlobalPos) = {
     assert(pos == null, "Cannot overwrite a known position with a reference")
     pos = Right(target)
-  } 
+  }
 }
 
 object GlobalPos {

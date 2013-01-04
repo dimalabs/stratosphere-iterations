@@ -33,12 +33,12 @@ import eu.stratosphere.pact.common.`type`.base._
 import eu.stratosphere.pact.common.`type`.base.parser._
 import eu.stratosphere.nephele.configuration.Configuration
 
-class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends DataStream[Out] {
-
+class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends DataStream[Out] with OutputHintable[Out] {
+  
   override def createContract = {
 
     val uri = getUri(url)
-    uri.getScheme match {
+    val contract = uri.getScheme match {
 
       case "file" | "hdfs" => new FileDataSource(format.stub.asInstanceOf[Class[FileInputFormat]], uri.toString) with DataSource4sContract[Out] {
 
@@ -54,6 +54,9 @@ class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends D
         override def persistConfiguration() = format.persistConfiguration(this.getParameters())
       }
     }
+    
+    applyHints(contract)
+    contract
   }
 
   private def getUri(url: String) = {

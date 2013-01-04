@@ -32,18 +32,20 @@ class CrossOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) extends Serializ
 
     def flatMap[Out: UDT](mapFunction: (LeftIn, RightIn) => Iterator[Out]) = createStream(Right(mapFunction))
 
-    private def createStream[Out: UDT](
-      mapFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]): DataStream[Out] = new DataStream[Out] {
+    private def createStream[Out: UDT](mapFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]) = new DataStream[Out] with TwoInputHintable[LeftIn, RightIn, Out] {
 
       override def createContract = {
 
         val builder = Cross4sContract.newBuilder.input1(leftInput.getContract).input2(rightInput.getContract)
-        
-        new CrossContract(builder) with Cross4sContract[LeftIn, RightIn, Out] {
+
+        val contract = new CrossContract(builder) with Cross4sContract[LeftIn, RightIn, Out] {
 
           override val udf = new UDF2[LeftIn, RightIn, Out]
           override val userCode = mapFunction
         }
+
+        applyHints(contract)
+        contract
       }
     }
   }

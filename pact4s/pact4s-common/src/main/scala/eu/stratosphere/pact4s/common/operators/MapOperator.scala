@@ -41,17 +41,20 @@ class MapOperator[In: UDT](input: DataStream[In]) extends Serializable {
     createStream(Right(fun), udf)
   }
 
-  private def createStream[Out: UDT](mapFunction: Either[In => Out, In => Iterator[Out]], mapUDF: UDF1[In, Out]): DataStream[Out] = new DataStream[Out] {
-
+  private def createStream[Out: UDT](mapFunction: Either[In => Out, In => Iterator[Out]], mapUDF: UDF1[In, Out]) = new DataStream[Out] with OneInputHintable[In, Out] {
+    
     override def createContract = {
 
       val builder = Map4sContract.newBuilder.input(input.getContract)
       
-      new MapContract(builder) with Map4sContract[In, Out] {
+      val contract = new MapContract(builder) with Map4sContract[In, Out] {
 
         override val udf = mapUDF
         override val userCode = mapFunction
       }
+      
+      applyHints(contract)
+      contract
     }
   }
 }

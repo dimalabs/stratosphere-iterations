@@ -28,16 +28,11 @@ class ReduceOperator[In: UDT](input: DataStream[In]) extends Serializable {
 
   def groupBy[Key: UDT](keySelector: KeySelector[In => Key]) = new Serializable {
 
-    def reduce[Out: UDT](reduceFunction: Iterator[In] => Out): DataStream[Out] = new ReduceStream(input, keySelector, None, reduceFunction)
+    def reduce[Out: UDT](reduceFunction: Iterator[In] => Out): DataStream[Out] with OneInputHintable[In, Out] = new ReduceStream(input, keySelector, None, reduceFunction)
 
-    def combine(combineFunction: Iterator[In] => In): DataStream[In] = new ReduceStream(input, keySelector, Some(combineFunction), combineFunction) {
+    def combine(combineFunction: Iterator[In] => In): DataStream[In] with OneInputHintable[In, In] = new ReduceStream(input, keySelector, Some(combineFunction), combineFunction) {
 
-      private val outer = this
-
-      def reduce[Out: UDT](reduceFunction: Iterator[In] => Out): DataStream[Out] = new ReduceStream(input, keySelector, Some(combineFunction), reduceFunction) {
-
-        override def getHints = outer.getGenericHints ++ this.hints
-      }
+      def reduce[Out: UDT](reduceFunction: Iterator[In] => Out): DataStream[Out] with OneInputHintable[In, Out] = new ReduceStream(input, keySelector, Some(combineFunction), reduceFunction)
     }
   }
 
@@ -46,7 +41,7 @@ class ReduceOperator[In: UDT](input: DataStream[In]) extends Serializable {
     keySelector: KeySelector[In => Key],
     combineFunction: Option[Iterator[In] => In],
     reduceFunction: Iterator[In] => Out)
-    extends DataStream[Out] {
+    extends DataStream[Out] with OneInputHintable[In, Out] {
 
     override def createContract = {
 
@@ -55,14 +50,17 @@ class ReduceOperator[In: UDT](input: DataStream[In]) extends Serializable {
       val keyTypes = implicitly[UDT[In]].getKeySet(keySelector.selectedFields map { _.localPos })
       keyTypes.foreach { builder.keyField(_, -1) } // global indexes haven't been computed yet...
 
-      new ReduceContract(builder) with Reduce4sContract[Key, In, Out] {
+      val contract = new ReduceContract(builder) with Reduce4sContract[Key, In, Out] {
 
-        override val key = keySelector
+        override val key = keySelector.copy()
         val combineUDF = new UDF1[In, In]
         override val udf = new UDF1[In, Out]
         override val userCombineCode = combineFunction
         override val userReduceCode = reduceFunction
       }
+
+      applyHints(contract)
+      contract
     }
   }
 }

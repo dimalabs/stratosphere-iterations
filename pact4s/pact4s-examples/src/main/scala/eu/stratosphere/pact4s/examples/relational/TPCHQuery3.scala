@@ -61,10 +61,10 @@ class TPCHQuery3(ordersInput: String, lineItemsInput: String, ordersOutput: Stri
 
   override def outputs = output <~ prioritizedOrders
 
-  orders.hints ++= UniqueKey({ o: Order => o.orderId })
-  filteredOrders.hints ++= RecordSize(32) +: RecordsEmitted(0.05f)
-  prioritizedItems.hints ++= RecordSize(64)
-  prioritizedOrders.hints ++= RecordSize(64) +: RecordsEmitted(1f)
+  orders.uniqueKey(_.orderId)
+  filteredOrders.avgBytesPerRecord(32).avgRecordsEmittedPerCall(0.05f)
+  prioritizedItems.avgBytesPerRecord(64)
+  prioritizedOrders.avgBytesPerRecord(64).avgRecordsEmittedPerCall(1)
 
   case class Order(orderId: Int, status: Char, year: Int, month: Int, day: Int, orderPriority: String, shipPriority: Int)
   case class LineItem(orderId: Int, extendedPrice: Double)

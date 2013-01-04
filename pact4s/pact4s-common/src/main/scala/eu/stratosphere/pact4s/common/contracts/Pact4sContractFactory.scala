@@ -20,22 +20,13 @@ package eu.stratosphere.pact4s.common.contracts
 import scala.collection.mutable
 import scala.util.DynamicVariable
 
-import eu.stratosphere.pact4s.common.HasHints
-
 import eu.stratosphere.pact.common.contract.Contract
 
-trait Pact4sContractFactory { this: HasHints[_] =>
+trait Pact4sContractFactory {
 
   protected def createContract: Contract
 
-  def getContract: Contract = Pact4sContractFactory.currentEnv.value.getContractFor(this, initContract)
-
-  private def initContract: Contract = {
-    val c = createContract
-    for (hint <- getHints)
-      hint.applyToContract(c)
-    c
-  }
+  def getContract: Contract = Pact4sContractFactory.currentEnv.value.getContractFor(this, createContract)
 }
 
 object Pact4sContractFactory {
@@ -50,7 +41,7 @@ object Pact4sContractFactory {
   }
 
   private val currentEnv: DynamicVariable[Environment] = new DynamicVariable(null)
-  
+
   def withEnvironment[T](thunk: => T): T = currentEnv.value match {
     case null => currentEnv.withValue(new Environment) { thunk }
     case _    => thunk

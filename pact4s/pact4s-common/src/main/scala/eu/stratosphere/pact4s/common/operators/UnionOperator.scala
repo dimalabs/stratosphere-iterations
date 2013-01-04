@@ -11,7 +11,7 @@ import eu.stratosphere.pact.common.contract._
 
 class UnionOperator[T: UDT](firstInput: DataStream[T]) extends Serializable {
 
-  def union(secondInput: DataStream[T]) = new DataStream[T] {
+  def union(secondInput: DataStream[T]) = new DataStream[T] with Hintable {
 
     override def createContract = {
 
@@ -27,12 +27,16 @@ class UnionOperator[T: UDT](firstInput: DataStream[T]) extends Serializable {
 
       val builder = Union4sContract.newBuilder.inputs(firstInputs ++ secondInputs)
 
-      new MapContract(builder) with Union4sContract[T] {
+      val contract = new MapContract(builder) with Union4sContract[T] {
+
         // Union is a no-op placeholder that reads nothing and writes nothing.
-        // outputFields specifies the write location for the union's children
-        // and the read location for its parent.
+        // Its udf's outputFields specifies the write location for the union's 
+        // children and the read location for its parent.
         override val udf = new UDF0[T]
       }
+
+      applyHints(contract)
+      contract
     }
   }
 }

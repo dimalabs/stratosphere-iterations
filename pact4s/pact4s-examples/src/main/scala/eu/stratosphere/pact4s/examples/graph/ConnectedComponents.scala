@@ -57,10 +57,10 @@ class ConnectedComponents(verticesInput: String, edgesInput: String, componentsO
     (s1, s1)
   }
 
-  vertices.hints ++= RecordSize(8)
-  directedEdges.hints ++= RecordSize(8)
-  undirectedEdges.hints ++= RecordSize(8) +: RecordsEmitted(2.0f)
-  output.hints ++= RecordSize(8)
+  vertices.avgBytesPerRecord(8)
+  directedEdges.avgBytesPerRecord(8)
+  undirectedEdges.avgBytesPerRecord(8).avgRecordsEmittedPerCall(2)
+  output.avgBytesPerRecord(8)
 
   def parseVertex = (line: String) => { val v = line.toInt; v -> v }
 
