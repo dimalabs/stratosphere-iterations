@@ -61,10 +61,18 @@ class TPCHQuery3(ordersInput: String, lineItemsInput: String, ordersOutput: Stri
 
   override def outputs = output <~ prioritizedOrders
 
-  orders.uniqueKey(_.orderId)
-  filteredOrders.avgBytesPerRecord(32).avgRecordsEmittedPerCall(0.05f)
-  prioritizedItems.avgBytesPerRecord(64)
-  prioritizedOrders.avgBytesPerRecord(64).avgRecordsEmittedPerCall(1)
+  orders.avgBytesPerRecord(44).uniqueKey(_.orderId)
+  lineItems.avgBytesPerRecord(28)
+  filteredOrders.usesOnly { o => (o.status, o.year, o.orderPriority) }
+  filteredOrders.avgBytesPerRecord(44).avgRecordsEmittedPerCall(0.05f).uniqueKey(_.orderId)
+  prioritizedItems.left.ignores { o => o }
+  prioritizedItems.left.preserves { o => (o.orderId, o.shipPriority) } as { po => (po.orderId, po.shipPriority) }
+  prioritizedItems.right.ignores { li => li }
+  prioritizedItems.right.preserves { li => li.extendedPrice } as { po => po.revenue }
+  prioritizedItems.avgBytesPerRecord(32)
+  prioritizedOrders.usesOnly { po => po.revenue }
+  prioritizedOrders.preserves { pi => (pi.orderId, pi.shipPriority) } as { pi => (pi.orderId, pi.shipPriority) }
+  prioritizedOrders.avgBytesPerRecord(32).avgRecordsEmittedPerCall(1)
 
   case class Order(orderId: Int, status: Char, year: Int, month: Int, day: Int, orderPriority: String, shipPriority: Int)
   case class LineItem(orderId: Int, extendedPrice: Double)

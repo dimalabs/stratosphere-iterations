@@ -41,6 +41,9 @@ class WordCount(textInput: String, wordsOutput: String) extends PactProgram {
   val counts = words groupBy { case (word, _) => word } combine {
     _.reduce { (z, s) => z.copy(_2 = z._2 + s._2) }
   }
+  
+  counts.ignores { case (word, _) => word }
+  counts.preserves { case (word, _) => word } as { case (word, _) => word }
 
   override def outputs = output <~ counts
 
