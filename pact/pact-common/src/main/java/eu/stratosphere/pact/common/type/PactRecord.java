@@ -238,7 +238,24 @@ public final class PactRecord implements Value
 		}		
 		else if (offset == MODIFIED_INDICATOR_OFFSET) {
 			// value that has been set is new or modified
-			return (T) this.writeFields[fieldNum];
+			final Value writeField = this.writeFields[fieldNum];
+			
+			if (writeField instanceof BinCopiedField) {
+				// get an instance, either from the instance cache or create a new one
+				final Value oldField = this.readFields[fieldNum]; 
+				final T field;
+				if (oldField != null && oldField.getClass() == type) {
+					field = (T) oldField;
+				}
+				else {
+					field = InstantiationUtil.instantiate(type, Value.class);
+					this.readFields[fieldNum] = field;
+				}
+				((BinCopiedField)writeField).deserialize(serializer, field, fieldNum);
+				
+			} else {
+				return (T) writeField;
+			}
 		}
 		
 		final int limit = offset + this.lengths[fieldNum];
@@ -281,14 +298,21 @@ public final class PactRecord implements Value
 			throw new NullPointerException("The target object may not be null");
 		
 		// get offset and check for null
-		int offset = this.offsets[fieldNum];
+		final int offset = this.offsets[fieldNum];
 		if (offset == NULL_INDICATOR_OFFSET) {
 			return null;
 		}
 		else if (offset == MODIFIED_INDICATOR_OFFSET) {
 			// value that has been set is new or modified
 			// bring the binary in sync so that the deserialization gives the correct result
-			return (T) this.writeFields[fieldNum];
+			final Value writeField = this.writeFields[fieldNum];
+			
+			if (writeField instanceof BinCopiedField) {
+				((BinCopiedField)writeField).deserialize(serializer, target, fieldNum);
+				return target;
+			} else {
+				return (T) writeField;
+			}
 		}
 		
 		final int limit = offset + this.lengths[fieldNum];
@@ -860,6 +884,72 @@ public final class PactRecord implements Value
 		return rec;
 	}
 	
+	/**
+	 * Bin-copies a field from a source record to this record. The following caveats apply:
+	 * 
+	 * If the source field is in a modified state, no binary representation
+	 * will exist yet. In that case, this method is equivalent to
+	 * setField(..., source.getField(..., <class>)). In particular, if
+	 * setValue is called on the source field Value instance, that change 
+	 * will propagate to this record.
+	 * 
+	 * If the source field has already been serialized, then the binary
+	 * representation will be copied. Further modifications to the source
+	 * field will have not be observable via this record, but attempting
+	 * to read the field from this record will cause it to be deserialized.
+	 * 
+	 * @param sourceFieldNum
+	 * @param targetFieldNum
+	 * @param target
+	 */
+	public void copyFrom(final PactRecord source, final int sourceFieldNum, final int targetFieldNum) {
+		// range check
+		if (targetFieldNum < 0)
+			throw new IndexOutOfBoundsException();
+ 
+		// get offset and check for null
+		final int offset = source == null ? NULL_INDICATOR_OFFSET : source.offsets[sourceFieldNum];
+ 
+		if (offset == NULL_INDICATOR_OFFSET) {
+			this.setNull(targetFieldNum);
+		}
+		else if (offset == MODIFIED_INDICATOR_OFFSET) {
+			// value that has been set is new or modified
+			final Value value = source.writeFields[sourceFieldNum];
+			this.setField(targetFieldNum, value);
+		}
+		else {
+			final int length = source.lengths[sourceFieldNum];
+			final byte[] value = new byte[length];
+			System.arraycopy(source.binaryData, offset, value, 0, length);
+			this.setField(targetFieldNum, new BinCopiedField(value));
+		}
+	}
+ 
+	/**
+	 * Bin-copies fields from a source record to this record. The following caveats apply:
+	 * 
+	 * If the source field is in a modified state, no binary representation
+	 * will exist yet. In that case, this method is equivalent to
+	 * setField(..., source.getField(..., <class>)). In particular, if
+	 * setValue is called on the source field Value instance, that change 
+	 * will propagate to this record.
+	 * 
+	 * If the source field has already been serialized, then the binary
+	 * representation will be copied. Further modifications to the source
+	 * field will have not be observable via this record, but attempting
+	 * to read the field from this record will cause it to be deserialized.
+	 *
+	 * @param sourceFieldNum
+	 * @param targetFieldNum
+	 * @param target
+	 */
+	public void copyFrom(final PactRecord source, final int[] sourcePositions, final int[] targetPositions) {
+		for (int i = 0; i < sourcePositions.length; i++) {
+			copyFrom(source, sourcePositions[i], targetPositions[i]);
+		}
+	}
+	
 	// --------------------------------------------------------------------------------------------
 	
 	/**
@@ -1227,6 +1317,38 @@ public final class PactRecord implements Value
 	// ------------------------------------------------------------------------
 	//                Utility class for internal (de)serialization
 	// ------------------------------------------------------------------------
+	
+	private static final class BinCopiedField implements Value {
+		
+		final byte[] value;
+		
+		public BinCopiedField(byte[] value) {
+			this.value = value;
+		}
+		
+		@Override
+		public final void write(DataOutput out) throws IOException {
+			out.write(value);
+		}
+
+		@Override
+		public final void read(DataInput in) throws IOException {
+			throw new UnsupportedOperationException();
+		}
+		
+		public final void deserialize(final InternalDeSerializer serializer, final Value target, final int fieldNumber) {
+			final byte[] value = this.value;
+			serializer.memory = value;
+			serializer.position = 0;
+			serializer.end = value.length;
+			try {
+				target.read(serializer);
+			}
+			catch (Exception e) {
+				throw new DeserializationException("Error reading field " + fieldNumber + " as " + target.getClass().getName(), e);
+			}
+		}
+	}
 	
 	/**
 	 * Internal interface class to provide serialization for the data types.

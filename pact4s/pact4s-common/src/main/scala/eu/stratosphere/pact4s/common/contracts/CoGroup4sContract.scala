@@ -27,8 +27,8 @@ trait CoGroup4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputKeyedCo
   val userCode: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]
 
   override def annotations = Seq(
-    Annotations.getConstantFieldsFirst(udf.getLeftForwardIndexArray._1),
-    Annotations.getConstantFieldsSecond(udf.getRightForwardIndexArray._1)
+    Annotations.getConstantFieldsFirst(udf.getLeftForwardIndexArray),
+    Annotations.getConstantFieldsSecond(udf.getRightForwardIndexArray)
   /*
     Annotations.getReadsFirst(coGroupUDF.getReadFields._1),
     Annotations.getReadsSecond(coGroupUDF.getReadFields._2),

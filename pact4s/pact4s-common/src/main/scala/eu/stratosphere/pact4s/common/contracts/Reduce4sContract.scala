@@ -39,7 +39,7 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputKeyedContract[Key, In
   //private def getAllReadFields = (combineUDF.getReadFields ++ reduceUDF.getReadFields).distinct.toArray
 
   override def annotations = combinableAnnotation ++ Seq(
-    Annotations.getConstantFields(udf.getForwardIndexArray._1),
+    Annotations.getConstantFields(udf.getForwardIndexArray),
     Annotations.getOutCardBounds(Annotations.CARD_UNBOUNDED, Annotations.CARD_INPUTCARD)
   /*
     Annotations.getReads(getAllReadFields),
@@ -51,15 +51,9 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputKeyedContract[Key, In
 
   override def persistConfiguration() = {
     
-    val combineForwardArray = combineForwardSet.toArray
-    val combineForwardTypes = combineForwardArray map { gPos =>
-      val lPos = udf.inputFields.find(_.globalPos.getValue == gPos).get.localPos
-      udf.inputUDT.fieldTypes(lPos)
-    }
-
     val stubParameters = new ReduceParameters(
       udf.getInputDeserializer, udf.getOutputSerializer, 
-      userCombineCode, (combineForwardArray, combineForwardTypes), 
+      userCombineCode, combineForwardSet.toArray, 
       userReduceCode,  udf.getForwardIndexArray
     )
     stubParameters.persist(this)

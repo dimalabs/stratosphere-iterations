@@ -9,7 +9,7 @@ import eu.stratosphere.pact.common.contract._
 trait Copy4sContract[In] extends Pact4sOneInputContract[In, In] { this: MapContract =>
 
   override def annotations = Seq(
-    Annotations.getConstantFields(udf.getForwardIndexArray._1),
+    Annotations.getConstantFields(udf.getForwardIndexArray),
     Annotations.getOutCardBounds(Annotations.CARD_INPUTCARD, Annotations.CARD_INPUTCARD)
   /*
     Annotations.getReads(copyUDF.getReadFields),
@@ -24,7 +24,6 @@ trait Copy4sContract[In] extends Pact4sOneInputContract[In, In] { this: MapContr
     val stubParameters = new CopyParameters(
       udf.inputFields.toSerializerIndexArray,
       udf.outputFields.toSerializerIndexArray,
-      udf.inputFields.toFieldTypesArray(udf.inputUDT),
       udf.getDiscardIndexArray
     )
     stubParameters.persist(this)

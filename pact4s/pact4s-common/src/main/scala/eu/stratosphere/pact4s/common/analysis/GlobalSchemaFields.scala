@@ -33,11 +33,6 @@ class FieldSet[+FieldType <: Field] private (private val fields: Seq[FieldType])
     }
   }
 
-  def toFieldTypesArray(udt: UDT[_]) = fields map {
-    case field if field.isUsed => field.globalPos.getValueClass
-    case _                     => classOf[eu.stratosphere.pact.common.`type`.base.PactNull]
-  } toArray
-
   def toSerializerIndexArray: Array[Int] = fields map {
     case field if field.isUsed => field.globalPos.getValue
     case _                     => -1
@@ -77,23 +72,17 @@ object FieldSet {
 
 class GlobalPos extends Serializable {
 
-  private var pos: Either[(Int, Class[_ <: PactValue]), GlobalPos] = null
+  private var pos: Either[Int, GlobalPos] = null
 
   def getValue: Int = pos match {
-    case null             => -1
-    case Left((index, _)) => index
-    case Right(target)    => target.getValue
-  }
-
-  def getValueClass: Class[_ <: PactValue] = pos match {
-    case null             => null
-    case Left((_, clazz)) => clazz
-    case Right(target)    => target.getValueClass
+    case null          => -1
+    case Left(index)   => index
+    case Right(target) => target.getValue
   }
 
   def getIndex: Option[Int] = pos match {
-    case null | Right(_)  => None
-    case Left((index, _)) => Some(index)
+    case null | Right(_) => None
+    case Left(index)     => Some(index)
   }
 
   def getReference: Option[GlobalPos] = pos match {
@@ -105,9 +94,9 @@ class GlobalPos extends Serializable {
   def isIndex = (pos != null) && pos.isLeft
   def isReference = (pos != null) && pos.isRight
 
-  def setIndex(index: Int, valueClass: Class[_ <: PactValue]) = {
+  def setIndex(index: Int) = {
     assert(pos == null || pos.isLeft, "Cannot convert a position reference to an index")
-    pos = Left((index, valueClass))
+    pos = Left(index)
   }
 
   def setReference(target: GlobalPos) = {

@@ -28,9 +28,9 @@ import eu.stratosphere.nephele.configuration.Configuration
 
 case class CoGroupParameters[LeftIn, RightIn, Out](
   val leftDeserializer: UDTSerializer[LeftIn],
-  val leftForward: (Array[Int], Array[Class[_ <: PactValue]]),
+  val leftForward: Array[Int],
   val rightDeserializer: UDTSerializer[RightIn],
-  val rightForward: (Array[Int], Array[Class[_ <: PactValue]]),
+  val rightForward: Array[Int],
   val serializer: UDTSerializer[Out],
   val userFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]])
   extends StubParameters
@@ -41,12 +41,10 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
 
   private var leftIterator: DeserializingIterator[LeftIn] = null
   private var leftForward: Array[Int] = _
-  private var leftForwardTypes: Array[Class[_ <: PactValue]] = _
-  
+
   private var rightIterator: DeserializingIterator[RightIn] = null
   private var rightForward: Array[Int] = _
-  private var rightForwardTypes: Array[Class[_ <: PactValue]] = _
-  
+
   private var serializer: UDTSerializer[Out] = _
 
   private var userFunction: (JIterator[PactRecord], JIterator[PactRecord], Collector[PactRecord]) => Unit = _
@@ -56,13 +54,11 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
     val parameters = StubParameters.getValue[CoGroupParameters[LeftIn, RightIn, Out]](config)
 
     this.leftIterator = new DeserializingIterator(parameters.leftDeserializer)
-    this.leftForward = parameters.leftForward._1
-    this.leftForwardTypes = parameters.leftForward._2
-    
+    this.leftForward = parameters.leftForward
+
     this.rightIterator = new DeserializingIterator(parameters.rightDeserializer)
-    this.rightForward = parameters.rightForward._1
-    this.rightForwardTypes = parameters.rightForward._2
-    
+    this.rightForward = parameters.rightForward
+
     this.serializer = parameters.serializer
 
     this.userFunction = parameters.userFunction.fold(doCoGroup _, doFlatCoGroup _)
@@ -73,21 +69,10 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
   private def doCoGroup(userFunction: (Iterator[LeftIn], Iterator[RightIn]) => Out)(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
     val firstLeftRecord = leftIterator.initialize(leftRecords)
+    outputRecord.copyFrom(firstLeftRecord, leftForward, leftForward)
+
     val firstRightRecord = rightIterator.initialize(rightRecords)
-
-    var field = 0
-    while (field < leftForward.length) {
-      val pos = leftForward(field)
-      outputRecord.setField(pos, firstLeftRecord.getField(pos, leftForwardTypes(field)))
-      field = field + 1
-    }
-
-    field = 0
-    while (field < rightForward.length) {
-      val pos = rightForward(field)
-      outputRecord.setField(pos, firstRightRecord.getField(pos, rightForwardTypes(field)))
-      field = field + 1
-    }
+    outputRecord.copyFrom(firstRightRecord, rightForward, rightForward)
 
     val output = userFunction.apply(leftIterator, rightIterator)
 
@@ -98,21 +83,10 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
   private def doFlatCoGroup(userFunction: (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out])(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
     val firstLeftRecord = leftIterator.initialize(leftRecords)
+    outputRecord.copyFrom(firstLeftRecord, leftForward, leftForward)
+
     val firstRightRecord = rightIterator.initialize(rightRecords)
-
-    var field = 0
-    while (field < leftForward.length) {
-      val pos = leftForward(field)
-      outputRecord.setField(pos, firstLeftRecord.getField(pos, leftForwardTypes(field)))
-      field = field + 1
-    }
-
-    field = 0
-    while (field < rightForward.length) {
-      val pos = rightForward(field)
-      outputRecord.setField(pos, firstRightRecord.getField(pos, rightForwardTypes(field)))
-      field = field + 1
-    }
+    outputRecord.copyFrom(firstRightRecord, rightForward, rightForward)
 
     val output = userFunction.apply(leftIterator, rightIterator)
 
