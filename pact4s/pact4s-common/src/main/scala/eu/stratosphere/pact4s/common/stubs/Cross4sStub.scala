@@ -69,9 +69,6 @@ class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub {
     for (field <- rightDiscard)
       rightRecord.setNull(field)
 
-    // Maybe unionFields is the problem?
-      // Try doing an updateBinaryRepresentation? Would that even help?
-      // Otherwise, try doing leftDiscard + leftRecord.copyFrom(rightRecord, rightForward, rightForward)
     leftRecord.unionFields(rightRecord)
 
     serializer.serialize(output, leftRecord)

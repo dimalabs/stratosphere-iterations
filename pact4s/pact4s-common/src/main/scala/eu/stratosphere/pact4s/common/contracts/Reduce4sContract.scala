@@ -26,12 +26,20 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputKeyedContract[Key, In
 
   val userCombineCode: Option[Iterator[In] => In]
   val userReduceCode: Iterator[In] => Out
+  
+  private def ignoredKeys: Set[Int] = {
+    val ignoredInputs = udf.inputFields.filterNot(_.isUsed).map(_.globalPos.getValue).toSet
+    key.selectedFields.toIndexSet.intersect(ignoredInputs)
+  }
+  
+  def combineForwardSet: Set[Int] = udf.forwardSet.map(_.getValue).union(ignoredKeys).toSet
+  def combineDiscardSet: Set[Int] = udf.discardSet.map(_.getValue).diff(ignoredKeys).diff(udf.inputFields.toIndexSet).toSet
 
   private def combinableAnnotation = userCombineCode map { _ => Annotations.getCombinable() } toSeq
   //private def getAllReadFields = (combineUDF.getReadFields ++ reduceUDF.getReadFields).distinct.toArray
 
   override def annotations = combinableAnnotation ++ Seq(
-    Annotations.getConstantFields(udf.getForwardIndexArray),
+    Annotations.getConstantFields(udf.getForwardIndexArray._1),
     Annotations.getOutCardBounds(Annotations.CARD_UNBOUNDED, Annotations.CARD_INPUTCARD)
   /*
     Annotations.getReads(getAllReadFields),
@@ -42,11 +50,17 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputKeyedContract[Key, In
   )
 
   override def persistConfiguration() = {
+    
+    val combineForwardArray = combineForwardSet.toArray
+    val combineForwardTypes = combineForwardArray map { gPos =>
+      val lPos = udf.inputFields.find(_.globalPos.getValue == gPos).get.localPos
+      udf.inputUDT.fieldTypes(lPos)
+    }
 
     val stubParameters = new ReduceParameters(
       udf.getInputDeserializer, udf.getOutputSerializer, 
-      userCombineCode, userReduceCode, 
-      udf.getForwardIndexArray
+      userCombineCode, (combineForwardArray, combineForwardTypes), 
+      userReduceCode,  udf.getForwardIndexArray
     )
     stubParameters.persist(this)
   }

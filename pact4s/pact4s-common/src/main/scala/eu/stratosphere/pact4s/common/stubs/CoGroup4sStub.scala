@@ -23,13 +23,14 @@ import eu.stratosphere.pact4s.common.analysis._
 
 import eu.stratosphere.pact.common.stubs._
 import eu.stratosphere.pact.common.`type`.PactRecord
+import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
 import eu.stratosphere.nephele.configuration.Configuration
 
 case class CoGroupParameters[LeftIn, RightIn, Out](
   val leftDeserializer: UDTSerializer[LeftIn],
-  val leftForward: Array[Int],
+  val leftForward: (Array[Int], Array[Class[_ <: PactValue]]),
   val rightDeserializer: UDTSerializer[RightIn],
-  val rightForward: Array[Int],
+  val rightForward: (Array[Int], Array[Class[_ <: PactValue]]),
   val serializer: UDTSerializer[Out],
   val userFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]])
   extends StubParameters
@@ -40,8 +41,12 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
 
   private var leftIterator: DeserializingIterator[LeftIn] = null
   private var leftForward: Array[Int] = _
+  private var leftForwardTypes: Array[Class[_ <: PactValue]] = _
+  
   private var rightIterator: DeserializingIterator[RightIn] = null
   private var rightForward: Array[Int] = _
+  private var rightForwardTypes: Array[Class[_ <: PactValue]] = _
+  
   private var serializer: UDTSerializer[Out] = _
 
   private var userFunction: (JIterator[PactRecord], JIterator[PactRecord], Collector[PactRecord]) => Unit = _
@@ -51,9 +56,13 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
     val parameters = StubParameters.getValue[CoGroupParameters[LeftIn, RightIn, Out]](config)
 
     this.leftIterator = new DeserializingIterator(parameters.leftDeserializer)
-    this.leftForward = parameters.leftForward
+    this.leftForward = parameters.leftForward._1
+    this.leftForwardTypes = parameters.leftForward._2
+    
     this.rightIterator = new DeserializingIterator(parameters.rightDeserializer)
-    this.rightForward = parameters.rightForward
+    this.rightForward = parameters.rightForward._1
+    this.rightForwardTypes = parameters.rightForward._2
+    
     this.serializer = parameters.serializer
 
     this.userFunction = parameters.userFunction.fold(doCoGroup _, doFlatCoGroup _)
@@ -63,11 +72,22 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
 
   private def doCoGroup(userFunction: (Iterator[LeftIn], Iterator[RightIn]) => Out)(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
-    leftIterator.initialize(leftRecords)
-    rightIterator.initialize(rightRecords)
+    val firstLeftRecord = leftIterator.initialize(leftRecords)
+    val firstRightRecord = rightIterator.initialize(rightRecords)
 
-    outputRecord.copyFrom(leftIterator.getFirstRecord, leftForward, leftForward);
-    outputRecord.copyFrom(rightIterator.getFirstRecord, rightForward, rightForward);
+    var field = 0
+    while (field < leftForward.length) {
+      val pos = leftForward(field)
+      outputRecord.setField(pos, firstLeftRecord.getField(pos, leftForwardTypes(field)))
+      field = field + 1
+    }
+
+    field = 0
+    while (field < rightForward.length) {
+      val pos = rightForward(field)
+      outputRecord.setField(pos, firstRightRecord.getField(pos, rightForwardTypes(field)))
+      field = field + 1
+    }
 
     val output = userFunction.apply(leftIterator, rightIterator)
 
@@ -77,11 +97,22 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
 
   private def doFlatCoGroup(userFunction: (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out])(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
-    leftIterator.initialize(leftRecords)
-    rightIterator.initialize(rightRecords)
+    val firstLeftRecord = leftIterator.initialize(leftRecords)
+    val firstRightRecord = rightIterator.initialize(rightRecords)
 
-    outputRecord.copyFrom(leftIterator.getFirstRecord, leftForward, leftForward);
-    outputRecord.copyFrom(rightIterator.getFirstRecord, rightForward, rightForward);
+    var field = 0
+    while (field < leftForward.length) {
+      val pos = leftForward(field)
+      outputRecord.setField(pos, firstLeftRecord.getField(pos, leftForwardTypes(field)))
+      field = field + 1
+    }
+
+    field = 0
+    while (field < rightForward.length) {
+      val pos = rightForward(field)
+      outputRecord.setField(pos, firstRightRecord.getField(pos, rightForwardTypes(field)))
+      field = field + 1
+    }
 
     val output = userFunction.apply(leftIterator, rightIterator)
 

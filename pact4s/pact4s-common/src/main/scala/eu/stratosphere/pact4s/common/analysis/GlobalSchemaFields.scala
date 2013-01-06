@@ -1,5 +1,6 @@
 package eu.stratosphere.pact4s.common.analysis
 
+import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
 import eu.stratosphere.pact.common.util.{ FieldSet => PactFieldSet }
 
 abstract sealed class Field extends Serializable {
@@ -32,11 +33,16 @@ class FieldSet[+FieldType <: Field] private (private val fields: Seq[FieldType])
     }
   }
 
+  def toFieldTypesArray(udt: UDT[_]) = fields map {
+    case field if field.isUsed => field.globalPos.getValueClass
+    case _                     => classOf[eu.stratosphere.pact.common.`type`.base.PactNull]
+  } toArray
+
   def toSerializerIndexArray: Array[Int] = fields map {
     case field if field.isUsed => field.globalPos.getValue
     case _                     => -1
   } toArray
-  
+
   def toIndexSet: Set[Int] = fields.filter(_.isUsed).map(_.globalPos.getValue).toSet
 
   protected val pactFieldSet = new PactFieldSet with Serializable {
@@ -71,17 +77,23 @@ object FieldSet {
 
 class GlobalPos extends Serializable {
 
-  private var pos: Either[Int, GlobalPos] = null
+  private var pos: Either[(Int, Class[_ <: PactValue]), GlobalPos] = null
 
   def getValue: Int = pos match {
-    case null          => -1
-    case Left(index)   => index
-    case Right(target) => target.getValue
+    case null             => -1
+    case Left((index, _)) => index
+    case Right(target)    => target.getValue
+  }
+
+  def getValueClass: Class[_ <: PactValue] = pos match {
+    case null             => null
+    case Left((_, clazz)) => clazz
+    case Right(target)    => target.getValueClass
   }
 
   def getIndex: Option[Int] = pos match {
-    case null | Right(_) => None
-    case Left(index)     => Some(index)
+    case null | Right(_)  => None
+    case Left((index, _)) => Some(index)
   }
 
   def getReference: Option[GlobalPos] = pos match {
@@ -93,9 +105,9 @@ class GlobalPos extends Serializable {
   def isIndex = (pos != null) && pos.isLeft
   def isReference = (pos != null) && pos.isRight
 
-  def setIndex(index: Int) = {
+  def setIndex(index: Int, valueClass: Class[_ <: PactValue]) = {
     assert(pos == null || pos.isLeft, "Cannot convert a position reference to an index")
-    pos = Left(index)
+    pos = Left((index, valueClass))
   }
 
   def setReference(target: GlobalPos) = {

@@ -31,7 +31,7 @@ trait Map4sContract[In, Out] extends Pact4sOneInputContract[In, Out] { this: Map
   private def outCardBound = userCode.fold({ _ => Annotations.CARD_INPUTCARD }, { _ => Annotations.CARD_UNKNOWN })
 
   override def annotations = Seq(
-    Annotations.getConstantFields(udf.getForwardIndexArray),
+    Annotations.getConstantFields(udf.getForwardIndexArray._1),
     Annotations.getOutCardBounds(outCardBound, outCardBound)
   /*
     Annotations.getReads(mapUDF.getReadFields),

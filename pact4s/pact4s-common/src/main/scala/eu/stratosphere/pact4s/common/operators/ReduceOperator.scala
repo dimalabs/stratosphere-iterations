@@ -30,12 +30,46 @@ class ReduceOperator[In: UDT](input: DataStream[In]) extends Serializable {
 
     def reduce[Out: UDT](reduceFunction: Iterator[In] => Out): DataStream[Out] with OneInputHintable[In, Out] = new ReduceStream(input, keySelector, None, reduceFunction)
 
-    type CReduce = { def reduce[Out: UDT](reduceFunction: Iterator[In] => Out): DataStream[Out] with OneInputHintable[In, Out] }
+    type CReduce = { def map[Out: UDT](mapFunction: In => Out): DataStream[Out] with OneInputHintable[In, Out] }
     type Combiner = DataStream[In] with OneInputHintable[In, In] with CReduce
 
     def combine(combineFunction: Iterator[In] => In): Combiner = new ReduceStream(input, keySelector, Some(combineFunction), combineFunction) {
 
-      def reduce[Out: UDT](reduceFunction: Iterator[In] => Out): DataStream[Out] with OneInputHintable[In, Out] = new ReduceStream(input, keySelector, Some(combineFunction), reduceFunction)
+      /**
+       * This map operator creates a reduceFunction by chaining the combineFunction and mapFunction. For example:
+       * 
+       * val b = a combine { fB } // Transient
+       * val c = b map { fC }     // ReduceContract
+       * val d = b map { fD }     // ReduceContract
+       * 
+       * Reduce(fC(fB))     Reduce(fD(fB))
+       *      |                  |
+       * Combine(fB)        Combine(fB)
+       *      |                  |
+       *      |------------------|
+       *                |
+       *                a
+       */
+      def map[Out: UDT](mapFunction: In => Out): DataStream[Out] with OneInputHintable[In, Out] = new ReduceStream(input, keySelector, Some(combineFunction), combineFunction.andThen(mapFunction))
+
+      /**
+       * Enables access to the non-chained map operator. For example:
+       * 
+       * val b = a combine { fB } toStream // ReduceContract
+       * val c = b map { fC }              // MapContract
+       * val d = b map { fD }              // MapContract
+       * 
+       * Map(fC)   Map(fD)
+       *    |         |
+       *    |---------|
+       *         |
+       *      Reduce(fB)
+       *         |
+       *      Combine(fB)
+       *         |
+       *         a
+       */
+      def toStream: DataStream[In] with OneInputHintable[In, In] = this
     }
   }
 

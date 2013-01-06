@@ -38,7 +38,7 @@ object GlobalSchemaPrinter {
             printInfo(node, "Sink",
               Seq(),
               Seq(("", udf.inputFields)),
-              Seq(("", udf.getForwardIndexArray)),
+              Seq(("", udf.getForwardIndexArray._1)),
               Seq(("", udf.getDiscardIndexArray)),
               udf.outputFields
             )
@@ -58,7 +58,7 @@ object GlobalSchemaPrinter {
             printInfo(node, "CoGroup",
               Seq(("L", leftKey), ("R", rightKey)),
               Seq(("L", udf.leftInputFields), ("R", udf.rightInputFields)),
-              Seq(("L", udf.getLeftForwardIndexArray), ("R", udf.getRightForwardIndexArray)),
+              Seq(("L", udf.getLeftForwardIndexArray._1), ("R", udf.getRightForwardIndexArray._1)),
               Seq(("L", udf.getLeftDiscardIndexArray), ("R", udf.getRightDiscardIndexArray)),
               udf.outputFields
             )
@@ -68,7 +68,7 @@ object GlobalSchemaPrinter {
             printInfo(node, "Cross",
               Seq(),
               Seq(("L", udf.leftInputFields), ("R", udf.rightInputFields)),
-              Seq(("L", udf.getLeftForwardIndexArray), ("R", udf.getRightForwardIndexArray)),
+              Seq(("L", udf.getLeftForwardIndexArray._1), ("R", udf.getRightForwardIndexArray._1)),
               Seq(("L", udf.getLeftDiscardIndexArray), ("R", udf.getRightDiscardIndexArray)),
               udf.outputFields
             )
@@ -78,7 +78,7 @@ object GlobalSchemaPrinter {
             printInfo(node, "Join",
               Seq(("L", leftKey), ("R", rightKey)),
               Seq(("L", udf.leftInputFields), ("R", udf.rightInputFields)),
-              Seq(("L", udf.getLeftForwardIndexArray), ("R", udf.getRightForwardIndexArray)),
+              Seq(("L", udf.getLeftForwardIndexArray._1), ("R", udf.getRightForwardIndexArray._1)),
               Seq(("L", udf.getLeftDiscardIndexArray), ("R", udf.getRightDiscardIndexArray)),
               udf.outputFields
             )
@@ -88,7 +88,7 @@ object GlobalSchemaPrinter {
             printInfo(node, "Map",
               Seq(),
               Seq(("", udf.inputFields)),
-              Seq(("", udf.getForwardIndexArray)),
+              Seq(("", udf.getForwardIndexArray._1)),
               Seq(("", udf.getDiscardIndexArray)),
               udf.outputFields
             )
@@ -96,15 +96,21 @@ object GlobalSchemaPrinter {
 
           case ReduceNode(udf, key, input) => {
 
-            val kind = node.getPactContract.asInstanceOf[Reduce4sContract[_, _, _]].userCombineCode match {
-              case None    => "Reduce"
-              case Some(_) => "CombineReduce"
+            val contract = node.getPactContract.asInstanceOf[Reduce4sContract[_, _, _]] 
+            contract.userCombineCode map { _ =>
+              printInfo(node, "Combine",
+                Seq(("", key)),
+                Seq(("", udf.inputFields)),
+                Seq(("", contract.combineForwardSet.toArray)),
+                Seq(("", contract.combineDiscardSet.toArray.toArray)),
+                udf.inputFields
+              )
             }
 
-            printInfo(node, kind,
+            printInfo(node, "Reduce",
               Seq(("", key)),
               Seq(("", udf.inputFields)),
-              Seq(("", udf.getForwardIndexArray)),
+              Seq(("", udf.getForwardIndexArray._1)),
               Seq(("", udf.getDiscardIndexArray)),
               udf.outputFields
             )

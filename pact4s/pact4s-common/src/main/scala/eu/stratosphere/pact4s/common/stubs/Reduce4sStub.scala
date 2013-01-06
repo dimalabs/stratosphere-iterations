@@ -24,14 +24,16 @@ import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact.common.contract.ReduceContract.Combinable
 import eu.stratosphere.pact.common.stubs._
 import eu.stratosphere.pact.common.`type`.PactRecord
+import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
 import eu.stratosphere.nephele.configuration.Configuration
 
 case class ReduceParameters[In, Out](
   val deserializer: UDTSerializer[In],
   val serializer: UDTSerializer[Out],
   val combineFunction: Option[Iterator[In] => In],
+  val combineForward: (Array[Int], Array[Class[_ <: PactValue]]),
   val reduceFunction: Iterator[In] => Out,
-  val forward: Array[Int])
+  val reduceForward: (Array[Int], Array[Class[_ <: PactValue]]))
   extends StubParameters
 
 class Reduce4sStub[In, Out] extends ReduceStub {
@@ -42,12 +44,14 @@ class Reduce4sStub[In, Out] extends ReduceStub {
   private var combineIterator: DeserializingIterator[In] = null
   private var combineFunction: Iterator[In] => In = _
   private var combineSerializer: UDTSerializer[In] = _
+  private var combineForward: Array[Int] = _
+  private var combineForwardTypes: Array[Class[_ <: PactValue]] = _
 
   private var reduceIterator: DeserializingIterator[In] = null
   private var reduceFunction: Iterator[In] => Out = _
   private var reduceSerializer: UDTSerializer[Out] = _
-
-  private var forward: Array[Int] = _
+  private var reduceForward: Array[Int] = _
+  private var reduceForwardTypes: Array[Class[_ <: PactValue]] = _
 
   override def open(config: Configuration) = {
     super.open(config)
@@ -56,18 +60,26 @@ class Reduce4sStub[In, Out] extends ReduceStub {
     this.combineIterator = parameters.combineFunction map { _ => new DeserializingIterator(parameters.deserializer) } getOrElse null
     this.combineFunction = parameters.combineFunction getOrElse null
     this.combineSerializer = parameters.combineFunction map { _ => parameters.deserializer } getOrElse null
+    this.combineForward = parameters.combineForward._1
+    this.combineForwardTypes = parameters.combineForward._2
 
     this.reduceIterator = new DeserializingIterator(parameters.deserializer)
     this.reduceFunction = parameters.reduceFunction
     this.reduceSerializer = parameters.serializer
-
-    this.forward = parameters.forward
+    this.reduceForward = parameters.reduceForward._1
+    this.reduceForwardTypes = parameters.reduceForward._2
   }
 
   override def combine(records: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
-    combineIterator.initialize(records)
-    combineRecord.copyFrom(combineIterator.getFirstRecord, forward, forward);
+    val firstRecord = combineIterator.initialize(records)
+
+    var field = 0
+    while (field < combineForward.length) {
+      val pos = combineForward(field)
+      combineRecord.setField(pos, firstRecord.getField(pos, combineForwardTypes(field)))
+      field = field + 1
+    }
 
     val output = combineFunction.apply(combineIterator)
 
@@ -77,8 +89,14 @@ class Reduce4sStub[In, Out] extends ReduceStub {
 
   override def reduce(records: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
-    reduceIterator.initialize(records)
-    reduceRecord.copyFrom(reduceIterator.getFirstRecord, forward, forward);
+    val firstRecord = reduceIterator.initialize(records)
+
+    var field = 0
+    while (field < reduceForward.length) {
+      val pos = reduceForward(field)
+      reduceRecord.setField(pos, firstRecord.getField(pos, reduceForwardTypes(field)))
+      field = field + 1
+    }
 
     val output = reduceFunction.apply(reduceIterator)
 

@@ -23,35 +23,37 @@ import eu.stratosphere.pact4s.common.analysis.UDTSerializer
 
 import eu.stratosphere.pact.common.`type`.PactRecord
 
-protected class DeserializingIterator[T](deserializer: UDTSerializer[T]) extends Iterator[T] {
+protected final class DeserializingIterator[T](deserializer: UDTSerializer[T]) extends Iterator[T] {
 
   private var source: JIterator[PactRecord] = null
-  private var firstRecord: PactRecord = null
+  private var first: PactRecord = null
   private var fresh = true
 
-  def initialize(records: JIterator[PactRecord]) = {
+  final def initialize(records: JIterator[PactRecord]): PactRecord = {
     source = records
 
     if (source.hasNext) {
-      firstRecord = source.next()
       fresh = true
+      first = source.next()
     } else {
-      firstRecord = null
       fresh = false
+      first = null
     }
+    
+    first
   }
 
-  def hasNext = fresh || source.hasNext
+  final def hasNext = fresh || source.hasNext
 
-  def next() = {
+  final def next(): T = {
 
     if (fresh) {
       fresh = false
-      deserializer.deserialize(firstRecord)
+      val record = deserializer.deserialize(first)
+      first = null
+      record
     } else {
       deserializer.deserialize(source.next())
     }
   }
-
-  def getFirstRecord: PactRecord = firstRecord
 }

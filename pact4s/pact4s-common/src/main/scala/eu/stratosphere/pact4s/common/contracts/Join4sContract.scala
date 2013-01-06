@@ -27,8 +27,8 @@ trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputKeyedContr
   val userCode: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
 
   override def annotations = Seq(
-    Annotations.getConstantFieldsFirst(udf.getLeftForwardIndexArray),
-    Annotations.getConstantFieldsSecond(udf.getRightForwardIndexArray)
+    Annotations.getConstantFieldsFirst(udf.getLeftForwardIndexArray._1),
+    Annotations.getConstantFieldsSecond(udf.getRightForwardIndexArray._1)
   /*
     Annotations.getReadsFirst(joinUDF.getReadFields._1),
     Annotations.getReadsSecond(joinUDF.getReadFields._2),

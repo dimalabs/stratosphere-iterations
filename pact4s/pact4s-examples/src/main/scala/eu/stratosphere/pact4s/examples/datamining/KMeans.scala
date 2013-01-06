@@ -43,15 +43,8 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
   def computeNewCenters = (centers: DataStream[(Int, Point)]) => {
 
     val distances = dataPoints cross centers map computeDistance
-    
-    val nearestCenters = distances groupBy { case (pid, _) => pid } combine { ds => ds.minBy(_._2.distance) } reduce { ds => 
-      asPointSum.tupled(ds.minBy(_._2.distance)) 
-    }
-    
-    val newCenters = nearestCenters groupBy { case (cid, _) => cid } combine sumPointSums reduce { ps => 
-      val (cid, pointSum) = sumPointSums(ps)
-      (cid, pointSum.toPoint)
-    }
+    val nearestCenters = distances groupBy { case (pid, _) => pid } combine { ds => ds.minBy(_._2.distance) } map asPointSum.tupled    
+    val newCenters = nearestCenters groupBy { case (cid, _) => cid } combine sumPointSums map { case (cid: Int, pSum: PointSum) => cid -> pSum.toPoint() }
 
     distances.left ignores { case (pid, _) => pid }
     distances.left preserves { dp => dp } as { case (pid, dist) => (pid, dist.dataPoint) }

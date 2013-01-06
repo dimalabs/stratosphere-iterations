@@ -14,9 +14,9 @@ abstract class UDF[R: UDT] extends Serializable {
 
     outputFields.setGlobalized()
 
-    outputFields.map(_.globalPos).foldLeft(startPos) {
-      case (i, globalPos @ GlobalPos.Unknown()) => globalPos.setIndex(i); i + 1
-      case (i, _)                               => i
+    outputFields.foldLeft(startPos) {
+      case (i, OutputField(lPos, gPos @ GlobalPos.Unknown())) => gPos.setIndex(i, outputUDT.fieldTypes(lPos)); i + 1
+      case (i, _)                                             => i
     }
   }
 
@@ -58,10 +58,16 @@ class UDF1[T: UDT, R: UDT] extends UDF[R] {
   val inputFields = FieldSet.newInputSet[T]()
   val forwardSet = mutable.Set[GlobalPos]()
   val discardSet = mutable.Set[GlobalPos]()
-  
+
   def getInputDeserializer = inputUDT.getSerializer(inputFields.toSerializerIndexArray)
-  def getForwardIndexArray = forwardSet.map(_.getValue).toArray
   def getDiscardIndexArray = discardSet.map(_.getValue).toArray
+
+  def getForwardIndexArray = {
+    val forwards = forwardSet.toArray
+    val indexes = forwards map { _.getValue }
+    val types = forwards map { _.getValueClass }
+    (indexes, types)
+  }
 
   def markInputFieldUnread(localPos: Int): Unit = {
     inputFields(localPos).isUsed = false
@@ -87,13 +93,25 @@ class UDF2[T1: UDT, T2: UDT, R: UDT] extends UDF[R] {
   val rightDiscardSet = mutable.Set[GlobalPos]()
 
   def getLeftInputDeserializer = leftInputUDT.getSerializer(leftInputFields.toSerializerIndexArray)
-  def getLeftForwardIndexArray = leftForwardSet.map(_.getValue).toArray
   def getLeftDiscardIndexArray = leftDiscardSet.map(_.getValue).toArray
-  
+
+  def getLeftForwardIndexArray = {
+    val forwards = leftForwardSet.toArray
+    val indexes = forwards map { _.getValue }
+    val types = forwards map { _.getValueClass }
+    (indexes, types)
+  }
+
   def getRightInputDeserializer = rightInputUDT.getSerializer(rightInputFields.toSerializerIndexArray)
-  def getRightForwardIndexArray = rightForwardSet.map(_.getValue).toArray
   def getRightDiscardIndexArray = rightDiscardSet.map(_.getValue).toArray
-  
+
+  def getRightForwardIndexArray = {
+    val forwards = rightForwardSet.toArray
+    val indexes = forwards map { _.getValue }
+    val types = forwards map { _.getValueClass }
+    (indexes, types)
+  }
+
   private def getInputField(localPos: Either[Int, Int]): InputField = localPos match {
     case Left(pos)  => leftInputFields(pos)
     case Right(pos) => rightInputFields(pos)
