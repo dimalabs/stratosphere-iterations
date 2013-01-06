@@ -43,11 +43,27 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
   def computeNewCenters = (centers: DataStream[(Int, Point)]) => {
 
     val distances = dataPoints cross centers map computeDistance
-    val nearestCenters = distances groupBy { case (pid, _) => pid } combine { ds => ds.minBy(_._2.distance) } map asPointSum.tupled
-    val newCenters = nearestCenters groupBy { case (cid, _) => cid } combine sumPointSums map { case (cid: Int, pSum: PointSum) => cid -> pSum.toPoint() }
+    
+    val nearestCenters = distances groupBy { case (pid, _) => pid } combine { ds => ds.minBy(_._2.distance) } reduce { ds => 
+      asPointSum.tupled(ds.minBy(_._2.distance)) 
+    }
+    
+    val newCenters = nearestCenters groupBy { case (cid, _) => cid } combine sumPointSums reduce { ps => 
+      val (cid, pointSum) = sumPointSums(ps)
+      (cid, pointSum.toPoint)
+    }
 
+    distances.left ignores { case (pid, _) => pid }
+    distances.left preserves { dp => dp } as { case (pid, dist) => (pid, dist.dataPoint) }
+    distances.right ignores { case (cid, _) => cid }
+    distances.right preserves { case (cid, _) => cid } as { case (_, dist) => dist.clusterId }
     distances.avgBytesPerRecord(48)
-    nearestCenters.avgBytesPerRecord(48)
+    
+    nearestCenters.ignores { case (pid, _) => pid }
+    nearestCenters.avgBytesPerRecord(40)
+    
+    newCenters.ignores { case (cid, _) => cid }
+    newCenters.preserves { case (cid, _) => cid } as { case (cid, _) => cid }
     newCenters.avgBytesPerRecord(36)
 
     newCenters

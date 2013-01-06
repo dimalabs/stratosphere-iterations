@@ -24,7 +24,6 @@ import eu.stratosphere.pact.common.contract._
 
 trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputKeyedContract[Key, In, Out] { this: ReduceContract =>
 
-  val combineUDF: UDF1[In, In]
   val userCombineCode: Option[Iterator[In] => In]
   val userReduceCode: Iterator[In] => Out
 
@@ -44,18 +43,10 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputKeyedContract[Key, In
 
   override def persistConfiguration() = {
 
-    val combineDeserializer = userCombineCode map { _ => combineUDF.getInputDeserializer }
-    val combineSerializer = userCombineCode map { _ => combineUDF.getOutputSerializer }
-
-    val reduceDeserializer = udf.getInputDeserializer
-    val reduceSerializer = udf.getOutputSerializer
-    
-    val forward = udf.getForwardIndexArray
-
     val stubParameters = new ReduceParameters(
-      combineDeserializer, combineSerializer, userCombineCode, 
-      reduceDeserializer, reduceSerializer, userReduceCode,
-      forward
+      udf.getInputDeserializer, udf.getOutputSerializer, 
+      userCombineCode, userReduceCode, 
+      udf.getForwardIndexArray
     )
     stubParameters.persist(this)
   }

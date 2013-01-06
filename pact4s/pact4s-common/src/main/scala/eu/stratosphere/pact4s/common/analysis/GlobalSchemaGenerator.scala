@@ -9,13 +9,9 @@ import eu.stratosphere.pact.common.contract._
 
 trait GlobalSchemaGenerator {
 
-  private val schemaPrinter = new DynamicVariable[GlobalSchemaPrinter](null)
-
   def initGlobalSchema(sinks: Seq[DataSink4sContract[_]]): Unit = {
 
-    schemaPrinter.withValue(new GlobalSchemaPrinter) {
-      sinks.foldLeft(0) { (freePos, contract) => globalizeContract(contract, Seq(), Map(), None, freePos) }
-    }
+    sinks.foldLeft(0) { (freePos, contract) => globalizeContract(contract, Seq(), Map(), None, freePos) }
   }
 
   /**
@@ -44,8 +40,6 @@ trait GlobalSchemaGenerator {
 
         eliminateNoOps(contract4s)
         contract4s.persistConfiguration(this.getClass.getClassLoader)
-
-        schemaPrinter.value.printSchema(contract, proxies)
 
         freePos1
       }
@@ -128,9 +122,7 @@ trait GlobalSchemaGenerator {
 
       case contract @ Reduce4sContract(input) => {
 
-        val freePos1 = globalizeContract(input, Seq(contract.udf.inputFields, contract.combineUDF.inputFields, contract.key.inputFields), proxies, None, freePos)
-
-        contract.combineUDF.assignOutputGlobalIndexes(contract.combineUDF.inputFields)
+        val freePos1 = globalizeContract(input, Seq(contract.udf.inputFields, contract.key.inputFields), proxies, None, freePos)
 
         contract.udf.setOutputGlobalIndexes(freePos1, fixedOutputs)
       }
@@ -158,9 +150,9 @@ trait GlobalSchemaGenerator {
 
       case contract @ Copy4sContract(input) => {
 
-        val freePos1 = contract.udf.setOutputGlobalIndexes(freePos, fixedOutputs)
+        val freePos1 = globalizeContract(input, Seq(contract.udf.inputFields), proxies, None, freePos)
 
-        globalizeContract(input, Seq(contract.udf.inputFields), proxies, None, freePos1)
+        contract.udf.setOutputGlobalIndexes(freePos1, fixedOutputs)
       }
     }
   }

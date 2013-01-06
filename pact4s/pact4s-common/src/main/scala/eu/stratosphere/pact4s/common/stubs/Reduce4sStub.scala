@@ -27,11 +27,9 @@ import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.nephele.configuration.Configuration
 
 case class ReduceParameters[In, Out](
-  val combineDeserializer: Option[UDTSerializer[In]],
-  val combineSerializer: Option[UDTSerializer[In]],
+  val deserializer: UDTSerializer[In],
+  val serializer: UDTSerializer[Out],
   val combineFunction: Option[Iterator[In] => In],
-  val reduceDeserializer: UDTSerializer[In],
-  val reduceSerializer: UDTSerializer[Out],
   val reduceFunction: Iterator[In] => Out,
   val forward: Array[Int])
   extends StubParameters
@@ -55,13 +53,13 @@ class Reduce4sStub[In, Out] extends ReduceStub {
     super.open(config)
     val parameters = StubParameters.getValue[ReduceParameters[In, Out]](config)
 
-    this.combineIterator = parameters.combineDeserializer map { d => new DeserializingIterator(d) } getOrElse null
+    this.combineIterator = parameters.combineFunction map { _ => new DeserializingIterator(parameters.deserializer) } getOrElse null
     this.combineFunction = parameters.combineFunction getOrElse null
-    this.combineSerializer = parameters.combineSerializer getOrElse null
+    this.combineSerializer = parameters.combineFunction map { _ => parameters.deserializer } getOrElse null
 
-    this.reduceIterator = new DeserializingIterator(parameters.reduceDeserializer)
+    this.reduceIterator = new DeserializingIterator(parameters.deserializer)
     this.reduceFunction = parameters.reduceFunction
-    this.reduceSerializer = parameters.reduceSerializer
+    this.reduceSerializer = parameters.serializer
 
     this.forward = parameters.forward
   }

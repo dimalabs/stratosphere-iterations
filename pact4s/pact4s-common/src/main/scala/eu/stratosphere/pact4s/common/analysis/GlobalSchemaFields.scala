@@ -36,11 +36,13 @@ class FieldSet[+FieldType <: Field] private (private val fields: Seq[FieldType])
     case field if field.isUsed => field.globalPos.getValue
     case _                     => -1
   } toArray
+  
+  def toIndexSet: Set[Int] = fields.filter(_.isUsed).map(_.globalPos.getValue).toSet
 
   protected val pactFieldSet = new PactFieldSet with Serializable {
     import scala.collection.JavaConversions._
 
-    private def getIndexes = fields.filter(_.isUsed).map(_.globalPos.getValue: java.lang.Integer).distinct
+    private def getIndexes = toIndexSet.toSeq.map(i => i: java.lang.Integer)
 
     override def iterator() = getIndexes.toIterator
     override def size() = getIndexes.length

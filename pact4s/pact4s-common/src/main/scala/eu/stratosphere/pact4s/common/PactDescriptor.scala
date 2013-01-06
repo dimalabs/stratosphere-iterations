@@ -21,6 +21,7 @@ import java.lang.reflect.Constructor
 
 import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact4s.common.analysis._
+import eu.stratosphere.pact4s.common.analysis.postPass._
 
 import eu.stratosphere.pact.common.plan._
 

@@ -30,7 +30,10 @@ class ReduceOperator[In: UDT](input: DataStream[In]) extends Serializable {
 
     def reduce[Out: UDT](reduceFunction: Iterator[In] => Out): DataStream[Out] with OneInputHintable[In, Out] = new ReduceStream(input, keySelector, None, reduceFunction)
 
-    def combine(combineFunction: Iterator[In] => In): DataStream[In] with OneInputHintable[In, In] = new ReduceStream(input, keySelector, Some(combineFunction), combineFunction) {
+    type CReduce = { def reduce[Out: UDT](reduceFunction: Iterator[In] => Out): DataStream[Out] with OneInputHintable[In, Out] }
+    type Combiner = DataStream[In] with OneInputHintable[In, In] with CReduce
+
+    def combine(combineFunction: Iterator[In] => In): Combiner = new ReduceStream(input, keySelector, Some(combineFunction), combineFunction) {
 
       def reduce[Out: UDT](reduceFunction: Iterator[In] => Out): DataStream[Out] with OneInputHintable[In, Out] = new ReduceStream(input, keySelector, Some(combineFunction), reduceFunction)
     }
@@ -53,7 +56,6 @@ class ReduceOperator[In: UDT](input: DataStream[In]) extends Serializable {
       val contract = new ReduceContract(builder) with Reduce4sContract[Key, In, Out] {
 
         override val key = keySelector.copy()
-        val combineUDF = new UDF1[In, In]
         override val udf = new UDF1[In, Out]
         override val userCombineCode = combineFunction
         override val userReduceCode = reduceFunction
