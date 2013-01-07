@@ -886,27 +886,37 @@ public final class PactRecord implements Value
 		
 		final int[] sourceOffsets = source.offsets;
 		final int[] sourceLengths = source.lengths;
-		final byte[] sourceData = source.binaryData;
+		final byte[] sourceBuffer = source.binaryData;
 		final Value[] sourceFields = source.writeFields;
 
 		boolean anyFieldIsBinary = false;
 		int maxFieldNum = 0;
 		
 		for (int i = 0; i < sourcePositions.length; i++) {
-
-			maxFieldNum = Math.max(targetPositions[i], maxFieldNum);
-			
+		
 			final int sourceFieldNum = sourcePositions[i];
 			final int sourceOffset = sourceOffsets[sourceFieldNum];
-			
-			if (sourceOffset != MODIFIED_INDICATOR_OFFSET && sourceOffset != NULL_INDICATOR_OFFSET)
+			final int targetFieldNum = targetPositions[i];
+
+			maxFieldNum = Math.max(targetFieldNum, maxFieldNum);
+
+			if (sourceOffset == NULL_INDICATOR_OFFSET) {
+				// set null on existing field (new fields are null by default)
+				if (targetFieldNum < numFields) {
+					internallySetField(targetFieldNum, null);
+				}
+			} else if (sourceOffset != MODIFIED_INDICATOR_OFFSET) {
 				anyFieldIsBinary = true;
+			}
 		}
 		
 		if (numFields < maxFieldNum + 1)
 			setNumFields(maxFieldNum + 1);
 		
-		// reserve space in binaryData for the source fields
+		final int[] targetLengths = this.lengths;
+		final int[] targetOffsets = this.offsets;
+		
+		// reserve space in binaryData for the binary source fields
 		if (anyFieldIsBinary) {
 			
 			for (int i = 0; i < sourcePositions.length; i++) {
@@ -915,15 +925,16 @@ public final class PactRecord implements Value
 				
 				if (sourceOffset != MODIFIED_INDICATOR_OFFSET && sourceOffset != NULL_INDICATOR_OFFSET) {
 					final int targetFieldNum = targetPositions[i];
-					final int length = sourceLengths[sourceFieldNum];
-					lengths[targetFieldNum] = length;
+					targetLengths[targetFieldNum] = sourceLengths[sourceFieldNum];
 					internallySetField(targetFieldNum, RESERVE_SPACE);
 				}
 			}
 			
 			updateBinaryRepresenation();
 		}
-		
+			
+		final byte[] targetBuffer = this.binaryData;
+
 		for (int i = 0; i < sourcePositions.length; i++) {
 			final int sourceFieldNum = sourcePositions[i];
 			final int sourceOffset = sourceOffsets[sourceFieldNum];
@@ -931,12 +942,11 @@ public final class PactRecord implements Value
 
 			if (sourceOffset == MODIFIED_INDICATOR_OFFSET) {
 				internallySetField(targetFieldNum, sourceFields[sourceFieldNum]);
-			} else if (sourceOffset == NULL_INDICATOR_OFFSET) {
-				internallySetField(targetFieldNum, null);
-			} else {
-				final int targetOffset = offsets[targetFieldNum];
-				final int length = lengths[targetFieldNum];
-				System.arraycopy(sourceData, sourceOffset, binaryData, targetOffset, length);
+			} else if (sourceOffset != NULL_INDICATOR_OFFSET) {
+				// bin-copy
+				final int targetOffset = targetOffsets[targetFieldNum];
+				final int length = targetLengths[targetFieldNum];
+				System.arraycopy(sourceBuffer, sourceOffset, targetBuffer, targetOffset, length);
 			}
 		}
 	}
