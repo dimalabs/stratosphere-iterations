@@ -8,11 +8,11 @@ import eu.stratosphere.pact4s.common.contracts._
 
 import eu.stratosphere.pact.compiler.plan._
 
-object GlobalSchemaCompressor {
+object GlobalSchemaCompactor {
 
   import Extractors._
 
-  def compressSchema(plan: OptimizedPlan): Unit = {
+  def compactSchema(plan: OptimizedPlan): Unit = {
 
     val (_, conflicts) = plan.getDataSinks().foldLeft((Set[OptimizerNode](), Map[GlobalPos, Set[GlobalPos]]())) {
       case ((visited, conflicts), node) => findConflicts(node, visited, conflicts)
@@ -21,26 +21,7 @@ object GlobalSchemaCompressor {
     // Reset all position indexes before reassigning them 
     conflicts.keys.foreach { _.setIndex(Int.MinValue) }
 
-    plan.getDataSinks().foldLeft(Set[OptimizerNode]())(compressSchema(conflicts))
-  }
-
-  private def findConflicts(node: OptimizerNode, visited: Set[OptimizerNode], conflicts: Map[GlobalPos, Set[GlobalPos]]): (Set[OptimizerNode], Map[GlobalPos, Set[GlobalPos]]) = {
-
-    // breadth-first traversal
-    node.getOutConns.map(_.getTargetPact).forall(visited) match {
-
-      case false => (visited, conflicts)
-
-      case true => {
-
-        val newVisited = visited + node
-        val newConflicts = findConflicts(node, conflicts)
-
-        node.getIncomingConnections.map(_.getSourcePact).foldLeft((newVisited, newConflicts)) {
-          case ((visited, conflicts), node) => findConflicts(node, visited, conflicts)
-        }
-      }
-    }
+    plan.getDataSinks().foldLeft(Set[OptimizerNode]())(compactSchema(conflicts))
   }
 
   /**
@@ -56,32 +37,44 @@ object GlobalSchemaCompressor {
    *       (p2 in n.forwards && p1 in n.outputs)
    *     )
    */
-  private def findConflicts(node: OptimizerNode, conflicts: Map[GlobalPos, Set[GlobalPos]]): Map[GlobalPos, Set[GlobalPos]] = {
+  private def findConflicts(node: OptimizerNode, visited: Set[OptimizerNode], conflicts: Map[GlobalPos, Set[GlobalPos]]): (Set[OptimizerNode], Map[GlobalPos, Set[GlobalPos]]) = {
 
-    val (forwardPos, outputFields) = node.getUDF match {
-      case None                     => (Set[GlobalPos](), Set[OutputField]())
-      case Some(udf: UDF0[_])       => (Set[GlobalPos](), udf.outputFields.toSet)
-      case Some(udf: UDF1[_, _])    => (udf.forwardSet, udf.outputFields.toSet)
-      case Some(udf: UDF2[_, _, _]) => (udf.leftForwardSet ++ udf.rightForwardSet, udf.outputFields.toSet)
-    }
+    visited.contains(node) match {
 
-    // resolve GlobalPos references to the instance that holds the actual index 
-    val forwards = forwardPos map { _.resolve }
-    val outputs = outputFields filter { _.isUsed } map { _.globalPos.resolve }
+      case true => (visited, conflicts)
 
-    val newConflicts = forwards.foldLeft(conflicts) {
-      case (conflicts, fPos) => {
-        // add all other forwards and all outputs to this forward's conflict set
-        val fConflicts = conflicts.getOrElse(fPos, Set()) ++ (forwards filterNot { _ == fPos }) ++ outputs
-        conflicts.updated(fPos, fConflicts)
-      }
-    }
+      case false => {
 
-    outputs.foldLeft(newConflicts) {
-      case (conflicts, oPos) => {
-        // add all forwards to this output's conflict set
-        val oConflicts = conflicts.getOrElse(oPos, Set()) ++ forwards
-        conflicts.updated(oPos, oConflicts)
+        val (forwardPos, outputFields) = node.getUDF match {
+          case None                     => (Set[GlobalPos](), Set[OutputField]())
+          case Some(udf: UDF0[_])       => (Set[GlobalPos](), udf.outputFields.toSet)
+          case Some(udf: UDF1[_, _])    => (udf.forwardSet, udf.outputFields.toSet)
+          case Some(udf: UDF2[_, _, _]) => (udf.leftForwardSet ++ udf.rightForwardSet, udf.outputFields.toSet)
+        }
+
+        // resolve GlobalPos references to the instance that holds the actual index 
+        val forwards = forwardPos map { _.resolve }
+        val outputs = outputFields filter { _.isUsed } map { _.globalPos.resolve }
+
+        val newConflictsF = forwards.foldLeft(conflicts) {
+          case (conflicts, fPos) => {
+            // add all other forwards and all outputs to this forward's conflict set
+            val fConflicts = conflicts.getOrElse(fPos, Set()) ++ (forwards filterNot { _ == fPos }) ++ outputs
+            conflicts.updated(fPos, fConflicts)
+          }
+        }
+
+        val newConflictsO = outputs.foldLeft(newConflictsF) {
+          case (conflicts, oPos) => {
+            // add all forwards to this output's conflict set
+            val oConflicts = conflicts.getOrElse(oPos, Set()) ++ forwards
+            conflicts.updated(oPos, oConflicts)
+          }
+        }
+
+        node.getIncomingConnections.map(_.getSourcePact).foldLeft((visited + node, newConflictsO)) {
+          case ((visited, conflicts), node) => findConflicts(node, visited, conflicts)
+        }
       }
     }
   }
@@ -90,7 +83,7 @@ object GlobalSchemaCompressor {
    * Assign indexes bottom-up, giving lower values to fields with larger conflict sets.
    * This ordering should do a decent job of minimizing the number of gaps between fields.
    */
-  private def compressSchema(conflicts: Map[GlobalPos, Set[GlobalPos]])(visited: Set[OptimizerNode], node: OptimizerNode): Set[OptimizerNode] = {
+  private def compactSchema(conflicts: Map[GlobalPos, Set[GlobalPos]])(visited: Set[OptimizerNode], node: OptimizerNode): Set[OptimizerNode] = {
 
     visited.contains(node) match {
 
@@ -98,7 +91,7 @@ object GlobalSchemaCompressor {
 
       case false => {
 
-        node.getIncomingConnections.map(_.getSourcePact).foldLeft(visited)(compressSchema(conflicts))
+        val newVisited = node.getIncomingConnections.map(_.getSourcePact).foldLeft(visited + node)(compactSchema(conflicts))
 
         val outputFields = node.getUDF match {
           case None      => Seq[OutputField]()
@@ -130,7 +123,7 @@ object GlobalSchemaCompressor {
           case _                        =>
         }
 
-        visited + node
+        newVisited
       }
     }
   }
@@ -145,9 +138,11 @@ object GlobalSchemaCompressor {
 
   private def updateDiscards(outputs: Set[Int], discardSets: mutable.Set[GlobalPos]*): Unit = {
     for (discardSet <- discardSets) {
-      for (discard <- discardSet if outputs.contains(discard.getValue)) {
-        discardSet.remove(discard)
-      }
+
+      val overwrites = discardSet filter { pos => outputs.contains(pos.getValue) } toList
+
+      for (pos <- overwrites)
+        discardSet.remove(pos)
     }
   }
 }
