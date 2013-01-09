@@ -12,19 +12,21 @@ import eu.stratosphere.pact.compiler.plan._
 trait GlobalSchemaOptimizer extends OptimizerPostPass {
 
   import Extractors._
-  import EdgeFieldSets.EdgeFieldSet
+  import EdgeSchemas.EdgeSchema
 
   override def postPass(plan: OptimizedPlan): Unit = {
 
     val (outputSets, outputPositions) = OutputSets.computeOutputSets(plan)
-    val edgeFieldSets = EdgeFieldSets.computeEdgeFieldSets(plan, outputSets)
+    val edgeSchemas = EdgeSchemas.computeEdgeSchemas(plan, outputSets)
 
-    plan.getDataSinks().foldLeft(Set[OptimizerNode]())(computeAmbientFieldSets(outputPositions, edgeFieldSets))
+    plan.getDataSinks().foldLeft(Set[OptimizerNode]())(computeAmbientFieldSets(outputPositions, edgeSchemas))
+    
+    GlobalSchemaCompressor.compressSchema(plan)
 
     GlobalSchemaPrinter.printSchema(plan)
   }
 
-  private def computeAmbientFieldSets(outputPositions: Map[Int, GlobalPos], edgeFieldSets: Map[PactConnection, EdgeFieldSet])(visited: Set[OptimizerNode], node: OptimizerNode): Set[OptimizerNode] = {
+  private def computeAmbientFieldSets(outputPositions: Map[Int, GlobalPos], edgeSchemas: Map[PactConnection, EdgeSchema])(visited: Set[OptimizerNode], node: OptimizerNode): Set[OptimizerNode] = {
 
     visited.contains(node) match {
 
@@ -39,9 +41,9 @@ trait GlobalSchemaOptimizer extends OptimizerPostPass {
 
           case CoGroupNode(udf, _, _, leftInput, rightInput) => {
 
-            val leftProvides = edgeFieldSets(leftInput).childProvides
-            val rightProvides = edgeFieldSets(rightInput).childProvides
-            val parentNeeds = edgeFieldSets(node.getOutConns.head).childProvides
+            val leftProvides = edgeSchemas(leftInput).childProvides
+            val rightProvides = edgeSchemas(rightInput).childProvides
+            val parentNeeds = edgeSchemas(node.getOutConns.head).childProvides
             val writes = udf.outputFields.toIndexSet
 
             populateSets(udf.leftForwardSet, udf.leftDiscardSet, leftProvides, parentNeeds, writes, outputPositions)
@@ -50,9 +52,9 @@ trait GlobalSchemaOptimizer extends OptimizerPostPass {
 
           case CrossNode(udf, leftInput, rightInput) => {
 
-            val leftProvides = edgeFieldSets(leftInput).childProvides
-            val rightProvides = edgeFieldSets(rightInput).childProvides
-            val parentNeeds = edgeFieldSets(node.getOutConns.head).childProvides
+            val leftProvides = edgeSchemas(leftInput).childProvides
+            val rightProvides = edgeSchemas(rightInput).childProvides
+            val parentNeeds = edgeSchemas(node.getOutConns.head).childProvides
             val writes = udf.outputFields.toIndexSet
 
             populateSets(udf.leftForwardSet, udf.leftDiscardSet, leftProvides, parentNeeds, writes, outputPositions)
@@ -61,9 +63,9 @@ trait GlobalSchemaOptimizer extends OptimizerPostPass {
 
           case JoinNode(udf, _, _, leftInput, rightInput) => {
 
-            val leftProvides = edgeFieldSets(leftInput).childProvides
-            val rightProvides = edgeFieldSets(rightInput).childProvides
-            val parentNeeds = edgeFieldSets(node.getOutConns.head).childProvides
+            val leftProvides = edgeSchemas(leftInput).childProvides
+            val rightProvides = edgeSchemas(rightInput).childProvides
+            val parentNeeds = edgeSchemas(node.getOutConns.head).childProvides
             val writes = udf.outputFields.toIndexSet
 
             populateSets(udf.leftForwardSet, udf.leftDiscardSet, leftProvides, parentNeeds, writes, outputPositions)
@@ -72,23 +74,23 @@ trait GlobalSchemaOptimizer extends OptimizerPostPass {
 
           case MapNode(udf, input) => {
 
-            val inputProvides = edgeFieldSets(input).childProvides
-            val parentNeeds = edgeFieldSets(node.getOutConns.head).childProvides
+            val inputProvides = edgeSchemas(input).childProvides
+            val parentNeeds = edgeSchemas(node.getOutConns.head).childProvides
             val writes = udf.outputFields.toIndexSet
 
             populateSets(udf.forwardSet, udf.discardSet, inputProvides, parentNeeds, writes, outputPositions)
           }
 
           case ReduceNode(udf, _, input) => {
-            val inputProvides = edgeFieldSets(input).childProvides
-            val parentNeeds = edgeFieldSets(node.getOutConns.head).childProvides
+            val inputProvides = edgeSchemas(input).childProvides
+            val parentNeeds = edgeSchemas(node.getOutConns.head).childProvides
             val writes = udf.outputFields.toIndexSet
 
             populateSets(udf.forwardSet, udf.discardSet, inputProvides, parentNeeds, writes, outputPositions)
           }
         }
 
-        node.getIncomingConnections.map(_.getSourcePact).foldLeft(visited + node)(computeAmbientFieldSets(outputPositions, edgeFieldSets))
+        node.getIncomingConnections.map(_.getSourcePact).foldLeft(visited + node)(computeAmbientFieldSets(outputPositions, edgeSchemas))
       }
     }
   }

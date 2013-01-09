@@ -90,6 +90,12 @@ class GlobalPos extends Serializable {
     case Right(target)  => Some(target)
   }
 
+  def resolve: GlobalPos = pos match {
+    case null          => this
+    case Left(_)       => this
+    case Right(target) => target.resolve
+  }
+
   def isUnknown = pos == null
   def isIndex = (pos != null) && pos.isLeft
   def isReference = (pos != null) && pos.isRight

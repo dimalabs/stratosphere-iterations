@@ -7,44 +7,44 @@ import eu.stratosphere.pact4s.common.contracts._
 
 import eu.stratosphere.pact.compiler.plan._
 
-object EdgeFieldSets {
+object EdgeSchemas {
 
   import Extractors._
 
-  case class EdgeFieldSet(parentNeeds: Set[Int], childProvides: Set[Int] = Set())
+  case class EdgeSchema(parentNeeds: Set[Int], childProvides: Set[Int] = Set())
 
-  def computeEdgeFieldSets(plan: OptimizedPlan, outputSets: Map[OptimizerNode, Set[Int]]): Map[PactConnection, EdgeFieldSet] = {
+  def computeEdgeSchemas(plan: OptimizedPlan, outputSets: Map[OptimizerNode, Set[Int]]): Map[PactConnection, EdgeSchema] = {
     
-    plan.getDataSinks().foldLeft(Map[PactConnection, EdgeFieldSet]())(computeEdgeFieldSets(outputSets))
+    plan.getDataSinks().foldLeft(Map[PactConnection, EdgeSchema]())(computeEdgeSchemas(outputSets))
   }
 
-  private def computeEdgeFieldSets(outputSets: Map[OptimizerNode, Set[Int]])(edgeFieldSets: Map[PactConnection, EdgeFieldSet], node: OptimizerNode): Map[PactConnection, EdgeFieldSet] = {
+  private def computeEdgeSchemas(outputSets: Map[OptimizerNode, Set[Int]])(edgeSchemas: Map[PactConnection, EdgeSchema], node: OptimizerNode): Map[PactConnection, EdgeSchema] = {
 
     // breadth-first traversal: parentNeeds will be None if any parent has not yet been visited
     val parentNeeds = node.getOutConns.foldLeft(Option(Set[Int]())) {
       case (None, _)           => None
-      case (Some(acc), parent) => edgeFieldSets.get(parent) map { acc ++ _.parentNeeds }
+      case (Some(acc), parent) => edgeSchemas.get(parent) map { acc ++ _.parentNeeds }
     }
 
     parentNeeds match {
-      case None                => edgeFieldSets
-      case Some(parentNeeds) => computeEdgeFieldSets(node, parentNeeds, outputSets, edgeFieldSets)
+      case None                => edgeSchemas
+      case Some(parentNeeds) => computeEdgeSchemas(node, parentNeeds, outputSets, edgeSchemas)
     }
   }
 
-  private def computeEdgeFieldSets(node: OptimizerNode, parentNeeds: Set[Int], outputSets: Map[OptimizerNode, Set[Int]], edgeFieldSets: Map[PactConnection, EdgeFieldSet]): Map[PactConnection, EdgeFieldSet] = {
+  private def computeEdgeSchemas(node: OptimizerNode, parentNeeds: Set[Int], outputSets: Map[OptimizerNode, Set[Int]], edgeSchemas: Map[PactConnection, EdgeSchema]): Map[PactConnection, EdgeSchema] = {
 
-    def updateEdges(needs: (PactConnection, Set[Int])*): Map[PactConnection, EdgeFieldSet] = {
+    def updateEdges(needs: (PactConnection, Set[Int])*): Map[PactConnection, EdgeSchema] = {
 
-      val updParents = node.getOutConns.foldLeft(edgeFieldSets) { (edgeFieldSets, parent) =>
-        val entry = edgeFieldSets(parent)
-        edgeFieldSets.updated(parent, entry.copy(childProvides = parentNeeds))
+      val updParents = node.getOutConns.foldLeft(edgeSchemas) { (edgeSchemas, parent) =>
+        val entry = edgeSchemas(parent)
+        edgeSchemas.updated(parent, entry.copy(childProvides = parentNeeds))
       }
 
       needs.foldLeft(updParents) {
-        case (edgeFieldSets, (inConn, needs)) => {
-          val updInConn = edgeFieldSets.updated(inConn, EdgeFieldSet(needs))
-          computeEdgeFieldSets(outputSets)(updInConn, inConn.getSourcePact)
+        case (edgeSchemas, (inConn, needs)) => {
+          val updInConn = edgeSchemas.updated(inConn, EdgeSchema(needs))
+          computeEdgeSchemas(outputSets)(updInConn, inConn.getSourcePact)
         }
       }
     }
@@ -55,8 +55,11 @@ object EdgeFieldSets {
       val writeFields = udf.outputFields filter { _.isUsed }
       val unused = writeFields filterNot { f => parentNeeds.contains(f.globalPos.getValue) }
       
-      for (field <- unused)
+      for (field <- unused) {
         field.isUsed = false
+        if (field.globalPos.isIndex)
+          field.globalPos.setIndex(Int.MinValue)
+      }
     }
 
     node match {

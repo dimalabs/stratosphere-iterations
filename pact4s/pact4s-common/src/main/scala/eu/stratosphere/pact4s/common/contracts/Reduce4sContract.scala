@@ -27,13 +27,11 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputKeyedContract[Key, In
   val userCombineCode: Option[Iterator[In] => In]
   val userReduceCode: Iterator[In] => Out
   
-  private def ignoredKeys: Set[Int] = {
-    val ignoredInputs = udf.inputFields.filterNot(_.isUsed).map(_.globalPos.getValue).toSet
-    key.selectedFields.toIndexSet.intersect(ignoredInputs)
-  }
+  private def combinerOutputs: Set[Int] = udf.inputFields.filter(_.isUsed).map(_.globalPos.getValue).toSet
+  private def forwardedKeys: Set[Int] = key.selectedFields.toIndexSet.diff(combinerOutputs)
   
-  def combineForwardSet: Set[Int] = udf.forwardSet.map(_.getValue).union(ignoredKeys).toSet
-  def combineDiscardSet: Set[Int] = udf.discardSet.map(_.getValue).diff(ignoredKeys).diff(udf.inputFields.toIndexSet).toSet
+  def combineForwardSet: Set[Int] = udf.forwardSet.map(_.getValue).diff(combinerOutputs).union(forwardedKeys).toSet  
+  def combineDiscardSet: Set[Int] =  udf.discardSet.map(_.getValue).diff(combinerOutputs).diff(forwardedKeys).toSet
 
   private def combinableAnnotation = userCombineCode map { _ => Annotations.getCombinable() } toSeq
   //private def getAllReadFields = (combineUDF.getReadFields ++ reduceUDF.getReadFields).distinct.toArray

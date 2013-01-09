@@ -102,7 +102,7 @@ object GlobalSchemaPrinter {
                 Seq(("", key)),
                 Seq(("", udf.inputFields)),
                 Seq(("", contract.combineForwardSet.toArray)),
-                Seq(("", contract.combineDiscardSet.toArray.toArray)),
+                Seq(("", contract.combineDiscardSet.toArray)),
                 udf.inputFields
               )
             }
