@@ -1,6 +1,4 @@
 /**
- * *********************************************************************************************************************
- *
  * Copyright (C) 2010 by the Stratosphere project (http://stratosphere.eu)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -11,8 +9,6 @@
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
- *
- * ********************************************************************************************************************
  */
 
 package eu.stratosphere.pact4s.examples.relational
@@ -61,17 +57,21 @@ class TPCHQuery3(ordersInput: String, lineItemsInput: String, ordersOutput: Stri
 
   override def outputs = output <~ prioritizedOrders
 
-  orders.avgBytesPerRecord(44).uniqueKey(_.orderId)
-  lineItems.avgBytesPerRecord(28)
   filteredOrders.usesOnly { o => (o.status, o.year, o.orderPriority) }
-  filteredOrders.avgBytesPerRecord(44).avgRecordsEmittedPerCall(0.05f).uniqueKey(_.orderId)
+
   prioritizedItems.left.ignores { o => o }
   prioritizedItems.left.preserves { o => (o.orderId, o.shipPriority) } as { po => (po.orderId, po.shipPriority) }
+  
   prioritizedItems.right.ignores { li => li }
   prioritizedItems.right.preserves { li => li.extendedPrice } as { po => po.revenue }
-  prioritizedItems.avgBytesPerRecord(32)
+
   prioritizedOrders.usesOnly { po => po.revenue }
   prioritizedOrders.preserves { pi => (pi.orderId, pi.shipPriority) } as { pi => (pi.orderId, pi.shipPriority) }
+
+  orders.avgBytesPerRecord(44).uniqueKey(_.orderId)
+  lineItems.avgBytesPerRecord(28)
+  filteredOrders.avgBytesPerRecord(44).avgRecordsEmittedPerCall(0.05f).uniqueKey(_.orderId)
+  prioritizedItems.avgBytesPerRecord(32)
   prioritizedOrders.avgBytesPerRecord(32).avgRecordsEmittedPerCall(1)
 
   case class Order(orderId: Int, status: Char, year: Int, month: Int, day: Int, orderPriority: String, shipPriority: Int)
