@@ -24,16 +24,19 @@ import eu.stratosphere.nephele.template.GenericInputSplit;
 
 case class BinaryInputParameters[Out](
   val serializer: UDTSerializer[Out],
+  val outputLength: Int,
   val userFunction: DataInput => Out)
   extends StubParameters
 
 case class DelimetedInputParameters[Out](
   val serializer: UDTSerializer[Out],
+  val outputLength: Int,
   val userFunction: (Array[Byte], Int, Int) => Out)
   extends StubParameters
 
 case class FixedLengthInputParameters[Out](
   val serializer: UDTSerializer[Out],
+  val outputLength: Int,
   val userFunction: (Array[Byte], Int) => Out)
   extends StubParameters
 
@@ -41,12 +44,14 @@ case class ExternalProcessFixedLengthInputParameters[Out](
   val serializer: UDTSerializer[Out],
   val externalProcessCommand: Int => String,
   val numSplits: Option[Int],
+  val outputLength: Int,
   val userFunction: (Array[Byte], Int) => Out)
   extends StubParameters
 
 class BinaryInput4sStub[Out] extends BinaryInputFormat {
 
   private var serializer: UDTSerializer[Out] = _
+  private var outputLength: Int = _
   private var userFunction: DataInput => Out = _
 
   override def configure(config: Configuration) {
@@ -54,12 +59,14 @@ class BinaryInput4sStub[Out] extends BinaryInputFormat {
     val parameters = StubParameters.getValue[BinaryInputParameters[Out]](config)
 
     this.serializer = parameters.serializer
+    this.outputLength = parameters.outputLength
     this.userFunction = parameters.userFunction
   }
 
   override def deserialize(record: PactRecord, source: DataInput) = {
 
     val output = userFunction.apply(source)
+    record.setNumFields(outputLength)
     serializer.serialize(output, record)
   }
 }
@@ -67,6 +74,7 @@ class BinaryInput4sStub[Out] extends BinaryInputFormat {
 class DelimetedInput4sStub[Out] extends DelimitedInputFormat {
 
   private var serializer: UDTSerializer[Out] = _
+  private var outputLength: Int = _
   private var userFunction: (Array[Byte], Int, Int) => Out = _
 
   override def configure(config: Configuration) {
@@ -74,6 +82,7 @@ class DelimetedInput4sStub[Out] extends DelimitedInputFormat {
     val parameters = StubParameters.getValue[DelimetedInputParameters[Out]](config)
 
     this.serializer = parameters.serializer
+    this.outputLength = parameters.outputLength
     this.userFunction = parameters.userFunction
   }
 
@@ -81,8 +90,10 @@ class DelimetedInput4sStub[Out] extends DelimitedInputFormat {
 
     val output = userFunction.apply(source, offset, numBytes)
 
-    if (output != null)
+    if (output != null) {
+      record.setNumFields(outputLength)
       serializer.serialize(output, record)
+    }
 
     return output != null
   }
@@ -91,6 +102,7 @@ class DelimetedInput4sStub[Out] extends DelimitedInputFormat {
 class FixedLengthInput4sStub[Out] extends FixedLengthInputFormat {
 
   private var serializer: UDTSerializer[Out] = _
+  private var outputLength: Int = _
   private var userFunction: (Array[Byte], Int) => Out = _
 
   override def configure(config: Configuration) {
@@ -98,6 +110,7 @@ class FixedLengthInput4sStub[Out] extends FixedLengthInputFormat {
     val parameters = StubParameters.getValue[FixedLengthInputParameters[Out]](config)
 
     this.serializer = parameters.serializer
+    this.outputLength = parameters.outputLength
     this.userFunction = parameters.userFunction
   }
 
@@ -105,9 +118,11 @@ class FixedLengthInput4sStub[Out] extends FixedLengthInputFormat {
 
     val output = userFunction.apply(source, startPos)
 
-    if (output != null)
+    if (output != null) {
+      record.setNumFields(outputLength)
       serializer.serialize(output, record)
-
+    }
+    
     return output != null
   }
 }
@@ -117,6 +132,7 @@ class ExternalProcessFixedLengthInput4sStub[Out] extends ExternalProcessFixedLen
   private var serializer: UDTSerializer[Out] = _
   private var externalProcessCommand: Int => String = _
   private var numSplits: Int = _
+  private var outputLength: Int = _
   private var userFunction: (Array[Byte], Int) => Out = _
 
   override def configure(config: Configuration) {
@@ -126,6 +142,7 @@ class ExternalProcessFixedLengthInput4sStub[Out] extends ExternalProcessFixedLen
     this.serializer = parameters.serializer
     this.externalProcessCommand = parameters.externalProcessCommand
     this.numSplits = math.max(parameters.numSplits.getOrElse(1), 1)
+    this.outputLength = parameters.outputLength
     this.userFunction = parameters.userFunction
   }
 
@@ -137,8 +154,10 @@ class ExternalProcessFixedLengthInput4sStub[Out] extends ExternalProcessFixedLen
 
     val output = userFunction.apply(source, startPos)
 
-    if (output != null)
+    if (output != null) {
+      record.setNumFields(outputLength)
       serializer.serialize(output, record)
+    }
 
     return output != null
   }

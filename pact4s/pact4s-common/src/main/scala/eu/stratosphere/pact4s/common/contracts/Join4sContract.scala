@@ -40,8 +40,8 @@ trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputKeyedContr
 
     val stubParameters = new JoinParameters(
       udf.getLeftInputDeserializer, udf.getLeftDiscardIndexArray, 
-      udf.getRightInputDeserializer, udf.getRightDiscardIndexArray, 
-      udf.getOutputSerializer, userCode
+      udf.getRightInputDeserializer, udf.getRightForwardIndexArray, 
+      udf.getOutputSerializer, udf.getOutputLength, userCode
     )
     stubParameters.persist(this)
   }

@@ -23,8 +23,9 @@ case class CrossParameters[LeftIn, RightIn, Out](
   val leftDeserializer: UDTSerializer[LeftIn],
   val leftDiscard: Array[Int],
   val rightDeserializer: UDTSerializer[RightIn],
-  val rightDiscard: Array[Int],
+  val rightForward: Array[Int],
   val serializer: UDTSerializer[Out],
+  val outputLength: Int,
   val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]])
   extends StubParameters
 
@@ -33,8 +34,9 @@ class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub {
   private var leftDeserializer: UDTSerializer[LeftIn] = _
   private var leftDiscard: Array[Int] = _
   private var rightDeserializer: UDTSerializer[RightIn] = _
-  private var rightDiscard: Array[Int] = _
+  private var rightForward: Array[Int] = _
   private var serializer: UDTSerializer[Out] = _
+  private var outputLength: Int = _
 
   private var userFunction: (PactRecord, PactRecord, Collector[PactRecord]) => Unit = _
 
@@ -43,10 +45,11 @@ class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub {
     val parameters = StubParameters.getValue[CrossParameters[LeftIn, RightIn, Out]](config)
 
     this.leftDeserializer = parameters.leftDeserializer
-    this.leftDiscard = parameters.leftDiscard
+    this.leftDiscard = parameters.leftDiscard.filter(_ < parameters.outputLength)
     this.rightDeserializer = parameters.rightDeserializer
-    this.rightDiscard = parameters.rightDiscard
+    this.rightForward = parameters.rightForward
     this.serializer = parameters.serializer
+    this.outputLength = parameters.outputLength
 
     this.userFunction = parameters.userFunction.fold(doCross _, doFlatCross _)
   }
@@ -59,13 +62,12 @@ class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub {
     val right = rightDeserializer.deserialize(rightRecord)
     val output = userFunction.apply(left, right)
 
+    leftRecord.setNumFields(outputLength)
+
     for (field <- leftDiscard)
       leftRecord.setNull(field)
 
-    for (field <- rightDiscard)
-      rightRecord.setNull(field)
-
-    leftRecord.unionFields(rightRecord)
+    leftRecord.copyFrom(rightRecord, rightForward, rightForward)
 
     serializer.serialize(output, leftRecord)
     out.collect(leftRecord)
@@ -79,13 +81,12 @@ class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub {
 
     if (output.nonEmpty) {
 
+      leftRecord.setNumFields(outputLength)
+
       for (field <- leftDiscard)
         leftRecord.setNull(field)
 
-      for (field <- rightDiscard)
-        rightRecord.setNull(field)
-
-      leftRecord.unionFields(rightRecord)
+      leftRecord.copyFrom(rightRecord, rightForward, rightForward)
 
       for (item <- output) {
         serializer.serialize(item, leftRecord)

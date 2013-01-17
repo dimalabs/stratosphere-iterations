@@ -28,8 +28,10 @@ case class ReduceParameters[In, Out](
   val serializer: UDTSerializer[Out],
   val combineFunction: Option[Iterator[In] => In],
   val combineForward: Array[Int],
+  val combineOutputLength: Int,
   val reduceFunction: Iterator[In] => Out,
-  val reduceForward: Array[Int])
+  val reduceForward: Array[Int],
+  val reduceOutputLength: Int)
   extends StubParameters
 
 class Reduce4sStub[In, Out] extends ReduceStub {
@@ -51,6 +53,9 @@ class Reduce4sStub[In, Out] extends ReduceStub {
     super.open(config)
     val parameters = StubParameters.getValue[ReduceParameters[In, Out]](config)
 
+    this.combineRecord.setNumFields(parameters.combineOutputLength)
+    this.reduceRecord.setNumFields(parameters.reduceOutputLength)
+    
     this.combineIterator = parameters.combineFunction map { _ => new DeserializingIterator(parameters.deserializer) } getOrElse null
     this.combineFunction = parameters.combineFunction getOrElse null
     this.combineSerializer = parameters.combineFunction map { _ => parameters.deserializer } getOrElse null

@@ -80,7 +80,7 @@ case class BinaryDataSourceFormat[Out: UDT](val readFunction: DataInput => Out, 
 
   override def persistConfiguration(config: Configuration) {
 
-    val stubParameters = BinaryInputParameters(udf.getOutputSerializer, readFunction)
+    val stubParameters = BinaryInputParameters(udf.getOutputSerializer, udf.getOutputLength, readFunction)
     stubParameters.persist(config)
 
     if (blockSize.isDefined)
@@ -108,7 +108,7 @@ case class DelimetedDataSourceFormat[Out: UDT](val readFunction: (Array[Byte], I
 
   override def persistConfiguration(config: Configuration) {
 
-    val stubParameters = DelimetedInputParameters(udf.getOutputSerializer, readFunction)
+    val stubParameters = DelimetedInputParameters(udf.getOutputSerializer, udf.getOutputLength, readFunction)
     stubParameters.persist(config)
 
     if (delimeter.isDefined)
@@ -173,7 +173,7 @@ case class FixedLengthDataSourceFormat[Out: UDT](val readFunction: (Array[Byte],
   override val stub = classOf[FixedLengthInput4sStub[Out]]
 
   override def persistConfiguration(config: Configuration) {
-    val stubParameters = FixedLengthInputParameters(udf.getOutputSerializer, readFunction)
+    val stubParameters = FixedLengthInputParameters(udf.getOutputSerializer, udf.getOutputLength, readFunction)
     stubParameters.persist(config)
 
     config.setInteger(FixedLengthInputFormat.RECORDLENGTH_PARAMETER_KEY, recordLength)
@@ -187,7 +187,7 @@ case class ExternalProcessFixedLengthDataSourceFormat[Out: UDT](val readFunction
   override val stub = classOf[ExternalProcessFixedLengthInput4sStub[Out]]
 
   override def persistConfiguration(config: Configuration) {
-    val stubParameters = ExternalProcessFixedLengthInputParameters(udf.getOutputSerializer, externalProcessCommand, numSplits, readFunction)
+    val stubParameters = ExternalProcessFixedLengthInputParameters(udf.getOutputSerializer, externalProcessCommand, numSplits, udf.getOutputLength, readFunction)
     stubParameters.persist(config)
 
     config.setInteger(ExternalProcessFixedLengthInputFormat.RECORDLENGTH_PARAMETER_KEY, recordLength)

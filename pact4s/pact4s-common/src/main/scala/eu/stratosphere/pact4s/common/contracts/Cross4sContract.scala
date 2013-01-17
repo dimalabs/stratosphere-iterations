@@ -40,8 +40,8 @@ trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract[LeftI
 
     val stubParameters = new CrossParameters(
       udf.getLeftInputDeserializer, udf.getLeftDiscardIndexArray, 
-      udf.getRightInputDeserializer, udf.getRightDiscardIndexArray, 
-      udf.getOutputSerializer, userCode
+      udf.getRightInputDeserializer, udf.getRightForwardIndexArray, 
+      udf.getOutputSerializer, udf.getOutputLength, userCode
     )
     stubParameters.persist(this)
   }

@@ -23,6 +23,15 @@ abstract class UDF[R: UDT] extends Serializable {
 
   def getOutputSerializer = outputUDT.getSerializer(outputFields.toSerializerIndexArray)
 
+  def getOutputLength = {
+    val indexes = outputFields.toIndexSet
+    if (indexes.isEmpty) {
+      0 
+    } else {
+      indexes.max + 1
+    }
+  }
+
   def allocateOutputGlobalIndexes(startPos: Int): Int = {
 
     outputFields.setGlobalized()
@@ -76,6 +85,11 @@ class UDF1[T: UDT, R: UDT] extends UDF[R] {
   def getForwardIndexArray = forwardSet.map(_.getValue).toArray
   def getDiscardIndexArray = discardSet.map(_.getValue).toArray
 
+  override def getOutputLength = {
+    val forwardMax = if (forwardSet.isEmpty) -1 else forwardSet.map(_.getValue).max
+    math.max(super.getOutputLength, forwardMax + 1)
+  }
+
   def markInputFieldUnread(localPos: Int): Unit = {
     inputFields(localPos).isUsed = false
   }
@@ -106,6 +120,12 @@ class UDF2[T1: UDT, T2: UDT, R: UDT] extends UDF[R] {
   def getRightInputDeserializer = rightInputUDT.getSerializer(rightInputFields.toSerializerIndexArray)
   def getRightForwardIndexArray = rightForwardSet.map(_.getValue).toArray
   def getRightDiscardIndexArray = rightDiscardSet.map(_.getValue).toArray
+
+  override def getOutputLength = {
+    val leftForwardMax = if (leftForwardSet.isEmpty) -1 else leftForwardSet.map(_.getValue).max
+    val rightForwardMax = if (rightForwardSet.isEmpty) -1 else rightForwardSet.map(_.getValue).max
+    math.max(super.getOutputLength, math.max(leftForwardMax, rightForwardMax) + 1)
+  }
 
   private def getInputField(localPos: Either[Int, Int]): InputField = localPos match {
     case Left(pos)  => leftInputFields(pos)

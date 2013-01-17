@@ -23,6 +23,7 @@ case class MapParameters[In, Out](
   val deserializer: UDTSerializer[In],
   val serializer: UDTSerializer[Out],
   val discard: Array[Int],
+  val outputLength: Int,
   val userFunction: Either[In => Out, In => Iterator[Out]])
   extends StubParameters
 
@@ -31,6 +32,7 @@ class Map4sStub[In, Out] extends MapStub {
   private var deserializer: UDTSerializer[In] = _
   private var serializer: UDTSerializer[Out] = _
   private var discard: Array[Int] = _
+  private var outputLength: Int = _
 
   private var userFunction: (PactRecord, Collector[PactRecord]) => Unit = _
 
@@ -40,7 +42,8 @@ class Map4sStub[In, Out] extends MapStub {
 
     this.deserializer = parameters.deserializer
     this.serializer = parameters.serializer
-    this.discard = parameters.discard
+    this.discard = parameters.discard.filter(_ < parameters.outputLength)
+    this.outputLength = parameters.outputLength
 
     this.userFunction = parameters.userFunction.fold(doMap _, doFlatMap _)
   }
@@ -51,6 +54,8 @@ class Map4sStub[In, Out] extends MapStub {
 
     val input = deserializer.deserialize(record)
     val output = userFunction.apply(input)
+
+    record.setNumFields(outputLength)
 
     for (field <- discard)
       record.setNull(field)
@@ -65,6 +70,8 @@ class Map4sStub[In, Out] extends MapStub {
     val output = userFunction.apply(input)
 
     if (output.nonEmpty) {
+
+      record.setNumFields(outputLength)
 
       for (field <- discard)
         record.setNull(field)

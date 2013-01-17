@@ -37,7 +37,8 @@ trait Copy4sContract[In] extends Pact4sOneInputContract[In, In] { this: MapContr
     val stubParameters = new CopyParameters(
       udf.inputFields.toSerializerIndexArray,
       udf.outputFields.toSerializerIndexArray,
-      udf.getDiscardIndexArray
+      udf.getDiscardIndexArray, 
+      udf.getOutputLength
     )
     stubParameters.persist(this)
   }

@@ -28,6 +28,12 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputKeyedContract[Key, In
   
   def combineForwardSet: Set[Int] = udf.forwardSet.map(_.getValue).diff(combinerOutputs).union(forwardedKeys).toSet  
   def combineDiscardSet: Set[Int] =  udf.discardSet.map(_.getValue).diff(combinerOutputs).diff(forwardedKeys).toSet
+  
+  private def combineOutputLength = {
+    val outMax = if (combinerOutputs.isEmpty) -1 else combinerOutputs.max
+    val forwardMax = if (combineForwardSet.isEmpty) -1 else combineForwardSet.max
+    math.max(outMax, forwardMax) + 1
+  }
 
   private def combinableAnnotation = userCombineCode map { _ => Annotations.getCombinable() } toSeq
   //private def getAllReadFields = (combineUDF.getReadFields ++ reduceUDF.getReadFields).distinct.toArray
@@ -47,8 +53,8 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputKeyedContract[Key, In
     
     val stubParameters = new ReduceParameters(
       udf.getInputDeserializer, udf.getOutputSerializer, 
-      userCombineCode, combineForwardSet.toArray, 
-      userReduceCode,  udf.getForwardIndexArray
+      userCombineCode, combineForwardSet.toArray, combineOutputLength, 
+      userReduceCode,  udf.getForwardIndexArray, udf.getOutputLength
     )
     stubParameters.persist(this)
   }

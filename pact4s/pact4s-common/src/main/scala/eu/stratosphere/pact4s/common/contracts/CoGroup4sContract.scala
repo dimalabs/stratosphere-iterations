@@ -41,7 +41,7 @@ trait CoGroup4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputKeyedCo
     val stubParameters = CoGroupParameters(
       udf.getLeftInputDeserializer, udf.getLeftForwardIndexArray,
       udf.getRightInputDeserializer, udf.getRightForwardIndexArray,
-      udf.getOutputSerializer, userCode
+      udf.getOutputSerializer, udf.getOutputLength, userCode
     )
     stubParameters.persist(this)
   }

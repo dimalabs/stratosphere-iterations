@@ -43,6 +43,7 @@ trait Map4sContract[In, Out] extends Pact4sOneInputContract[In, Out] { this: Map
       udf.getInputDeserializer, 
       udf.getOutputSerializer, 
       udf.getDiscardIndexArray, 
+      udf.getOutputLength, 
       userCode
     )
     stubParameters.persist(this)

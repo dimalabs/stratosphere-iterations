@@ -21,7 +21,8 @@ import eu.stratosphere.nephele.configuration.Configuration
 case class CopyParameters(
   val from: Array[Int],
   val to: Array[Int],
-  val discard: Array[Int])
+  val discard: Array[Int],
+  val outputLength: Int)
   extends StubParameters
 
 class Copy4sStub extends MapStub {
@@ -29,6 +30,7 @@ class Copy4sStub extends MapStub {
   private var from: Array[Int] = _
   private var to: Array[Int] = _
   private var discard: Array[Int] = _
+  private var outputLength: Int = _
 
   override def open(config: Configuration) = {
     super.open(config)
@@ -36,10 +38,13 @@ class Copy4sStub extends MapStub {
 
     this.from = parameters.from
     this.to = parameters.to
-    this.discard = parameters.discard
+    this.discard = parameters.discard.filter(_ < parameters.outputLength)
+    this.outputLength = parameters.outputLength
   }
 
   override def map(record: PactRecord, out: Collector[PactRecord]) = {
+
+    record.setNumFields(outputLength)
 
     record.copyFrom(record, from, to)
 

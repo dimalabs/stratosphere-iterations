@@ -28,6 +28,7 @@ case class CoGroupParameters[LeftIn, RightIn, Out](
   val rightDeserializer: UDTSerializer[RightIn],
   val rightForward: Array[Int],
   val serializer: UDTSerializer[Out],
+  val outputLength: Int,
   val userFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]])
   extends StubParameters
 
@@ -48,6 +49,8 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
   override def open(config: Configuration) = {
     super.open(config)
     val parameters = StubParameters.getValue[CoGroupParameters[LeftIn, RightIn, Out]](config)
+    
+    this.outputRecord.setNumFields(parameters.outputLength)
 
     this.leftIterator = new DeserializingIterator(parameters.leftDeserializer)
     this.leftForward = parameters.leftForward
