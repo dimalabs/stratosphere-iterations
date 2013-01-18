@@ -20,27 +20,18 @@ import eu.stratosphere.pact.common.contract._
 
 trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract[LeftIn, RightIn, Out] { this: CrossContract =>
 
-  val userCode: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
+  val userCode: CrossParameters.FunType[LeftIn, RightIn, Out]
 
   override def annotations = Seq(
     Annotations.getConstantFieldsFirst(udf.getLeftForwardIndexArray),
     Annotations.getConstantFieldsSecond(udf.getRightForwardIndexArray)
-  /*
-    Annotations.getReadsFirst(crossUDF.getReadFields._1),
-    Annotations.getReadsSecond(crossUDF.getReadFields._2),
-    Annotations.getExplicitModifications(crossUDF.getWriteFields),
-    Annotations.getImplicitOperationFirst(ImplicitOperationMode.Copy),
-    Annotations.getImplicitOperationSecond(ImplicitOperationMode.Copy),
-    Annotations.getExplicitProjectionsFirst(crossUDF.getDiscardedFields._1),
-    Annotations.getExplicitProjectionsSecond(crossUDF.getDiscardedFields._2)
-    */
   )
 
   override def persistConfiguration() = {
 
-    val stubParameters = new CrossParameters(
-      udf.getLeftInputDeserializer, udf.getLeftDiscardIndexArray, 
-      udf.getRightInputDeserializer, udf.getRightForwardIndexArray, 
+    val stubParameters = CrossParameters(
+      udf.getLeftInputDeserializer, udf.getLeftDiscardIndexArray.filter(_ < udf.getOutputLength),
+      udf.getRightInputDeserializer, udf.getRightForwardIndexArray,
       udf.getOutputSerializer, udf.getOutputLength, userCode
     )
     stubParameters.persist(this)
@@ -49,7 +40,7 @@ trait Cross4sContract[LeftIn, RightIn, Out] extends Pact4sTwoInputContract[LeftI
 
 object Cross4sContract {
 
-  def newBuilder[LeftIn, RightIn, Out] = CrossContract.builder(classOf[Cross4sStub[LeftIn, RightIn, Out]])
+  def newBuilderFor[LeftIn, RightIn, Out](mapFunction: CrossParameters.FunType[LeftIn, RightIn, Out]) = CrossContract.builder(CrossParameters.getStubFor(mapFunction))
 
   def unapply(c: Cross4sContract[_, _, _]) = Some((c.leftInput, c.rightInput))
 }

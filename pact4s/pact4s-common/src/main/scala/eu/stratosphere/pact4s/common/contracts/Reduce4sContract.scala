@@ -36,17 +36,10 @@ trait Reduce4sContract[Key, In, Out] extends Pact4sOneInputKeyedContract[Key, In
   }
 
   private def combinableAnnotation = userCombineCode map { _ => Annotations.getCombinable() } toSeq
-  //private def getAllReadFields = (combineUDF.getReadFields ++ reduceUDF.getReadFields).distinct.toArray
 
   override def annotations = combinableAnnotation ++ Seq(
     Annotations.getConstantFields(udf.getForwardIndexArray),
     Annotations.getOutCardBounds(Annotations.CARD_UNBOUNDED, Annotations.CARD_INPUTCARD)
-  /*
-    Annotations.getReads(getAllReadFields),
-    Annotations.getExplicitModifications(reduceUDF.getWriteFields),
-    Annotations.getImplicitOperation(ImplicitOperationMode.Projection),
-    Annotations.getExplicitCopies(reduceUDF.getForwardedFields),
-    */
   )
 
   override def persistConfiguration() = {

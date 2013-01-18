@@ -19,7 +19,6 @@ import eu.stratosphere.pact4s.common.analysis._
 
 import eu.stratosphere.pact.common.stubs._
 import eu.stratosphere.pact.common.`type`.PactRecord
-import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
 import eu.stratosphere.nephele.configuration.Configuration
 
 case class CoGroupParameters[LeftIn, RightIn, Out](
@@ -29,43 +28,52 @@ case class CoGroupParameters[LeftIn, RightIn, Out](
   val rightForward: Array[Int],
   val serializer: UDTSerializer[Out],
   val outputLength: Int,
-  val userFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]])
+  val userFunction: CoGroupParameters.FunType[LeftIn, RightIn, Out])
   extends StubParameters
 
-class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
+object CoGroupParameters {
+  
+  type FunType[LeftIn, RightIn, Out] = Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]
+  
+  def getStubFor[LeftIn, RightIn, Out](mapFunction: FunType[LeftIn, RightIn, Out]) = mapFunction match {
+    case Left(_)  => classOf[CoGroup4sStub[LeftIn, RightIn, Out]]
+    case Right(_) => classOf[FlatCoGroup4sStub[LeftIn, RightIn, Out]]
+  }
+}
 
-  private val outputRecord = new PactRecord()
+abstract sealed class CoGroup4sStubBase[LeftIn, RightIn, Out, R] extends CoGroupStub {
+  
+  protected val outputRecord = new PactRecord()
 
-  private var leftIterator: DeserializingIterator[LeftIn] = null
-  private var leftForward: Array[Int] = _
-
-  private var rightIterator: DeserializingIterator[RightIn] = null
-  private var rightForward: Array[Int] = _
-
-  private var serializer: UDTSerializer[Out] = _
-
-  private var userFunction: (JIterator[PactRecord], JIterator[PactRecord], Collector[PactRecord]) => Unit = _
+  protected var leftIterator: DeserializingIterator[LeftIn] = _
+  protected var leftForward: Array[Int] = _
+  protected var rightIterator: DeserializingIterator[RightIn] = _
+  protected var rightForward: Array[Int] = _
+  protected var serializer: UDTSerializer[Out] = _
+  protected var userFunction: (Iterator[LeftIn], Iterator[RightIn]) => R = _
 
   override def open(config: Configuration) = {
     super.open(config)
     val parameters = StubParameters.getValue[CoGroupParameters[LeftIn, RightIn, Out]](config)
-    
+
     this.outputRecord.setNumFields(parameters.outputLength)
 
     this.leftIterator = new DeserializingIterator(parameters.leftDeserializer)
     this.leftForward = parameters.leftForward
-
     this.rightIterator = new DeserializingIterator(parameters.rightDeserializer)
     this.rightForward = parameters.rightForward
-
     this.serializer = parameters.serializer
-
-    this.userFunction = parameters.userFunction.fold(doCoGroup _, doFlatCoGroup _)
+    this.userFunction = getUserFunction(parameters)
   }
+  
+  protected def getUserFunction(parameters: CoGroupParameters[LeftIn, RightIn, Out]): (Iterator[LeftIn], Iterator[RightIn]) => R
+}
 
-  override def coGroup(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector[PactRecord]) = userFunction(leftRecords, rightRecords, out)
+final class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroup4sStubBase[LeftIn, RightIn, Out, Out] {
 
-  private def doCoGroup(userFunction: (Iterator[LeftIn], Iterator[RightIn]) => Out)(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector[PactRecord]) = {
+  override def getUserFunction(parameters: CoGroupParameters[LeftIn, RightIn, Out]) = parameters.userFunction.left.get
+
+  override def coGroup(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
     val firstLeftRecord = leftIterator.initialize(leftRecords)
     outputRecord.copyFrom(firstLeftRecord, leftForward, leftForward)
@@ -78,8 +86,13 @@ class CoGroup4sStub[LeftIn, RightIn, Out] extends CoGroupStub {
     serializer.serialize(output, outputRecord)
     out.collect(outputRecord)
   }
+}
 
-  private def doFlatCoGroup(userFunction: (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out])(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector[PactRecord]) = {
+final class FlatCoGroup4sStub[LeftIn, RightIn, Out] extends CoGroup4sStubBase[LeftIn, RightIn, Out, Iterator[Out]] {
+
+  override def getUserFunction(parameters: CoGroupParameters[LeftIn, RightIn, Out]) = parameters.userFunction.right.get
+
+  override def coGroup(leftRecords: JIterator[PactRecord], rightRecords: JIterator[PactRecord], out: Collector[PactRecord]) = {
 
     val firstLeftRecord = leftIterator.initialize(leftRecords)
     outputRecord.copyFrom(firstLeftRecord, leftForward, leftForward)

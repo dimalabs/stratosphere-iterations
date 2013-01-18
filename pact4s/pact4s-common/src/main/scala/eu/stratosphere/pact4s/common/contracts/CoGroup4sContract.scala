@@ -20,28 +20,23 @@ import eu.stratosphere.pact.common.contract._
 
 trait CoGroup4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputKeyedContract[Key, LeftIn, RightIn, Out] { this: CoGroupContract =>
 
-  val userCode: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]
+  val userCode: CoGroupParameters.FunType[LeftIn, RightIn, Out]
 
   override def annotations = Seq(
     Annotations.getConstantFieldsFirst(udf.getLeftForwardIndexArray),
     Annotations.getConstantFieldsSecond(udf.getRightForwardIndexArray)
-  /*
-    Annotations.getReadsFirst(coGroupUDF.getReadFields._1),
-    Annotations.getReadsSecond(coGroupUDF.getReadFields._2),
-    Annotations.getExplicitModifications(coGroupUDF.getWriteFields),
-    Annotations.getImplicitOperationFirst(ImplicitOperationMode.Projection),
-    Annotations.getImplicitOperationSecond(ImplicitOperationMode.Projection),
-    Annotations.getExplicitCopiesFirst(coGroupUDF.getForwardedFields._1),
-    Annotations.getExplicitCopiesSecond(coGroupUDF.getForwardedFields._2)
-    */
   )
 
   override def persistConfiguration() = {
 
     val stubParameters = CoGroupParameters(
-      udf.getLeftInputDeserializer, udf.getLeftForwardIndexArray,
-      udf.getRightInputDeserializer, udf.getRightForwardIndexArray,
-      udf.getOutputSerializer, udf.getOutputLength, userCode
+      udf.getLeftInputDeserializer,
+      udf.getLeftForwardIndexArray,
+      udf.getRightInputDeserializer,
+      udf.getRightForwardIndexArray,
+      udf.getOutputSerializer,
+      udf.getOutputLength,
+      userCode
     )
     stubParameters.persist(this)
   }
@@ -49,7 +44,15 @@ trait CoGroup4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputKeyedCo
 
 object CoGroup4sContract {
 
-  def newBuilder[LeftIn, RightIn, Out] = CoGroupContract.builder(classOf[CoGroup4sStub[LeftIn, RightIn, Out]])
+  def newBuilderFor[LeftIn, RightIn, Out](mapFunction: CoGroupParameters.FunType[LeftIn, RightIn, Out]) = {
+
+    val clazz = mapFunction match {
+      case Left(_)  => classOf[CoGroup4sStub[LeftIn, RightIn, Out]]
+      case Right(_) => classOf[FlatCoGroup4sStub[LeftIn, RightIn, Out]]
+    }
+
+    CoGroupContract.builder(clazz)
+  }
 
   def unapply(c: CoGroup4sContract[_, _, _, _]) = Some((c.leftInput, c.rightInput))
 }

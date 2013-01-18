@@ -24,20 +24,14 @@ trait Copy4sContract[In] extends Pact4sOneInputContract[In, In] { this: MapContr
   override def annotations = Seq(
     Annotations.getConstantFields(udf.getForwardIndexArray),
     Annotations.getOutCardBounds(Annotations.CARD_INPUTCARD, Annotations.CARD_INPUTCARD)
-  /*
-    Annotations.getReads(copyUDF.getReadFields),
-    Annotations.getExplicitModifications(copyUDF.getWriteFields),
-    Annotations.getImplicitOperation(ImplicitOperationMode.Copy),
-    Annotations.getExplicitProjections(copyUDF.getDiscardedFields),
-    */
   )
 
   override def persistConfiguration() = {
 
-    val stubParameters = new CopyParameters(
+    val stubParameters = CopyParameters(
       udf.inputFields.toSerializerIndexArray,
       udf.outputFields.toSerializerIndexArray,
-      udf.getDiscardIndexArray, 
+      udf.getDiscardIndexArray.filter(_ < udf.getOutputLength), 
       udf.getOutputLength
     )
     stubParameters.persist(this)
@@ -46,7 +40,7 @@ trait Copy4sContract[In] extends Pact4sOneInputContract[In, In] { this: MapContr
 
 object Copy4sContract {
 
-  def newBuilder = MapContract.builder(classOf[Copy4sStub])
+  def newBuilder = MapContract.builder(CopyParameters.getStub)
 
   def apply[In](source: Pact4sContract[In]): Copy4sContract[In] = {
     new MapContract(Copy4sContract.newBuilder.input(source)) with Copy4sContract[In] {

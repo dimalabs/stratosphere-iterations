@@ -20,26 +20,17 @@ import eu.stratosphere.pact.common.contract._
 
 trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputKeyedContract[Key, LeftIn, RightIn, Out] { this: MatchContract =>
 
-  val userCode: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
+  val userCode: JoinParameters.FunType[LeftIn, RightIn, Out]
 
   override def annotations = Seq(
     Annotations.getConstantFieldsFirst(udf.getLeftForwardIndexArray),
     Annotations.getConstantFieldsSecond(udf.getRightForwardIndexArray)
-  /*
-    Annotations.getReadsFirst(joinUDF.getReadFields._1),
-    Annotations.getReadsSecond(joinUDF.getReadFields._2),
-    Annotations.getExplicitModifications(joinUDF.getWriteFields),
-    Annotations.getImplicitOperationFirst(ImplicitOperationMode.Copy),
-    Annotations.getImplicitOperationSecond(ImplicitOperationMode.Copy),
-    Annotations.getExplicitProjectionsFirst(joinUDF.getDiscardedFields._1),
-    Annotations.getExplicitProjectionsSecond(joinUDF.getDiscardedFields._2)
-    */
   )
 
   override def persistConfiguration() = {
 
     val stubParameters = new JoinParameters(
-      udf.getLeftInputDeserializer, udf.getLeftDiscardIndexArray, 
+      udf.getLeftInputDeserializer, udf.getLeftDiscardIndexArray.filter(_ < udf.getOutputLength), 
       udf.getRightInputDeserializer, udf.getRightForwardIndexArray, 
       udf.getOutputSerializer, udf.getOutputLength, userCode
     )
@@ -49,7 +40,7 @@ trait Join4sContract[Key, LeftIn, RightIn, Out] extends Pact4sTwoInputKeyedContr
 
 object Join4sContract {
 
-  def newBuilder[LeftIn, RightIn, Out] = MatchContract.builder(classOf[Join4sStub[LeftIn, RightIn, Out]])
+  def newBuilderFor[LeftIn, RightIn, Out](mapFunction: JoinParameters.FunType[LeftIn, RightIn, Out]) = MatchContract.builder(JoinParameters.getStubFor(mapFunction))
 
   def unapply(c: Join4sContract[_, _, _, _]) = Some((c.leftInput, c.rightInput))
 }

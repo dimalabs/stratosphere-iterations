@@ -36,7 +36,7 @@ class JoinOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) extends Serializa
 
           override def createContract = {
 
-            val builder = Join4sContract.newBuilder.input1(leftInput.getContract).input2(rightInput.getContract)
+            val builder = Join4sContract.newBuilderFor(mapFunction).input1(leftInput.getContract).input2(rightInput.getContract)
 
             val keyTypes = implicitly[UDT[LeftIn]].getKeySet(leftKeySelector.selectedFields map { _.localPos })
             keyTypes.foreach { builder.keyField(_, -1, -1) } // global indexes haven't been computed yet...

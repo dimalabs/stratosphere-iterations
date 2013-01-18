@@ -24,17 +24,26 @@ case class MapParameters[In, Out](
   val serializer: UDTSerializer[Out],
   val discard: Array[Int],
   val outputLength: Int,
-  val userFunction: Either[In => Out, In => Iterator[Out]])
+  val userFunction: MapParameters.FunType[In, Out])
   extends StubParameters
 
-class Map4sStub[In, Out] extends MapStub {
+object MapParameters {
+  
+  type FunType[In, Out] = Either[In => Out, In => Iterator[Out]]
 
-  private var deserializer: UDTSerializer[In] = _
-  private var serializer: UDTSerializer[Out] = _
-  private var discard: Array[Int] = _
-  private var outputLength: Int = _
+  def getStubFor[In, Out](mapFunction: FunType[In, Out]) = mapFunction match {
+    case Left(_)  => classOf[Map4sStub[In, Out]]
+    case Right(_) => classOf[FlatMap4sStub[In, Out]]
+  }
+}
 
-  private var userFunction: (PactRecord, Collector[PactRecord]) => Unit = _
+abstract sealed class Map4sStubBase[In, Out, R] extends MapStub {
+
+  protected var deserializer: UDTSerializer[In] = _
+  protected var serializer: UDTSerializer[Out] = _
+  protected var discard: Array[Int] = _
+  protected var outputLength: Int = _
+  protected var userFunction: In => R = _
 
   override def open(config: Configuration) = {
     super.open(config)
@@ -42,15 +51,19 @@ class Map4sStub[In, Out] extends MapStub {
 
     this.deserializer = parameters.deserializer
     this.serializer = parameters.serializer
-    this.discard = parameters.discard.filter(_ < parameters.outputLength)
+    this.discard = parameters.discard
     this.outputLength = parameters.outputLength
-
-    this.userFunction = parameters.userFunction.fold(doMap _, doFlatMap _)
+    this.userFunction = getUserFunction(parameters)
   }
 
-  override def map(record: PactRecord, out: Collector[PactRecord]) = userFunction(record, out)
+  protected def getUserFunction(parameters: MapParameters[In, Out]): In => R
+}
 
-  private def doMap(userFunction: In => Out)(record: PactRecord, out: Collector[PactRecord]) = {
+final class Map4sStub[In, Out] extends Map4sStubBase[In, Out, Out] {
+
+  override def getUserFunction(parameters: MapParameters[In, Out]) = parameters.userFunction.left.get
+
+  override def map(record: PactRecord, out: Collector[PactRecord]) = {
 
     val input = deserializer.deserialize(record)
     val output = userFunction.apply(input)
@@ -63,8 +76,13 @@ class Map4sStub[In, Out] extends MapStub {
     serializer.serialize(output, record)
     out.collect(record)
   }
+}
 
-  private def doFlatMap(userFunction: In => Iterator[Out])(record: PactRecord, out: Collector[PactRecord]) = {
+final class FlatMap4sStub[In, Out] extends Map4sStubBase[In, Out, Iterator[Out]] {
+
+  override def getUserFunction(parameters: MapParameters[In, Out]) = parameters.userFunction.right.get
+
+  override def map(record: PactRecord, out: Collector[PactRecord]) = {
 
     val input = deserializer.deserialize(record)
     val output = userFunction.apply(input)

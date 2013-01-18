@@ -26,19 +26,28 @@ case class JoinParameters[LeftIn, RightIn, Out](
   val rightForward: Array[Int],
   val serializer: UDTSerializer[Out],
   val outputLength: Int,
-  val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]])
+  val userFunction: JoinParameters.FunType[LeftIn, RightIn, Out])
   extends StubParameters
 
-class Join4sStub[LeftIn, RightIn, Out] extends MatchStub {
+object JoinParameters {
+  
+  type FunType[LeftIn, RightIn, Out] = Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
+  
+  def getStubFor[LeftIn, RightIn, Out](mapFunction: FunType[LeftIn, RightIn, Out]) = mapFunction match {
+    case Left(_)  => classOf[Join4sStub[LeftIn, RightIn, Out]]
+    case Right(_) => classOf[FlatJoin4sStub[LeftIn, RightIn, Out]]
+  }
+}
 
-  private var leftDeserializer: UDTSerializer[LeftIn] = _
-  private var leftDiscard: Array[Int] = _
-  private var rightDeserializer: UDTSerializer[RightIn] = _
-  private var rightForward: Array[Int] = _
-  private var serializer: UDTSerializer[Out] = _
-  private var outputLength: Int = _
-
-  private var userFunction: (PactRecord, PactRecord, Collector[PactRecord]) => Unit = _
+abstract sealed class Join4sStubBase[LeftIn, RightIn, Out, R] extends MatchStub {
+  
+  protected var leftDeserializer: UDTSerializer[LeftIn] = _
+  protected var leftDiscard: Array[Int] = _
+  protected var rightDeserializer: UDTSerializer[RightIn] = _
+  protected var rightForward: Array[Int] = _
+  protected var serializer: UDTSerializer[Out] = _
+  protected var outputLength: Int = _
+  protected var userFunction: (LeftIn, RightIn) => R = _
 
   override def open(config: Configuration) = {
     super.open(config)
@@ -51,12 +60,17 @@ class Join4sStub[LeftIn, RightIn, Out] extends MatchStub {
     this.serializer = parameters.serializer
     this.outputLength = parameters.outputLength
 
-    this.userFunction = parameters.userFunction.fold(doJoin _, doFlatJoin _)
+    this.userFunction = getUserFunction(parameters)
   }
 
-  override def `match`(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) = userFunction(leftRecord, rightRecord, out)
+  protected def getUserFunction(parameters: JoinParameters[LeftIn, RightIn, Out]): (LeftIn, RightIn) => R
+}
 
-  private def doJoin(userFunction: (LeftIn, RightIn) => Out)(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) {
+final class Join4sStub[LeftIn, RightIn, Out] extends Join4sStubBase[LeftIn, RightIn, Out, Out] {
+
+  override def getUserFunction(parameters: JoinParameters[LeftIn, RightIn, Out]) = parameters.userFunction.left.get
+
+  override def `match`(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) =  {
 
     val left = leftDeserializer.deserialize(leftRecord)
     val right = rightDeserializer.deserialize(rightRecord)
@@ -72,8 +86,13 @@ class Join4sStub[LeftIn, RightIn, Out] extends MatchStub {
     serializer.serialize(output, leftRecord)
     out.collect(leftRecord)
   }
+}
 
-  private def doFlatJoin(userFunction: (LeftIn, RightIn) => Iterator[Out])(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) {
+final class FlatJoin4sStub[LeftIn, RightIn, Out] extends Join4sStubBase[LeftIn, RightIn, Out, Iterator[Out]] {
+
+  override def getUserFunction(parameters: JoinParameters[LeftIn, RightIn, Out]) = parameters.userFunction.right.get
+
+  override def `match`(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) = {
 
     val left = leftDeserializer.deserialize(leftRecord)
     val right = rightDeserializer.deserialize(rightRecord)

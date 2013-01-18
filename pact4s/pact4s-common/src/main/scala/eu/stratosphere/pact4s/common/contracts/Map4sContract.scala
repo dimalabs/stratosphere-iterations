@@ -22,28 +22,22 @@ import eu.stratosphere.pact.common.contract._
 
 trait Map4sContract[In, Out] extends Pact4sOneInputContract[In, Out] { this: MapContract =>
 
-  val userCode: Either[In => Out, In => Iterator[Out]]
+  val userCode: MapParameters.FunType[In, Out]
 
   private def outCardBound = userCode.fold({ _ => Annotations.CARD_INPUTCARD }, { _ => Annotations.CARD_UNKNOWN })
 
   override def annotations = Seq(
     Annotations.getConstantFields(udf.getForwardIndexArray),
     Annotations.getOutCardBounds(outCardBound, outCardBound)
-  /*
-    Annotations.getReads(mapUDF.getReadFields),
-    Annotations.getExplicitModifications(mapUDF.getWriteFields),
-    Annotations.getImplicitOperation(ImplicitOperationMode.Copy),
-    Annotations.getExplicitProjections(mapUDF.getDiscardedFields),
-    */
   )
 
   override def persistConfiguration() = {
 
-    val stubParameters = new MapParameters(
-      udf.getInputDeserializer, 
-      udf.getOutputSerializer, 
-      udf.getDiscardIndexArray, 
-      udf.getOutputLength, 
+    val stubParameters = MapParameters(
+      udf.getInputDeserializer,
+      udf.getOutputSerializer,
+      udf.getDiscardIndexArray.filter(_ < udf.getOutputLength),
+      udf.getOutputLength,
       userCode
     )
     stubParameters.persist(this)
@@ -52,7 +46,7 @@ trait Map4sContract[In, Out] extends Pact4sOneInputContract[In, Out] { this: Map
 
 object Map4sContract {
 
-  def newBuilder[In, Out] = MapContract.builder(classOf[Map4sStub[In, Out]])
+  def newBuilderFor[In, Out](mapFunction: MapParameters.FunType[In, Out]) = MapContract.builder(MapParameters.getStubFor(mapFunction))
 
   def unapply(c: Map4sContract[_, _]) = Some(c.singleInput)
 }

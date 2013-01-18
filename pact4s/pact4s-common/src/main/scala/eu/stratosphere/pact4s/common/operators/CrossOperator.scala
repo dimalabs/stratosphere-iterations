@@ -32,7 +32,7 @@ class CrossOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) extends Serializ
 
       override def createContract = {
 
-        val builder = Cross4sContract.newBuilder.input1(leftInput.getContract).input2(rightInput.getContract)
+        val builder = Cross4sContract.newBuilderFor(mapFunction).input1(leftInput.getContract).input2(rightInput.getContract)
 
         val contract = new CrossContract(builder) with Cross4sContract[LeftIn, RightIn, Out] {
 

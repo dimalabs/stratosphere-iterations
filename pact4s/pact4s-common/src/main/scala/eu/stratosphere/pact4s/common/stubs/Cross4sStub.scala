@@ -26,37 +26,50 @@ case class CrossParameters[LeftIn, RightIn, Out](
   val rightForward: Array[Int],
   val serializer: UDTSerializer[Out],
   val outputLength: Int,
-  val userFunction: Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]])
+  val userFunction: CrossParameters.FunType[LeftIn, RightIn, Out])
   extends StubParameters
 
-class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub {
-
-  private var leftDeserializer: UDTSerializer[LeftIn] = _
-  private var leftDiscard: Array[Int] = _
-  private var rightDeserializer: UDTSerializer[RightIn] = _
-  private var rightForward: Array[Int] = _
-  private var serializer: UDTSerializer[Out] = _
-  private var outputLength: Int = _
-
-  private var userFunction: (PactRecord, PactRecord, Collector[PactRecord]) => Unit = _
+object CrossParameters {
+  
+  type FunType[LeftIn, RightIn, Out] = Either[(LeftIn, RightIn) => Out, (LeftIn, RightIn) => Iterator[Out]]
+  
+  def getStubFor[LeftIn, RightIn, Out](mapFunction: FunType[LeftIn, RightIn, Out]) = mapFunction match {
+    case Left(_)  => classOf[Cross4sStub[LeftIn, RightIn, Out]]
+    case Right(_) => classOf[FlatCross4sStub[LeftIn, RightIn, Out]]
+  }
+}
+  
+abstract sealed class Cross4sStubBase[LeftIn, RightIn, Out, R] extends CrossStub {
+  
+  protected var leftDeserializer: UDTSerializer[LeftIn] = _
+  protected var leftDiscard: Array[Int] = _
+  protected var rightDeserializer: UDTSerializer[RightIn] = _
+  protected var rightForward: Array[Int] = _
+  protected var serializer: UDTSerializer[Out] = _
+  protected var outputLength: Int = _
+  protected var userFunction: (LeftIn, RightIn) => R = _
 
   override def open(config: Configuration) = {
     super.open(config)
     val parameters = StubParameters.getValue[CrossParameters[LeftIn, RightIn, Out]](config)
 
     this.leftDeserializer = parameters.leftDeserializer
-    this.leftDiscard = parameters.leftDiscard.filter(_ < parameters.outputLength)
+    this.leftDiscard = parameters.leftDiscard
     this.rightDeserializer = parameters.rightDeserializer
     this.rightForward = parameters.rightForward
     this.serializer = parameters.serializer
     this.outputLength = parameters.outputLength
-
-    this.userFunction = parameters.userFunction.fold(doCross _, doFlatCross _)
+    this.userFunction = getUserFunction(parameters)
   }
 
-  override def cross(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) = userFunction(leftRecord, rightRecord, out)
+  protected def getUserFunction(parameters: CrossParameters[LeftIn, RightIn, Out]): (LeftIn, RightIn) => R
+}
 
-  private def doCross(userFunction: (LeftIn, RightIn) => Out)(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) {
+final class Cross4sStub[LeftIn, RightIn, Out] extends Cross4sStubBase[LeftIn, RightIn, Out, Out] {
+
+  override def getUserFunction(parameters: CrossParameters[LeftIn, RightIn, Out]) = parameters.userFunction.left.get
+
+  override def cross(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) = {
 
     val left = leftDeserializer.deserialize(leftRecord)
     val right = rightDeserializer.deserialize(rightRecord)
@@ -72,8 +85,13 @@ class Cross4sStub[LeftIn, RightIn, Out] extends CrossStub {
     serializer.serialize(output, leftRecord)
     out.collect(leftRecord)
   }
+}
 
-  private def doFlatCross(userFunction: (LeftIn, RightIn) => Iterator[Out])(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) {
+final class FlatCross4sStub[LeftIn, RightIn, Out] extends Cross4sStubBase[LeftIn, RightIn, Out, Iterator[Out]] {
+
+  override def getUserFunction(parameters: CrossParameters[LeftIn, RightIn, Out]) = parameters.userFunction.right.get
+
+  override def cross(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) = {
 
     val left = leftDeserializer.deserialize(leftRecord)
     val right = rightDeserializer.deserialize(rightRecord)

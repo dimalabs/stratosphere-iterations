@@ -15,7 +15,6 @@ package eu.stratosphere.pact4s.common.stubs
 
 import eu.stratosphere.pact.common.stubs._
 import eu.stratosphere.pact.common.`type`.PactRecord
-import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
 import eu.stratosphere.nephele.configuration.Configuration
 
 case class CopyParameters(
@@ -25,6 +24,11 @@ case class CopyParameters(
   val outputLength: Int)
   extends StubParameters
 
+object CopyParameters {
+  
+  def getStub = classOf[Copy4sStub]
+}
+  
 class Copy4sStub extends MapStub {
 
   private var from: Array[Int] = _
@@ -38,7 +42,7 @@ class Copy4sStub extends MapStub {
 
     this.from = parameters.from
     this.to = parameters.to
-    this.discard = parameters.discard.filter(_ < parameters.outputLength)
+    this.discard = parameters.discard
     this.outputLength = parameters.outputLength
   }
 
