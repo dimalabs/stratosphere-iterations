@@ -17,7 +17,7 @@ import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
 class KMeansMutableDescriptor extends PactDescriptor[KMeansMutable] {
-  override val name = "KMeans Iteration"
+  override val name = "KMeans Iteration (Mutable)"
   override val parameters = "[-numIterations <int:2>] -dataPoints <file> -clusterCenters <file> -output <file>"
 
   override def createInstance(args: Pact4sArgs) = new KMeansMutable(args("numIterations", "2").toInt, args("dataPoints"), args("clusterCenters"), args("output"))

@@ -71,8 +71,8 @@ final class Cross4sStub[LeftIn, RightIn, Out] extends Cross4sStubBase[LeftIn, Ri
 
   override def cross(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) = {
 
-    val left = leftDeserializer.deserialize(leftRecord)
-    val right = rightDeserializer.deserialize(rightRecord)
+    val left = leftDeserializer.deserializeRecyclingOn(leftRecord)
+    val right = rightDeserializer.deserializeRecyclingOn(rightRecord)
     val output = userFunction.apply(left, right)
 
     leftRecord.setNumFields(outputLength)
@@ -93,8 +93,8 @@ final class FlatCross4sStub[LeftIn, RightIn, Out] extends Cross4sStubBase[LeftIn
 
   override def cross(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) = {
 
-    val left = leftDeserializer.deserialize(leftRecord)
-    val right = rightDeserializer.deserialize(rightRecord)
+    val left = leftDeserializer.deserializeRecyclingOn(leftRecord)
+    val right = rightDeserializer.deserializeRecyclingOn(rightRecord)
     val output = userFunction.apply(left, right)
 
     if (output.nonEmpty) {

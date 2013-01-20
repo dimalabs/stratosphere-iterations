@@ -17,7 +17,7 @@ import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
 class WordCountMutableDescriptor extends PactDescriptor[WordCountMutable] {
-  override val name = "Word Count"
+  override val name = "Word Count (Mutable)"
   override val parameters = "-input <file> -output <file>"
 
   override def createInstance(args: Pact4sArgs) = new WordCountMutable(args("input"), args("output"))

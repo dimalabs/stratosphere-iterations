@@ -45,7 +45,7 @@
           </compilerPlugins>
           <args>
             <arg>-P:pact4s:udtRecycling:on</arg>
-            <arg>-P:pact4s:verbosity:debug</arg>
+            <!--<arg>-P:pact4s:verbosity:debug</arg>-->
           </args>
         </configuration>
         <executions>

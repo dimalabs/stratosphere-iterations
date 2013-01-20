@@ -45,11 +45,11 @@ protected final class DeserializingIterator[T](deserializer: UDTSerializer[T]) e
 
     if (fresh) {
       fresh = false
-      val record = deserializer.deserialize(first)
+      val record = deserializer.deserializeRecyclingOff(first)
       first = null
       record
     } else {
-      deserializer.deserialize(source.next())
+      deserializer.deserializeRecyclingOff(source.next())
     }
   }
 }

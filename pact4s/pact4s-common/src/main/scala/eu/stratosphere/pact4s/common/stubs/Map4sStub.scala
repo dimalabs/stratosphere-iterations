@@ -65,7 +65,7 @@ final class Map4sStub[In, Out] extends Map4sStubBase[In, Out, Out] {
 
   override def map(record: PactRecord, out: Collector[PactRecord]) = {
 
-    val input = deserializer.deserialize(record)
+    val input = deserializer.deserializeRecyclingOn(record)
     val output = userFunction.apply(input)
 
     record.setNumFields(outputLength)
@@ -84,7 +84,7 @@ final class FlatMap4sStub[In, Out] extends Map4sStubBase[In, Out, Iterator[Out]]
 
   override def map(record: PactRecord, out: Collector[PactRecord]) = {
 
-    val input = deserializer.deserialize(record)
+    val input = deserializer.deserializeRecyclingOn(record)
     val output = userFunction.apply(input)
 
     if (output.nonEmpty) {

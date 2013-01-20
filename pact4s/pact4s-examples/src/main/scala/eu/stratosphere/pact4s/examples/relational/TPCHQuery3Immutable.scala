@@ -32,7 +32,7 @@ import eu.stratosphere.pact4s.common.operators._
  *   GROUP BY l_orderkey, o_shippriority;
  */
 class TPCHQuery3ImmutableDescriptor extends PactDescriptor[TPCHQuery3Immutable] {
-  override val name = "TPCH Query 3"
+  override val name = "TPCH Query 3 (Immutable)"
   override val parameters = "-orders <file> -lineItems <file> -output <file>"
 
   override def createInstance(args: Pact4sArgs) = new TPCHQuery3Immutable(args("orders"), args("lineItems"), args("output"))

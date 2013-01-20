@@ -24,19 +24,24 @@ trait UDTDeserializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClas
 
     protected def mkDeserialize(udtSerClassSym: Symbol, desc: UDTDescriptor, listImpls: Map[Int, Type]): List[Tree] = {
 
-      val root = mkMethod(udtSerClassSym, "deserialize", Flags.OVERRIDE | Flags.FINAL, List(("record", pactRecordClass.tpe)), desc.tpe) { methodSym =>
-        val env = GenEnvironment(udtSerClassSym, methodSym, listImpls, "flat" + desc.id, false, true, true)
+      val rootRecyclingOn = mkMethod(udtSerClassSym, "deserializeRecyclingOn", Flags.OVERRIDE | Flags.FINAL, List(("record", pactRecordClass.tpe)), desc.tpe) { methodSym =>
+        val env = GenEnvironment(udtSerClassSym, methodSym, listImpls, "flat" + desc.id, false, true, true, true)
+        mkSingle(genDeserialize(desc, Ident("record"), env, Map()))
+      }
+
+      val rootRecyclingOff = mkMethod(udtSerClassSym, "deserializeRecyclingOff", Flags.OVERRIDE | Flags.FINAL, List(("record", pactRecordClass.tpe)), desc.tpe) { methodSym =>
+        val env = GenEnvironment(udtSerClassSym, methodSym, listImpls, "flat" + desc.id, false, false, true, true)
         mkSingle(genDeserialize(desc, Ident("record"), env, Map()))
       }
 
       val aux = desc.getRecursiveRefs map { desc =>
         mkMethod(udtSerClassSym, "deserialize" + desc.id, Flags.PRIVATE | Flags.FINAL, List(("record", pactRecordClass.tpe)), desc.tpe) { methodSym =>
-          val env = GenEnvironment(udtSerClassSym, methodSym, listImpls, "boxed" + desc.id, true, false, true)
+          val env = GenEnvironment(udtSerClassSym, methodSym, listImpls, "boxed" + desc.id, true, false, false, true)
           mkSingle(genDeserialize(desc, Ident("record"), env, Map()))
         }
       }
 
-      root +: aux.toList
+      rootRecyclingOn +: rootRecyclingOff +: aux.toList
     }
 
     private def genDeserialize(desc: UDTDescriptor, source: Tree, env: GenEnvironment, scope: Map[Int, Symbol]): Seq[Tree] = desc match {
@@ -80,14 +85,14 @@ trait UDTDeserializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClas
         val buildTpe = appliedType(builderClass.tpe, List(elem.tpe, tpe))
         val build = mkVal(env.methodSym, "b" + id, 0, false, buildTpe) { _ => Apply(Select(cbf(), "apply"), List()) }
         val des = env.mkGetFieldInto(id, source, list)
-        val body = genDeserializeList(elem, list, Ident(build.symbol), env.copy(chkNull = true), scope)
+        val body = genDeserializeList(elem, list, Ident(build.symbol), env.copy(allowRecycling = false, chkNull = true), scope)
         val stats = init +: des +: build +: body
 
         Seq(mkIf(chk, Block(stats: _*), mkNull))
       }
 
-      // we have a mutable UDT
-      case CaseClassDescriptor(_, tpe, true, _, _, getters) => {
+      // we have a mutable UDT and the context allows recycling
+      case CaseClassDescriptor(_, tpe, true, _, _, getters) if env.allowRecycling => {
 
         val fields = getters filterNot { _.isBaseField } map {
           case FieldAccessor(_, _, _, _, desc) => desc.id -> mkVal(env.methodSym, "v" + desc.id, 0, false, desc.tpe) { _ =>
@@ -167,7 +172,8 @@ trait UDTDeserializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClas
         Seq(mkIf(chk, Block((stats :+ des :+ Match(get, cases)): _*), mkNull))
       }
 
-      case OpaqueDescriptor(id, tpe, _) => Seq(Apply(Select(env.mkSelectSerializer(id), "deserialize"), List(source)))
+      case OpaqueDescriptor(id, tpe, _) if env.allowRecycling => Seq(Apply(Select(env.mkSelectSerializer(id), "deserializeRecyclingOn"), List(source)))
+      case OpaqueDescriptor(id, tpe, _)                       => Seq(Apply(Select(env.mkSelectSerializer(id), "deserializeRecyclingOff"), List(source)))
 
       case RecursiveDescriptor(id, tpe, refId) => {
         val chk = mkAnd(env.mkChkIdx(id), env.mkNotIsNull(id, source))
@@ -228,10 +234,10 @@ trait UDTDeserializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClas
     }
 
     private def getListElemWrapperType(desc: UDTDescriptor, env: GenEnvironment): Type = desc match {
-      case PrimitiveDescriptor(_, _, _, wrapper) => wrapper.tpe
+      case PrimitiveDescriptor(_, _, _, wrapper)            => wrapper.tpe
       case BoxedPrimitiveDescriptor(_, _, _, wrapper, _, _) => wrapper.tpe
-      case ListDescriptor(id, _, _, _, _, _) => env.listImpls(id)
-      case _ => pactRecordClass.tpe
+      case ListDescriptor(id, _, _, _, _, _)                => env.listImpls(id)
+      case _                                                => pactRecordClass.tpe
     }
   }
 }

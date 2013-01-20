@@ -25,14 +25,14 @@ trait UDTSerializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClassG
     protected def mkSerialize(udtSerClassSym: Symbol, desc: UDTDescriptor, listImpls: Map[Int, Type]): List[Tree] = {
 
       val root = mkMethod(udtSerClassSym, "serialize", Flags.OVERRIDE | Flags.FINAL, List(("item", desc.tpe), ("record", pactRecordClass.tpe)), definitions.UnitClass.tpe) { methodSym =>
-        val env = GenEnvironment(udtSerClassSym, methodSym, listImpls, "flat" + desc.id, false, true, true)
+        val env = GenEnvironment(udtSerClassSym, methodSym, listImpls, "flat" + desc.id, false, true, true, true)
         val stats = genSerialize(desc, Ident("item"), Ident("record"), env)
         Block(stats.toList, mkUnit)
       }
 
       val aux = desc.getRecursiveRefs map { desc =>
         mkMethod(udtSerClassSym, "serialize" + desc.id, Flags.PRIVATE | Flags.FINAL, List(("item", desc.tpe), ("record", pactRecordClass.tpe)), definitions.UnitClass.tpe) { methodSym =>
-          val env = GenEnvironment(udtSerClassSym, methodSym, listImpls, "boxed" + desc.id, true, false, true)
+          val env = GenEnvironment(udtSerClassSym, methodSym, listImpls, "boxed" + desc.id, true, false, false, true)
           val stats = genSerialize(desc, Ident("item"), Ident("record"), env)
           Block(stats.toList, mkUnit)
         }

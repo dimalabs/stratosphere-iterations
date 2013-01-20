@@ -72,8 +72,8 @@ final class Join4sStub[LeftIn, RightIn, Out] extends Join4sStubBase[LeftIn, Righ
 
   override def `match`(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) =  {
 
-    val left = leftDeserializer.deserialize(leftRecord)
-    val right = rightDeserializer.deserialize(rightRecord)
+    val left = leftDeserializer.deserializeRecyclingOn(leftRecord)
+    val right = rightDeserializer.deserializeRecyclingOn(rightRecord)
     val output = userFunction.apply(left, right)
 
     leftRecord.setNumFields(outputLength)
@@ -94,8 +94,8 @@ final class FlatJoin4sStub[LeftIn, RightIn, Out] extends Join4sStubBase[LeftIn, 
 
   override def `match`(leftRecord: PactRecord, rightRecord: PactRecord, out: Collector[PactRecord]) = {
 
-    val left = leftDeserializer.deserialize(leftRecord)
-    val right = rightDeserializer.deserialize(rightRecord)
+    val left = leftDeserializer.deserializeRecyclingOn(leftRecord)
+    val right = rightDeserializer.deserializeRecyclingOn(rightRecord)
     val output = userFunction.apply(left, right)
 
     if (output.nonEmpty) {

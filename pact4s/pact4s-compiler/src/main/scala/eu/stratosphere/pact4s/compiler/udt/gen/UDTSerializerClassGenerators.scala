@@ -221,7 +221,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
 
     private def mkGetFieldIndex(udtSerClassSym: Symbol, desc: UDTDescriptor): Tree = {
 
-      val env = GenEnvironment(udtSerClassSym, NoSymbol, Map(), "flat" + desc.id, false, true, true)
+      val env = GenEnvironment(udtSerClassSym, NoSymbol, Map(), "flat" + desc.id, false, true, true, true)
 
       def mkCases(desc: UDTDescriptor, path: Seq[String]): Seq[(Seq[String], Tree)] = desc match {
 
@@ -278,7 +278,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
       }
     }
 
-    protected case class GenEnvironment(udtSerClassSym: Symbol, methodSym: Symbol, listImpls: Map[Int, Type], idxPrefix: String, reentrant: Boolean, chkIndex: Boolean, chkNull: Boolean) {
+    protected case class GenEnvironment(udtSerClassSym: Symbol, methodSym: Symbol, listImpls: Map[Int, Type], idxPrefix: String, reentrant: Boolean, allowRecycling: Boolean, chkIndex: Boolean, chkNull: Boolean) {
 
       def mkChkNotNull(source: Tree, tpe: Type): Tree = if (!tpe.isNotNull && chkNull) Apply(Select(source, "$bang$eq"), List(mkNull)) else EmptyTree
       def mkChkIdx(fieldId: Int): Tree = if (chkIndex) Apply(Select(mkSelectIdx(fieldId), "$greater$eq"), List(mkZero)) else EmptyTree

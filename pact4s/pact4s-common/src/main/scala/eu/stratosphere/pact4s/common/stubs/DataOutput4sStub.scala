@@ -52,7 +52,7 @@ class RawOutput4sStub[In] extends FileOutputFormat {
 
   override def writeRecord(record: PactRecord) = {
 
-    val input = deserializer.deserialize(record)
+    val input = deserializer.deserializeRecyclingOn(record)
     userFunction.apply(input, this.stream)
   }
 }
@@ -72,7 +72,7 @@ class BinaryOutput4sStub[In] extends BinaryOutputFormat {
 
   override def serialize(record: PactRecord, target: DataOutput) = {
 
-    val input = deserializer.deserialize(record)
+    val input = deserializer.deserializeRecyclingOn(record)
     userFunction.apply(input, target)
   }
 }
@@ -92,7 +92,7 @@ class DelimetedOutput4sStub[In] extends DelimitedOutputFormat {
 
   override def serializeRecord(record: PactRecord, target: Array[Byte]): Int = {
 
-    val input = deserializer.deserialize(record)
+    val input = deserializer.deserializeRecyclingOn(record)
     userFunction.apply(input, target)
   }
 }
