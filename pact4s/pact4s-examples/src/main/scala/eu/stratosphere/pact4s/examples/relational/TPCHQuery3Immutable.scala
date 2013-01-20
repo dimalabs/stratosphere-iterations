@@ -13,9 +13,6 @@
 
 package eu.stratosphere.pact4s.examples.relational
 
-import scala.math._
-import scala.math.Ordered._
-
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
@@ -34,39 +31,35 @@ import eu.stratosphere.pact4s.common.operators._
  *     AND o_orderpriority LIKE "Z%"
  *   GROUP BY l_orderkey, o_shippriority;
  */
-class TPCHQuery3Descriptor extends PactDescriptor[TPCHQuery3] {
+class TPCHQuery3ImmutableDescriptor extends PactDescriptor[TPCHQuery3Immutable] {
   override val name = "TPCH Query 3"
-  override val description = "Parameters: [numSubTasks] [orders] [lineItems] [output]"
-  override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
+  override val parameters = "-orders <file> -lineItems <file> -output <file>"
 
-  override def createInstance(args: Map[Int, String]) = new TPCHQuery3(args.getOrElse(1, "orders"), args.getOrElse(2, "lineItems"), args.getOrElse(3, "output"))
+  override def createInstance(args: Pact4sArgs) = new TPCHQuery3Immutable(args("orders"), args("lineItems"), args("output"))
 }
 
-class TPCHQuery3(ordersInput: String, lineItemsInput: String, ordersOutput: String, status: Char = 'F', minYear: Int = 1993, priority: String = "5") extends PactProgram {
+class TPCHQuery3Immutable(ordersInput: String, lineItemsInput: String, ordersOutput: String, status: Char = 'F', minYear: Int = 1993, priority: String = "5") extends PactProgram {
 
   val orders = new DataSource(ordersInput, DelimetedDataSourceFormat(parseOrder))
   val lineItems = new DataSource(lineItemsInput, DelimetedDataSourceFormat(parseLineItem))
   val output = new DataSink(ordersOutput, DelimetedDataSinkFormat(formatOutput))
 
   val filteredOrders = orders filter { o => o.status == status && o.year > minYear && o.orderPriority.startsWith(priority) }
-  val prioritizedItems = filteredOrders join lineItems on { _.orderId } isEqualTo { _.orderId } map { (o: Order, li: LineItem) => PrioritizedOrder(o.orderId, o.shipPriority, li.extendedPrice) }
-
-  val prioritizedOrders = prioritizedItems groupBy { pi => (pi.orderId, pi.shipPriority) } combine {
-    _.reduce { (z, s) => z.copy(revenue = z.revenue + s.revenue) }
-  }
+  val prioritizedItems = filteredOrders join lineItems on { _.orderId } isEqualTo { _.orderId } map { (o, li) => PrioritizedOrder(o.orderId, o.shipPriority, li.extendedPrice) }
+  val prioritizedOrders = prioritizedItems groupBy { pi => (pi.orderId, pi.shipPriority) } combine { _ reduce addRevenues }
 
   override def outputs = output <~ prioritizedOrders
 
-  filteredOrders.usesOnly { o => (o.status, o.year, o.orderPriority) }
+  filteredOrders observes { o => (o.status, o.year, o.orderPriority) }
 
-  prioritizedItems.left.ignores { o => o }
-  prioritizedItems.left.preserves { o => (o.orderId, o.shipPriority) } as { po => (po.orderId, po.shipPriority) }
-  
-  prioritizedItems.right.ignores { li => li }
-  prioritizedItems.right.preserves { li => li.extendedPrice } as { po => po.revenue }
+  prioritizedItems.left neglects { o => o }
+  prioritizedItems.left preserves { o => (o.orderId, o.shipPriority) } as { pi => (pi.orderId, pi.shipPriority) }
 
-  prioritizedOrders.usesOnly { po => po.revenue }
-  prioritizedOrders.preserves { pi => (pi.orderId, pi.shipPriority) } as { pi => (pi.orderId, pi.shipPriority) }
+  prioritizedItems.right neglects { li => li }
+  prioritizedItems.right preserves { li => li.extendedPrice } as { pi => pi.revenue }
+
+  prioritizedOrders observes { po => po.revenue }
+  prioritizedOrders preserves { pi => (pi.orderId, pi.shipPriority) } as { po => (po.orderId, po.shipPriority) }
 
   orders.avgBytesPerRecord(44).uniqueKey(_.orderId)
   lineItems.avgBytesPerRecord(28)
@@ -77,6 +70,7 @@ class TPCHQuery3(ordersInput: String, lineItemsInput: String, ordersOutput: Stri
   case class Order(orderId: Int, status: Char, year: Int, month: Int, day: Int, orderPriority: String, shipPriority: Int)
   case class LineItem(orderId: Int, extendedPrice: Double)
   case class PrioritizedOrder(orderId: Int, shipPriority: Int, revenue: Double)
+  def addRevenues(po1: PrioritizedOrder, po2: PrioritizedOrder) = po1.copy(revenue = po1.revenue + po2.revenue)
 
   val OrderInputPattern = """(\d+)\|[^\|]+\|([^\|])\|[^\|]+\|(\d\d\d\d)-(\d\d)-(\d\d)\|([^\|]+)\|[^\|]+\|(\d+)\|[^\|]+\|""".r
   val LineItemInputPattern = """(\d+)\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|(\d+\.\d\d)\|[^\|]+\|[^\|]+\|[^\|]\|[^\|]\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|""".r

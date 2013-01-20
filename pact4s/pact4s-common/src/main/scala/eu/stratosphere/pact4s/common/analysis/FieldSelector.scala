@@ -25,7 +25,7 @@ import scala.reflect.Code
  * must also be top-level. Nested fields (such as a list element or an inner instance of a
  * recursive type) are not allowed.
  *
- * @param T The type In => Key of the selector function
+ * @param T The type In => Result of the selector function
  * @param udtIn The UDT[In] instance
  * @param selection The selected fields
  */

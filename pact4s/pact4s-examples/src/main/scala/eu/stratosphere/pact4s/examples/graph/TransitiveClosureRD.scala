@@ -24,10 +24,9 @@ import eu.stratosphere.pact4s.common.operators._
  */
 class TransitiveClosureRDDescriptor extends PactDescriptor[TransitiveClosureRD] {
   override val name = "Transitive Closure with Recursive Doubling"
-  override val description = "Parameters: [numSubTasks] [vertices] [edges] [output]"
-  override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
+  override val parameters = "-vertices <file> -edges <file> -output <file>"
 
-  override def createInstance(args: Map[Int, String]) = new TransitiveClosureRD(args.getOrElse(1, "vertices"), args.getOrElse(2, "edges"), args.getOrElse(3, "output"))
+  override def createInstance(args: Pact4sArgs) = new TransitiveClosureRD(args("vertices"), args("edges"), args("output"))
 }
 
 class TransitiveClosureRD(verticesInput: String, edgesInput: String, pathsOutput: String) extends PactProgram {

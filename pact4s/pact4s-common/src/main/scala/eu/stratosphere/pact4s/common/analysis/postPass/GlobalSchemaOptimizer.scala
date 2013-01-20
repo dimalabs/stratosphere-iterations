@@ -13,19 +13,20 @@
 
 package eu.stratosphere.pact4s.common.analysis.postPass
 
-import eu.stratosphere.pact.compiler.postpass.OptimizerPostPass
-import eu.stratosphere.pact.compiler.plan._
+import eu.stratosphere.pact.compiler.plan.OptimizedPlan
 
-trait GlobalSchemaOptimizer extends OptimizerPostPass {
+trait GlobalSchemaOptimizer {
 
-  override def postPass(plan: OptimizedPlan): Unit = {
+  def optimizeSchema(plan: OptimizedPlan, compactSchema: Boolean): Unit = {
 
     val (outputSets, outputPositions) = OutputSets.computeOutputSets(plan)
     val edgeSchemas = EdgeDependencySets.computeEdgeDependencySets(plan, outputSets)
 
     AmbientFieldDetector.updateAmbientFields(plan, edgeSchemas, outputPositions)
 
-    GlobalSchemaCompactor.compactSchema(plan)
+    if (compactSchema) {
+      GlobalSchemaCompactor.compactSchema(plan)
+    }
 
     GlobalSchemaPrinter.printSchema(plan)
   }

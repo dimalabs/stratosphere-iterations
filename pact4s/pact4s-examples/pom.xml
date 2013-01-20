@@ -43,6 +43,10 @@
               <version>0.2</version>
             </compilerPlugin>
           </compilerPlugins>
+          <args>
+            <arg>-P:pact4s:udtRecycling:on</arg>
+            <arg>-P:pact4s:verbosity:debug</arg>
+          </args>
         </configuration>
         <executions>
           <execution>
@@ -81,40 +85,56 @@
                 <include>**/datamining/BatchGradientDescent$*.class</include>
                 <include>**/datamining/BatchGradientDescentDescriptor.class</include>
                 <include>**/datamining/BatchGradientDescentDescriptor$*.class</include>
-                <include>**/datamining/BatchGradientDescentGeneratedImplicits.class</include>
-                <include>**/datamining/BatchGradientDescentGeneratedImplicits$*.class</include>
               </includes>
             </configuration>
           </execution>
           -->
           
           <execution>
-            <id>KMeans</id>
+            <id>KMeansImmutable</id>
             <phase>package</phase>
             <goals>
               <goal>jar</goal>
             </goals>
 
             <configuration>
-              <classifier>KMeans</classifier>
+              <classifier>KMeansImmutable</classifier>
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.datamining.KMeansDescriptor</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.datamining.KMeansImmutableDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
               <includes>
-                <include>**/datamining/KMeans.class</include>
-                <include>**/datamining/KMeans$*.class</include>
-                <include>**/datamining/KMeansDescriptor.class</include>
-                <include>**/datamining/KMeansDescriptor$*.class</include>
-                <include>**/datamining/KMeansGeneratedImplicits.class</include>
-                <include>**/datamining/KMeansGeneratedImplicits$*.class</include>
+                <include>**/datamining/KMeansImmutable*.class</include>
               </includes>
             </configuration>
           </execution>
 
+          <execution>
+            <id>KMeansMutable</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>KMeansMutable</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.datamining.KMeansMutableDescriptor</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/datamining/KMeansMutable*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+		  <!-- These programs require support for iterations...
           <execution>
             <id>ConnectedComponents</id>
             <phase>package</phase>
@@ -136,8 +156,6 @@
                 <include>**/graph/ConnectedComponents$*.class</include>
                 <include>**/graph/ConnectedComponentsDescriptor.class</include>
                 <include>**/graph/ConnectedComponentsDescriptor$*.class</include>
-                <include>**/graph/ConnectedComponentsGeneratedImplicits.class</include>
-                <include>**/graph/ConnectedComponentsGeneratedImplicits$*.class</include>
               </includes>
             </configuration>
           </execution>
@@ -163,8 +181,6 @@
                 <include>**/graph/TransitiveClosureNaive$*.class</include>
                 <include>**/graph/TransitiveClosureNaiveDescriptor.class</include>
                 <include>**/graph/TransitiveClosureNaiveDescriptor$*.class</include>
-                <include>**/graph/TransitiveClosureNaiveGeneratedImplicits.class</include>
-                <include>**/graph/TransitiveClosureNaiveGeneratedImplicits$*.class</include>
               </includes>
             </configuration>
           </execution>
@@ -190,66 +206,99 @@
                 <include>**/graph/TransitiveClosureRD$*.class</include>
                 <include>**/graph/TransitiveClosureRDDescriptor.class</include>
                 <include>**/graph/TransitiveClosureRDDescriptor$*.class</include>
-                <include>**/graph/TransitiveClosureRDGeneratedImplicits.class</include>
-                <include>**/graph/TransitiveClosureRDGeneratedImplicits$*.class</include>
               </includes>
             </configuration>
           </execution>
+          -->
 
           <execution>
-            <id>TPCHQuery3</id>
+            <id>TPCHQuery3Immutable</id>
             <phase>package</phase>
             <goals>
               <goal>jar</goal>
             </goals>
 
             <configuration>
-              <classifier>TPCHQuery3</classifier>
+              <classifier>TPCHQuery3Immutable</classifier>
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.relational.TPCHQuery3Descriptor</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.relational.TPCHQuery3ImmutableDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
               <includes>
-                <include>**/relational/TPCHQuery3.class</include>
-                <include>**/relational/TPCHQuery3$*.class</include>
-                <include>**/relational/TPCHQuery3Descriptor.class</include>
-                <include>**/relational/TPCHQuery3Descriptor$*.class</include>
-                <include>**/relational/TPCHQuery3GeneratedImplicits.class</include>
-                <include>**/relational/TPCHQuery3GeneratedImplicits$*.class</include>
+                <include>**/relational/TPCHQuery3Immutable*.class</include>
               </includes>
             </configuration>
           </execution>
-
+          
           <execution>
-            <id>WordCount</id>
+            <id>TPCHQuery3Mutable</id>
             <phase>package</phase>
             <goals>
               <goal>jar</goal>
             </goals>
 
             <configuration>
-              <classifier>WordCount</classifier>
+              <classifier>TPCHQuery3Mutable</classifier>
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.wordcount.WordCountDescriptor</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.relational.TPCHQuery3MutableDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
               <includes>
-                <include>**/wordcount/WordCount.class</include>
-                <include>**/wordcount/WordCount$*.class</include>
-                <include>**/wordcount/WordCountDescriptor.class</include>
-                <include>**/wordcount/WordCountDescriptor$*.class</include>
-                <include>**/wordcount/WordCountGeneratedImplicits.class</include>
-                <include>**/wordcount/WordCountGeneratedImplicits$*.class</include>
+                <include>**/relational/TPCHQuery3Mutable*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+          
+          <execution>
+            <id>WordCountImmutable</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>WordCountImmutable</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.wordcount.WordCountImmutableDescriptor</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/wordcount/WordCountImmutable*.class</include>
               </includes>
             </configuration>
           </execution>
 
+          <execution>
+            <id>WordCountMutable</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>WordCountMutable</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.examples.wordcount.WordCountMutableDescriptor</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/wordcount/WordCountMutable*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+          
           <execution>
             <id>KMeansPlain</id>
             <phase>package</phase>
@@ -267,8 +316,7 @@
               </archive>
 
               <includes>
-                <include>**/datamining/KMeansPlain.class</include>
-                <include>**/datamining/KMeansPlain$*.class</include>
+                <include>**/datamining/KMeansPlain*.class</include>
               </includes>
             </configuration>
           </execution>
@@ -290,8 +338,7 @@
               </archive>
 
               <includes>
-                <include>**/wordcount/WordCountPlain.class</include>
-                <include>**/wordcount/WordCountPlain$*.class</include>
+                <include>**/wordcount/WordCountPlain*.class</include>
               </includes>
             </configuration>
           </execution>

@@ -13,6 +13,7 @@
 
 package eu.stratosphere.pact4s.compiler.udt
 
+import scala.collection.mutable
 import scala.util.DynamicVariable
 
 import eu.stratosphere.pact4s.compiler.Pact4sPlugin
@@ -28,14 +29,9 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
 
   trait UDTAnalyzer { this: TypingVisitor with Logger =>
 
-    //private val seen = collection.mutable.Set[(Type, Boolean)]()
+    private val mutableTypes = mutable.Set[Type]()
 
-    def getUDTDescriptor(tpe: Type): UDTDescriptor = {
-      //if (seen.add(normTpe(tpe), false))
-      //  Debug.report("Analyzing UDT[" + tpe + "]")
-
-      (new UDTAnalyzerInstance).analyze(tpe)
-    }
+    def getUDTDescriptor(tpe: Type): UDTDescriptor = (new UDTAnalyzerInstance).analyze(tpe)
 
     private def normTpe(tpe: Type): Type = {
       val currentThis = ThisType(localTyper.context.enclClass.owner)
@@ -51,17 +47,14 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
         val normed = normTpe(tpe)
 
         cache.getOrElseUpdate(normed) { id =>
-          //maybeVerbosely[UDTDescriptor](_ => seen.add(normed, true)) { d => "Analyzed UDT[" + tpe + " ~> " + normed + "] - " + d.getClass.getName } 
-          {
-            normed match {
-              case OpaqueType(ref) => OpaqueDescriptor(id, normed, ref)
-              case PrimitiveType(default, wrapper) => PrimitiveDescriptor(id, normed, default, wrapper)
-              case BoxedPrimitiveType(default, wrapper, box, unbox) => BoxedPrimitiveDescriptor(id, normed, default, wrapper, box, unbox)
-              case ListType(elemTpe, bf, iter) => analyzeList(id, normed, bf, iter)
-              case CaseClassType() => analyzeCaseClass(id, normed)
-              case BaseClassType() => analyzeClassHierarchy(id, normed)
-              case _ => UnsupportedDescriptor(id, normed, Seq("Unsupported type " + normed))
-            }
+          normed match {
+            case OpaqueType(ref)                                  => OpaqueDescriptor(id, normed, ref)
+            case PrimitiveType(default, wrapper)                  => PrimitiveDescriptor(id, normed, default, wrapper)
+            case BoxedPrimitiveType(default, wrapper, box, unbox) => BoxedPrimitiveDescriptor(id, normed, default, wrapper, box, unbox)
+            case ListType(elemTpe, bf, iter)                      => analyzeList(id, normed, bf, iter)
+            case CaseClassType()                                  => analyzeCaseClass(id, normed)
+            case BaseClassType()                                  => analyzeClassHierarchy(id, normed)
+            case _                                                => UnsupportedDescriptor(id, normed, Seq("Unsupported type " + normed))
           }
         }
       }
@@ -110,9 +103,9 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
             }
 
             val subMembers = subTypes map {
-              case BaseClassDescriptor(_, _, getters, _) => getters
+              case BaseClassDescriptor(_, _, getters, _)       => getters
               case CaseClassDescriptor(_, _, _, _, _, getters) => getters
-              case _ => Seq()
+              case _                                           => Seq()
             }
 
             val baseFields = baseMembers flatMap {
@@ -136,8 +129,8 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
 
               desc match {
                 case desc @ BaseClassDescriptor(_, _, getters, subTypes) => desc.copy(getters = getters map updateField, subTypes = subTypes map wireBaseFields)
-                case desc @ CaseClassDescriptor(_, _, _, _, _, getters) => desc.copy(getters = getters map updateField)
-                case _ => desc
+                case desc @ CaseClassDescriptor(_, _, _, _, _, getters)  => desc.copy(getters = getters map updateField)
+                case _                                                   => desc
               }
             }
 
@@ -163,7 +156,7 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
 
             val fields = getters map { case (fgetter, fsetter, fTpe) => FieldAccessor(fgetter, fsetter, fTpe, false, analyze(fTpe.resultType)) }
 
-            val mutable = maybeVerbosely(identity[Boolean])(_ => "Detected recyclable type: " + tpe) {
+            val mutable = maybeVerbosely[Boolean](m => m && mutableTypes.add(tpe))(_ => "Detected recyclable type: " + tpe) {
               enableMutableUDTs && (fields forall { f => f.setter != NoSymbol })
             }
 
@@ -250,7 +243,7 @@ trait UDTAnalyzers { this: Pact4sPlugin =>
         private object ArrayType {
           def unapply(tpe: Type): Option[Type] = tpe match {
             case _ if tpe.typeSymbol == definitions.ArrayClass => Some(tpe.typeArgs.head)
-            case _ => None
+            case _                                             => None
           }
         }
 

@@ -20,10 +20,9 @@ import eu.stratosphere.pact4s.common.operators._
 
 class ConnectedComponentsDescriptor extends PactDescriptor[ConnectedComponents] {
   override val name = "Connected Components"
-  override val description = "Parameters: [numSubTasks] [vertices] [edges] [output]"
-  override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
+  override val parameters = "-vertices <file> -edges <file> -output <file>"
 
-  override def createInstance(args: Map[Int, String]) = new ConnectedComponents(args.getOrElse(1, "vertices"), args.getOrElse(2, "edges"), args.getOrElse(3, "output"))
+  override def createInstance(args: Pact4sArgs) = new ConnectedComponents(args("vertices"), args("edges"), args("output"))
 }
 
 class ConnectedComponents(verticesInput: String, edgesInput: String, componentsOutput: String) extends PactProgram {

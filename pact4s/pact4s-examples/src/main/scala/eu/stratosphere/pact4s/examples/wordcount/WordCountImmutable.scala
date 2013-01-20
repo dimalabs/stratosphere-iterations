@@ -13,36 +13,29 @@
 
 package eu.stratosphere.pact4s.examples.wordcount
 
-import scala.math._
-import scala.math.Ordered._
-
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
-class WordCountDescriptor extends PactDescriptor[WordCount] {
+class WordCountImmutableDescriptor extends PactDescriptor[WordCountImmutable] {
   override val name = "Word Count"
-  override val description = "Parameters: [numSubTasks] [input] [output]"
-  override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
+  override val parameters = "-input <file> -output <file>"
 
-  override def createInstance(args: Map[Int, String]) = new WordCount(args.getOrElse(1, "input"), args.getOrElse(2, "output"))
+  override def createInstance(args: Pact4sArgs) = new WordCountImmutable(args("input"), args("output"))
 }
 
-class WordCount(textInput: String, wordsOutput: String) extends PactProgram {
+class WordCountImmutable(textInput: String, wordsOutput: String) extends PactProgram {
 
   val input = new DataSource(textInput, DelimetedDataSourceFormat(identity[String] _))
   val output = new DataSink(wordsOutput, DelimetedDataSinkFormat(formatOutput.tupled))
 
   val words = input flatMap { _.toLowerCase().split("""\W+""") map { (_, 1) } }
+  val counts = words groupBy { case (word, _) => word } combine { _ reduce addCounts }
 
-  val counts = words groupBy { case (word, _) => word } combine {
-    _.reduce { (z, s) => z.copy(_2 = z._2 + s._2) }
-  }
-  
-  counts.ignores { case (word, _) => word }
-  counts.preserves { case (word, _) => word } as { case (word, _) => word }
+  counts neglects { case (word, _) => word }
+  counts preserves { case (word, _) => word } as { case (word, _) => word }
 
   override def outputs = output <~ counts
 
+  def addCounts(w1: (String, Int), w2: (String, Int)) = (w1._1, w1._2 + w2._2)
   def formatOutput = (word: String, count: Int) => "%s %d".format(word, count)
 }
-

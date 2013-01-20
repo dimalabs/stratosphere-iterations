@@ -13,6 +13,8 @@
 
 package eu.stratosphere.pact4s.common
 
+import scala.util.DynamicVariable
+
 import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts._
 
@@ -126,45 +128,55 @@ trait InputHintable[In, Out] extends Serializable {
   private case class UnreadFields(fields: FieldSelector[_ <: Function1[In, _]], negate: Boolean)
   private case class CopiedFields(from: FieldSelector[_ <: Function1[In, _]], to: FieldSelector[_ <: Function1[Out, _]])
 
-  private var _unread: List[UnreadFields] = List[UnreadFields]()
-  private var _copied: List[CopiedFields] = List[CopiedFields]()
+  private var _unread: Option[UnreadFields] = None
+  private var _copied: Option[CopiedFields] = None
 
-  def ignores[Fields](fields: FieldSelector[In => Fields]): Unit = {
-    _unread = UnreadFields(fields, false) :: _unread
+  def neglects[Fields](fields: FieldSelector[In => Fields]): Unit = {
+    _unread = Some(UnreadFields(fields, false))
   }
 
-  def usesOnly[Fields](fields: FieldSelector[In => Fields]): Unit = {
-    _unread = UnreadFields(fields, true) :: _unread
+  def observes[Fields](fields: FieldSelector[In => Fields]): Unit = {
+    _unread = Some(UnreadFields(fields, true))
   }
 
   def preserves[Fields](from: FieldSelector[In => Fields]) = new {
     def as(to: FieldSelector[Out => Fields]): Unit = {
-      _copied = CopiedFields(from, to) :: _copied
+      _copied = Some(CopiedFields(from, to))
     }
   }
 
   protected def applyInputHints(markUnread: Int => Unit, markCopied: (Int, Int) => Unit): Unit = {
 
-    _unread.foreach { unread =>
+    if (InputHintable.enabled.value) {
 
-      val fieldSet = unread.fields.selectedFields.map(_.localPos).toSet
-      val unreadFields = unread.negate match {
-        // selected fields are unread
-        case false => fieldSet
-        // selected fields are read => all other fields are unread
-        case true  => unread.fields.inputFields.map(_.localPos).toSet.diff(fieldSet)
+      _unread map { unread =>
+
+        val fieldSet = unread.fields.selectedFields.map(_.localPos).toSet
+        val unreadFields = unread.negate match {
+          // selected fields are unread
+          case false => fieldSet
+          // selected fields are read => all other fields are unread
+          case true  => unread.fields.inputFields.map(_.localPos).toSet.diff(fieldSet)
+        }
+
+        unreadFields.foreach(markUnread(_))
       }
 
-      unreadFields.foreach(markUnread(_))
-    }
-
-    _copied.foreach {
-      case CopiedFields(from, to) => {
-        val pairs = from.selectedFields.map(_.localPos).zip(to.selectedFields.map(_.localPos))
-        pairs.foreach(markCopied.tupled)
+      _copied map {
+        case CopiedFields(from, to) => {
+          val pairs = from.selectedFields.map(_.localPos).zip(to.selectedFields.map(_.localPos))
+          pairs.foreach(markCopied.tupled)
+        }
       }
     }
   }
+}
+
+object InputHintable {
+
+  private val enabled = new DynamicVariable[Boolean](true)
+
+  def withEnabled[T](isEnabled: Boolean)(thunk: => T): T = enabled.withValue(isEnabled) { thunk }
 }
 
 trait OneInputHintable[In, Out] extends InputHintable[In, Out] with OutputHintable[Out] {

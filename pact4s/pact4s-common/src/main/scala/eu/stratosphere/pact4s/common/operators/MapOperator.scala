@@ -22,33 +22,32 @@ import eu.stratosphere.pact.common.contract._
 
 class MapOperator[In: UDT](input: DataStream[In]) extends Serializable {
 
-  def map[Out: UDT](mapFunction: In => Out) = createStream(Left(mapFunction), new UDF1[In, Out])
+  def map[Out: UDT](mapFunction: In => Out) = createStream(Left(mapFunction))
 
-  def flatMap[Out: UDT](mapFunction: In => Iterator[Out]) = createStream(Right(mapFunction), new UDF1[In, Out])
+  def flatMap[Out: UDT](mapFunction: In => Iterator[Out]) = createStream(Right(mapFunction))
 
   def filter(predicate: In => Boolean) = {
-    
-    val udf = new UDF1[In, In]
-    for (i <- udf.inputFields.map(_.localPos))
-      udf.markFieldCopied(i, i)
-      
-    val fun = { x: In => if (predicate(x)) Iterator.single(x) else Iterator.empty }
-    
-    createStream(Right(fun), udf)
+
+    val stream = input flatMap { x => if (predicate(x)) Iterator.single(x) else Iterator.empty }
+
+    def allFields = new FieldSelector[In => In](implicitly[UDT[In]])
+
+    stream preserves allFields as allFields
+    stream
   }
 
-  private def createStream[Out: UDT](mapFunction: Either[In => Out, In => Iterator[Out]], mapUDF: UDF1[In, Out]) = new DataStream[Out] with OneInputHintable[In, Out] {
-    
+  private def createStream[Out: UDT](mapFunction: Either[In => Out, In => Iterator[Out]]) = new DataStream[Out] with OneInputHintable[In, Out] {
+
     override def createContract = {
 
       val builder = Map4sContract.newBuilderFor(mapFunction).input(input.getContract)
-      
+
       val contract = new MapContract(builder) with Map4sContract[In, Out] {
 
-        override val udf = mapUDF
+        override val udf = new UDF1[In, Out]
         override val userCode = mapFunction
       }
-      
+
       applyHints(contract)
       contract
     }

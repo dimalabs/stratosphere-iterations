@@ -20,8 +20,7 @@ import eu.stratosphere.pact4s.common.operators._
 
 class BatchGradientDescentDescriptor[T <: BatchGradientDescent: Manifest] extends PactDescriptor[T] {
   override val name = "Batch Gradient Descent"
-  override val description = "Parameters: [numSubTasks] [eps] [eta] [lambda] [examples] [weights] [output]"
-  override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
+  override val parameters = "-eps <double> -eta <double> -lambda <double> -examples <file> -weights <file> -output <file>"
 }
 
 abstract class BatchGradientDescent(eps: Double, eta: Double, lambda: Double, examplesInput: String, weightsInput: String, weightsOutput: String) extends PactProgram {

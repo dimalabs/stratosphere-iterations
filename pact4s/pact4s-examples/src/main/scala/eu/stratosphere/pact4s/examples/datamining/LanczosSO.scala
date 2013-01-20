@@ -20,11 +20,9 @@ import eu.stratosphere.pact4s.common.operators._
 
 class LanczosSODescriptor extends PactDescriptor[LanczosSO] {
   override val name = "LanczosSO"
-  override val description = "Parameters: [numSubTasks] [k] [m] [ε] [A] [b] [λ] [Y]"
-  override def getDefaultParallelism(args: Map[Int, String]) = args.getOrElse(0, "1").toInt
+  override val parameters = "[-k <int:10>] [-m <int:10>] [-eps <double:0.05>] -A <file> -b <file> -lamba <file> -Y <file>"
 
-  override def createInstance(args: Map[Int, String]) = new LanczosSO(args.getOrElse(1, "10").toInt, args.getOrElse(2, "10").toInt, args.getOrElse(3, "0.05").toDouble,
-    args.getOrElse(4, "A"), args.getOrElse(5, "b"), args.getOrElse(6, "λ"), args.getOrElse(7, "Y"))
+  override def createInstance(args: Pact4sArgs) = new LanczosSO(args("k", "10").toInt, args("m", "10").toInt, args("eps", "0.05").toDouble, args("A"), args("b"), args("lambda"), args("Y"))
 }
 
 class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outputLambda: String, outputY: String) extends PactProgram {

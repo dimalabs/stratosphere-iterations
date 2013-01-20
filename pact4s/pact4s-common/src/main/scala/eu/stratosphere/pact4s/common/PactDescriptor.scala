@@ -20,40 +20,48 @@ import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.analysis.postPass._
 
 import eu.stratosphere.pact.common.plan._
+import eu.stratosphere.pact.compiler.plan.OptimizedPlan
+import eu.stratosphere.pact.compiler.postpass.OptimizerPostPass
 
-abstract class PactDescriptor[T <: PactProgram: Manifest] extends PlanAssembler with PlanAssemblerDescription
+abstract class PactDescriptor[T <: PactProgram: Manifest] extends PlanAssembler
+  with PlanAssemblerDescription with OptimizerPostPass
   with GlobalSchemaGenerator with GlobalSchemaOptimizer {
 
   val name: String = implicitly[Manifest[T]].toString
-  val description: String
+  val parameters: String
 
-  def getName(args: Map[Int, String]) = name
-  def getDefaultParallelism(args: Map[Int, String]) = 1
-  override def getDescription = description
+  override def getDescription = "Parameters: [-subtasks <int:1>] [-nohints] [-nocompact] " + parameters
 
-  override def getPlan(args: String*): Plan = {
+  override def getPlan(rawargs: String*): Plan = {
 
-    val argsMap = args.zipWithIndex.map (_.swap).toMap
-    val program = createInstance(argsMap)
+    val args = Pact4sArgs.parse(rawargs)
+    val program = createInstance(args)
 
     val sinks = Pact4sContractFactory.withEnvironment {
-      program.outputs map { _.getContract.asInstanceOf[DataSink4sContract[_]] }
+      InputHintable.withEnabled(args.schemaHints) {
+        program.outputs map { _.getContract.asInstanceOf[DataSink4sContract[_]] }
+      }
     }
 
     initGlobalSchema(sinks)
 
-    val plan = new Plan(sinks, getName(argsMap))
-    plan.setDefaultParallelism(getDefaultParallelism(argsMap))
+    val plan = new Plan(sinks, name)
+    plan.setDefaultParallelism(args.defaultParallelism)
+    plan.getPlanConfiguration().setBoolean("Pact4s::SchemaCompaction", args.schemaCompaction)
     plan
   }
 
-  def createInstance(args: Map[Int, String]): T = {
+  override def postPass(plan: OptimizedPlan): Unit = {
+    optimizeSchema(plan, plan.getPlanConfiguration().getBoolean("Pact4s::SchemaCompaction", true))
+  }
+
+  def createInstance(args: Pact4sArgs): T = {
 
     val clazz = implicitly[Manifest[T]].erasure
 
     try {
 
-      val constr = optionally { clazz.getConstructor(classOf[Map[Int, String]]).asInstanceOf[Constructor[Any]] }
+      val constr = optionally { clazz.getConstructor(classOf[Pact4sArgs]).asInstanceOf[Constructor[Any]] }
       val inst = constr map { _.newInstance(args) } getOrElse { clazz.newInstance }
 
       inst.asInstanceOf[T]
@@ -69,6 +77,35 @@ abstract class PactDescriptor[T <: PactProgram: Manifest] extends PlanAssembler 
     } catch {
       case _ => None
     }
+  }
+}
+
+case class Pact4sArgs(argsMap: Map[String, String], defaultParallelism: Int, schemaHints: Boolean, schemaCompaction: Boolean) {
+  def apply(key: String): String = argsMap.getOrElse(key, key)
+  def apply(key: String, default: => String) = argsMap.getOrElse(key, default)
+}
+
+object Pact4sArgs {
+
+  def parse(args: Seq[String]): Pact4sArgs = {
+
+    var argsMap = Map[String, String]()
+    var defaultParallelism = 1
+    var schemaHints = true
+    var schemaCompaction = true
+
+    val ParamName = "-(.+)".r
+
+    def parse(args: Seq[String]): Unit = args match {
+      case Seq("-subtasks", value, rest @ _*)     => { defaultParallelism = value.toInt; parse(rest) }
+      case Seq("-nohints", rest @ _*)             => { schemaHints = false; parse(rest) }
+      case Seq("-nocompact", rest @ _*)           => { schemaCompaction = false; parse(rest) }
+      case Seq(ParamName(name), value, rest @ _*) => { argsMap = argsMap.updated(name, value); parse(rest) }
+      case Seq()                                  =>
+    }
+
+    parse(args)
+    Pact4sArgs(argsMap, defaultParallelism, schemaHints, schemaCompaction)
   }
 }
 
