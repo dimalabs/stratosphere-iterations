@@ -23,17 +23,12 @@ import eu.stratosphere.pact.common.type.base.PactString;
 
 import java.util.Iterator;
 
-public class AppendTokenReducer extends ReduceStub {
+public class IdentityReducer extends ReduceStub {
 
   @Override
   public void reduce(Iterator<PactRecord> records, Collector<PactRecord> collector) throws Exception {
     while (records.hasNext()) {
-      PactRecord record = records.next();
-      PactInteger value = record.getField(1, PactInteger.class);
-      value.setValue(value.getValue() + 1);
-      record.setField(1, value);
-
-      collector.collect(record);
+      collector.collect(records.next());
     }
   }
 }

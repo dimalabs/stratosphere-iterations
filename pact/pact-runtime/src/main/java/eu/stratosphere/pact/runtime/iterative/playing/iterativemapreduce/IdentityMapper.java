@@ -20,19 +20,10 @@ import eu.stratosphere.pact.common.stubs.MapStub;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactInteger;
 
-public class AppendTokenMapper extends MapStub {
+public class IdentityMapper extends MapStub {
 
   @Override
   public void map(PactRecord record, Collector<PactRecord> collector) throws Exception {
-
-    PactInteger key = record.getField(0, PactInteger.class);
-    key.setValue(key.getValue() * 3);
-    record.setField(0, key);
-
-    PactInteger value = record.getField(1, PactInteger.class);
-    value.setValue(value.getValue() + 1);
-    record.setField(1, value);
-
     collector.collect(record);
   }
 }

@@ -55,8 +55,11 @@ public class CompensatableConnectedComponents {
     long memoryPerTask = 10;
     long memoryForMatch = memoryPerTask;
 
+    String failingWorkers = "1";
+    int failingIteration = 2;
+    double messageLoss = 0.75;
 
-    if (args.length == 9) {
+    if (args.length == 12) {
       degreeOfParallelism = Integer.parseInt(args[0]);
       numSubTasksPerInstance = Integer.parseInt(args[1]);
       initialSolutionSetPath = args[2];
@@ -66,6 +69,10 @@ public class CompensatableConnectedComponents {
       confPath = args[6];
       memoryPerTask = Integer.parseInt(args[7]);
       memoryForMatch = Integer.parseInt(args[8]);
+
+      failingWorkers = args[9];
+      failingIteration = Integer.parseInt(args[10]);
+      messageLoss = Double.parseDouble(args[11]);
     }
 
     JobGraph jobGraph = new JobGraph("CompensatableConnectedComponents");
@@ -122,6 +129,10 @@ public class CompensatableConnectedComponents {
     PactRecordComparatorFactory.writeComparatorSetupToConfig(
         intermediateMinimumComponentIDConfig.getConfigForInputParameters(0), new int[] { 0 },
         new Class[] { PactLong.class }, new boolean[] { true });
+    intermediateMinimumComponentIDConfig.setStubParameter("compensation.failingWorker", failingWorkers);
+    intermediateMinimumComponentIDConfig.setStubParameter("compensation.failingIteration",
+        String.valueOf(failingIteration));
+    intermediateMinimumComponentIDConfig.setStubParameter("compensation.messageLoss", String.valueOf(messageLoss));
 
     JobTaskVertex intermediateSolutionSetUpdate = JobGraphUtils.createTask(WorksetIterationSolutionsetJoinTask.class,
         "Intermediate-UpdateComponentID", jobGraph, degreeOfParallelism, numSubTasksPerInstance);
@@ -136,6 +147,10 @@ public class CompensatableConnectedComponents {
     PactRecordComparatorFactory.writeComparatorSetupToConfig(
         intermediateSolutionSetUpdateConfig.getConfigForInputParameters(1), new int[] { 0 },
         new Class[] { PactLong.class }, new boolean[] { true });
+    intermediateSolutionSetUpdateConfig.setStubParameter("compensation.failingWorker", failingWorkers);
+    intermediateSolutionSetUpdateConfig.setStubParameter("compensation.failingIteration",
+        String.valueOf(failingIteration));
+    intermediateSolutionSetUpdateConfig.setStubParameter("compensation.messageLoss", String.valueOf(messageLoss));
 
     JobTaskVertex tail = JobGraphUtils.createTask(IterationTailPactTask.class, "Tail-NeighborsComponentIDToWorkset",
         jobGraph, degreeOfParallelism, numSubTasksPerInstance);
@@ -147,6 +162,9 @@ public class CompensatableConnectedComponents {
     PactRecordComparatorFactory.writeComparatorSetupToConfig(tailConfig.getConfigForInputParameters(1),
         new int[] { 0 }, new Class[] { PactLong.class }, new boolean[] { true });
     tailConfig.setMemorySize(memoryForMatch * JobGraphUtils.MEGABYTE);
+    tailConfig.setStubParameter("compensation.failingWorker", failingWorkers);
+    tailConfig.setStubParameter("compensation.failingIteration", String.valueOf(failingIteration));
+    tailConfig.setStubParameter("compensation.messageLoss", String.valueOf(messageLoss));
 
     JobOutputVertex sync = JobGraphUtils.createSync(jobGraph, degreeOfParallelism);
     TaskConfig syncConfig = new TaskConfig(sync.getConfiguration());
@@ -158,6 +176,21 @@ public class CompensatableConnectedComponents {
     TaskConfig outputConfig = new TaskConfig(output.getConfiguration());
     outputConfig.setStubClass(ConnectedComponentsOutFormat.class);
     outputConfig.setStubParameter(FileOutputFormat.FILE_PARAMETER_KEY, outputPath);
+
+    JobTaskVertex compensation = JobGraphUtils.createTask(IterationIntermediatePactTask.class,
+        "Intermediate-ReactivateNeighbors", jobGraph, degreeOfParallelism, numSubTasksPerInstance);
+    TaskConfig compensationConfig = new TaskConfig(compensation.getConfiguration());
+    compensationConfig.setDriver(RepeatableHashjoinMatchDriverWithCachedBuildside.class);
+    compensationConfig.setStubClass(NeighborsComponentIDToWorksetMatch.class);
+    PactRecordComparatorFactory.writeComparatorSetupToConfig(compensationConfig.getConfigForInputParameters(0),
+        new int[] { 0 }, new Class[] { PactLong.class }, new boolean[] { true });
+    PactRecordComparatorFactory.writeComparatorSetupToConfig(compensationConfig.getConfigForInputParameters(1),
+        new int[] { 0 }, new Class[] { PactLong.class }, new boolean[] { true });
+    compensationConfig.setMemorySize(memoryForMatch * JobGraphUtils.MEGABYTE);
+    compensationConfig.setStubParameter("compensation.failingWorker", failingWorkers);
+    compensationConfig.setStubParameter("compensation.failingIteration", String.valueOf(failingIteration));
+    compensationConfig.setStubParameter("compensation.messageLoss", String.valueOf(messageLoss));
+
 
     JobOutputVertex fakeTailOutput = JobGraphUtils.createFakeOutput(jobGraph, "FakeTailOutput", degreeOfParallelism,
         numSubTasksPerInstance);
@@ -172,6 +205,11 @@ public class CompensatableConnectedComponents {
     JobGraphUtils.connect(intermediateMinimumComponentID, intermediateSolutionSetUpdate, ChannelType.NETWORK,
         DistributionPattern.POINTWISE, ShipStrategyType.FORWARD);
     intermediateSolutionSetUpdateConfig.setGateIterativeWithNumberOfEventsUntilInterrupt(0, 1);
+
+    JobGraphUtils.connect(compensation, intermediateSolutionSetUpdate, ChannelType.NETWORK,
+        DistributionPattern.BIPARTITE, ShipStrategyType.PARTITION_HASH);
+
+    intermediateSolutionSetUpdateConfig.addInputToGroup(1);
 
     JobGraphUtils.connect(initialSolutionset, intermediateSolutionSetUpdate, ChannelType.NETWORK,
         DistributionPattern.BIPARTITE, ShipStrategyType.PARTITION_HASH);
@@ -191,6 +229,12 @@ public class CompensatableConnectedComponents {
     JobGraphUtils.connect(tail, fakeTailOutput, ChannelType.INMEMORY, DistributionPattern.POINTWISE,
         ShipStrategyType.FORWARD);
 
+    JobGraphUtils.connect(graph, compensation, ChannelType.NETWORK, DistributionPattern.BIPARTITE,
+        ShipStrategyType.PARTITION_HASH);
+
+    JobGraphUtils.connect(initialSolutionset, compensation, ChannelType.NETWORK, DistributionPattern.BIPARTITE,
+        ShipStrategyType.PARTITION_HASH);
+
     initialSolutionset.setVertexToShareInstancesWith(head);
     initialWorkset.setVertexToShareInstancesWith(head);
     graph.setVertexToShareInstancesWith(head);
@@ -200,6 +244,7 @@ public class CompensatableConnectedComponents {
     fakeTailOutput.setVertexToShareInstancesWith(head);
     output.setVertexToShareInstancesWith(head);
     sync.setVertexToShareInstancesWith(head);
+    compensation.setVertexToShareInstancesWith(head);
 
     GlobalConfiguration.loadConfiguration(confPath);
     Configuration conf = GlobalConfiguration.getConfiguration();

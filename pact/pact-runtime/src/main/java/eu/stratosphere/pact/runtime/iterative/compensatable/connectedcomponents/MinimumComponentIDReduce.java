@@ -5,20 +5,42 @@ import eu.stratosphere.pact.common.stubs.Collector;
 import eu.stratosphere.pact.common.stubs.ReduceStub;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactLong;
+import eu.stratosphere.pact.runtime.iterative.compensatable.ConfigUtils;
 
 import java.util.Iterator;
+import java.util.Random;
+import java.util.Set;
 
 public class MinimumComponentIDReduce extends ReduceStub {
 
-  private PactRecord result;
+  private PactRecord result = new PactRecord();
+
+  private int workerIndex;
+  private int currentIteration;
+
+  private int failingIteration;
+  private Set<Integer> failingWorkers;
+  private double messageLoss;
+
+  private Random random;
 
   @Override
   public void open(Configuration parameters) throws Exception {
-    result = new PactRecord();
-  }
+    workerIndex = ConfigUtils.asInteger("pact.parallel.task.id", parameters);
+    currentIteration = ConfigUtils.asInteger("pact.iterations.currentIteration", parameters);
+    failingIteration = ConfigUtils.asInteger("compensation.failingIteration", parameters);
+    failingWorkers = ConfigUtils.asIntSet("compensation.failingWorker", parameters);
+    messageLoss = ConfigUtils.asDouble("compensation.messageLoss", parameters);
 
+    random = new Random();
+  }
   @Override
   public void reduce(Iterator<PactRecord> records, Collector<PactRecord> out) throws Exception {
+
+    if (currentIteration == failingIteration && failingWorkers.contains(workerIndex) &&
+        random.nextDouble() <= messageLoss) {
+      return;
+    }
 
     PactRecord first = records.next();
     long minimumComponentID = first.getField(1, PactLong.class).getValue();

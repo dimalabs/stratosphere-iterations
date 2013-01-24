@@ -70,6 +70,14 @@ public class JobGraphUtils {
     new TaskConfig(source.getConfiguration()).addOutputShipStrategy(shipStrategy);
   }
 
+  public static void connect(AbstractJobVertex source, AbstractJobVertex target, ChannelType channelType,
+                             int indexOfOutputGate, int indexOfInputGate, DistributionPattern distributionPattern,
+                             ShipStrategyType shipStrategy) throws JobGraphDefinitionException {
+    source.connectTo(target, channelType, CompressionLevel.NO_COMPRESSION, indexOfOutputGate, indexOfInputGate,
+        distributionPattern);
+    new TaskConfig(source.getConfiguration()).addOutputShipStrategy(shipStrategy);
+  }
+
   public static JobTaskVertex createTask(Class<? extends RegularPactTask> task, String name, JobGraph graph,
       int degreeOfParallelism, int numSubtasksPerInstance) {
     JobTaskVertex taskVertex = new JobTaskVertex(name, graph);

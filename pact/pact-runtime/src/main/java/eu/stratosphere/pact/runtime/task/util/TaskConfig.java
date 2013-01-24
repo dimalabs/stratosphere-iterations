@@ -35,6 +35,7 @@ import eu.stratosphere.pact.common.generic.types.TypeSerializerFactory;
 import eu.stratosphere.pact.common.stubs.Stub;
 import eu.stratosphere.pact.common.util.InstantiationUtil;
 import eu.stratosphere.pact.runtime.iterative.convergence.ConvergenceCriterion;
+import eu.stratosphere.pact.runtime.iterative.io.HdfsCheckpointWriter;
 import eu.stratosphere.pact.runtime.shipping.ShipStrategy.ShipStrategyType;
 import eu.stratosphere.pact.runtime.task.PactDriver;
 import eu.stratosphere.pact.runtime.task.chaining.ChainedDriver;
@@ -577,7 +578,7 @@ public class TaskConfig
 	/**
 	 * Sets the amount of memory dedicated to the task's input preparation (sorting / hashing).
 	 * 
-	 * @param memSize The memory size in bytes.
+	 * @param memorySize The memory size in bytes.
 	 */
 	public void setMemorySize(long memorySize) {
 		this.config.setLong(SIZE_MEMORY, memorySize);
@@ -689,7 +690,7 @@ public class TaskConfig
 	// --------------------------------------------------------------------------------------------
 
   public void setBackChannelMemoryFraction(float fraction) {
-    Preconditions.checkArgument(fraction > 0 && fraction < 1);
+    Preconditions.checkArgument(fraction > 0 && fraction <= 1);
     config.setFloat(BACKCHANNEL_MEMORY_FRACTION, fraction);
   }
 
@@ -812,17 +813,37 @@ public class TaskConfig
   }
 
   public <T> Class<? extends TypeComparatorFactory<T>> getWorksetHashJoinProbeSideComparatorFactoryClass(ClassLoader
-                                                                                                             classLoader) throws ClassNotFoundException {
+      classLoader) throws ClassNotFoundException {
     return getComparatorFactoryClass(WORKSET_HASHJOIN_PROBESIDE_COMPARATOR_FACTORY_CLASS, classLoader);
   }
 
   public <T> void setWorksetHashjoinProbesideComparatorFactoryClass(Class<? extends TypeComparatorFactory<T>>
-                                                                        comparatorFactoryClass) {
+      comparatorFactoryClass) {
     config.setClass(WORKSET_HASHJOIN_PROBESIDE_COMPARATOR_FACTORY_CLASS, comparatorFactoryClass);
   }
 
   public String getWorksetHashjoinProbesideComparatorPrefix() {
     return WORKSET_HASHJOIN_PROBESIDE_COMPARATOR_PREFIX;
+  }
+
+  private static final String SIMULATE_CHECKPOINTS_WRITER_CLASS = "pact.iterative.simulateCheckpointsWriterClass";
+
+  private static final String SIMULATE_CHECKPOINTS_PATH = "pact.iterative.simulateCheckpointsPath";
+
+  public void setSimulateCheckpointsWriterClass(Class<? extends HdfsCheckpointWriter> writerClass) {
+    config.setClass(SIMULATE_CHECKPOINTS_WRITER_CLASS, writerClass);
+  }
+
+  public Class<? extends HdfsCheckpointWriter> getSimulateCheckpointsWriterClass() {
+    return config.getClass(SIMULATE_CHECKPOINTS_WRITER_CLASS, null, HdfsCheckpointWriter.class);
+  }
+
+  public void setSimulateCheckpointsPath(String path) {
+    config.setString(SIMULATE_CHECKPOINTS_PATH, path);
+  }
+
+  public String getSimulateCheckpointsPath() {
+    return config.getString(SIMULATE_CHECKPOINTS_PATH, null);
   }
 
   // --------------------------------------------------------------------------------------------

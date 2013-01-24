@@ -118,7 +118,7 @@ public class SortMergeCoGroupIterator<T1, T2> implements CoGroupTaskIterator<T1,
 		
 		this.reader1 = reader1;
 		this.reader2 = reader2;
-		this.memoryPerChannel = memory / 2;
+		this.memoryPerChannel = localStrategy == LocalStrategy.SORT_BOTH_MERGE ? memory / 2 : memory;
 		this.fileHandlesPerChannel = (maxNumFileHandles / 2) < 2 ? 2 : (maxNumFileHandles / 2);
 		this.localStrategy = localStrategy;
 		this.parentTask = parentTask;
@@ -146,7 +146,7 @@ public class SortMergeCoGroupIterator<T1, T2> implements CoGroupTaskIterator<T1,
 		
 		this.reader1 = reader1;
 		this.reader2 = reader2;
-		this.memoryPerChannel = memory / 2;
+		this.memoryPerChannel = localStrategy == LocalStrategy.SORT_BOTH_MERGE ? memory / 2 : memory;
 		this.fileHandlesPerChannel = (maxNumFileHandles / 2) < 2 ? 2 : (maxNumFileHandles / 2);
 		this.localStrategy = localStrategy;
 		this.parentTask = parentTask;

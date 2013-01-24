@@ -25,7 +25,10 @@ import eu.stratosphere.pact.runtime.iterative.concurrent.Broker;
 import eu.stratosphere.pact.runtime.iterative.driver.AbstractRepeatableMatchDriver;
 import eu.stratosphere.pact.runtime.iterative.event.EndOfSuperstepEvent;
 import eu.stratosphere.pact.runtime.iterative.event.TerminationEvent;
+import eu.stratosphere.pact.runtime.iterative.io.CheckpointingDataOutputCollector;
 import eu.stratosphere.pact.runtime.iterative.io.DataOutputCollector;
+import eu.stratosphere.pact.runtime.iterative.io.DataOutputCollectorImpl;
+import eu.stratosphere.pact.runtime.iterative.io.HdfsCheckpointWriter;
 import eu.stratosphere.pact.runtime.iterative.monitoring.IterationMonitoring;
 import eu.stratosphere.pact.runtime.task.PactTaskContext;
 import org.apache.commons.logging.Log;
@@ -67,16 +70,32 @@ public class IterationTailPactTask<S extends Stub, OT> extends AbstractIterative
   @Override
   public void invoke() throws Exception {
 
-    //boolean isJoinOnConstantDataPath = driver instanceof RepeatableHashJoinMatchDriver || driver instanceof RepeatableHashJoinMatchDriver2;
-
     // Initially retreive the backchannel from the iteration head
     final BlockingBackChannel backChannel = retrieveBackChannel();
 
     // redirect output to the backchannel
     //TODO type safety
-    DataOutputCollector outputCollector = new DataOutputCollector(backChannel.getWriteEnd(),
+    DataOutputCollector outputCollector = new DataOutputCollectorImpl(backChannel.getWriteEnd(),
         createOutputTypeSerializer(), validOutputs);
+
+    // simulate checkpoints?
+    Class<? extends HdfsCheckpointWriter> checkpointWriterClass = getTaskConfig().getSimulateCheckpointsWriterClass();
+    String checkpointPath = getTaskConfig().getSimulateCheckpointsPath();
+
+    if (checkpointWriterClass != null && checkpointPath != null) {
+
+      if (log.isInfoEnabled()) {
+        log.info(formatLogString("Simulating checkpointing to [" + checkpointPath + "] using " +
+            "[" + checkpointWriterClass + "]"));
+      }
+
+      outputCollector = new CheckpointingDataOutputCollector(checkpointWriterClass,
+          getEnvironment().getJobID().toString(), getEnvironment().getIndexInSubtaskGroup(), checkpointPath,
+          outputCollector);
+    }
+
     output = outputCollector;
+
 
     while (!terminationRequested()) {
 
@@ -89,6 +108,8 @@ public class IterationTailPactTask<S extends Stub, OT> extends AbstractIterative
       if (!inFirstIteration() && !isJoinOnConstantDataPath()) {
         reinstantiateDriver();
       }
+
+      outputCollector.prepare();
 
       super.invoke();
       notifyMonitor(IterationMonitoring.Event.TAIL_PACT_FINISHED);
@@ -114,13 +135,7 @@ public class IterationTailPactTask<S extends Stub, OT> extends AbstractIterative
     }
 
     if (isJoinOnConstantDataPath()) {
-
       ((AbstractRepeatableMatchDriver) driver).finalCleanup();
-      /*if (driver instanceof RepeatableHashJoinMatchDriver) {
-        ((RepeatableHashJoinMatchDriver) driver).finalCleanup();
-      } else {
-        ((RepeatableHashJoinMatchDriver2) driver).finalCleanup();
-      }       */
     }
   }
 

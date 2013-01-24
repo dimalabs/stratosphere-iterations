@@ -117,10 +117,14 @@ public class IterationSynchronizationSinkTask extends AbstractOutputTask impleme
         log.info(formatLogString("starting iteration [" + currentIteration + "]"));
       }
 
+      long iterationStartTime = System.currentTimeMillis();
       readHeadEventChannel();
+      long duration = System.currentTimeMillis() - iterationStartTime;
+
+      System.out.println(formatLogString("finishing iteration [" + currentIteration + "], took ;" + duration +"; ms"));
 
       if (log.isInfoEnabled()) {
-        log.info(formatLogString("finishing iteration [" + currentIteration + "]"));
+        log.info(formatLogString("finishing iteration [" + currentIteration + "], took ;" + duration +"; ms"));
       }
 
       if (checkForConvergence()) {

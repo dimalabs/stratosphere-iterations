@@ -33,6 +33,9 @@ public class CompensatableDotProductCoGroup extends CoGroupStub {
 
   private static final double BETA = 0.85;
 
+  private final PactDouble newRank = new PactDouble();
+  private final BooleanValue newIsDangling = new BooleanValue();
+
   @Override
   public void open(Configuration parameters) throws Exception {
     accumulator = new PactRecord();
@@ -85,9 +88,12 @@ public class CompensatableDotProductCoGroup extends CoGroupStub {
 
     aggregator.aggregate(diff, rank, danglingRankToAggregate, danglingVerticesToAggregate, 1, edges, summedRank);
 
+    newRank.setValue(rank);
+    newIsDangling.set(isDangling);
+
     accumulator.setField(0, currentPageRank.getField(0, PactLong.class));
-    accumulator.setField(1, new PactDouble(rank));
-    accumulator.setField(2, new BooleanValue(isDangling));
+    accumulator.setField(1, newRank);
+    accumulator.setField(2, newIsDangling);
 
     collector.collect(accumulator);
   }

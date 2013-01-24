@@ -37,6 +37,7 @@ import eu.stratosphere.pact.runtime.iterative.task.IterationTailPactTask;
 import eu.stratosphere.pact.runtime.plugable.PactRecordComparatorFactory;
 import eu.stratosphere.pact.runtime.shipping.ShipStrategy.ShipStrategyType;
 import eu.stratosphere.pact.runtime.task.CoGroupDriver;
+import eu.stratosphere.pact.runtime.task.CombineDriver;
 import eu.stratosphere.pact.runtime.task.MapDriver;
 import eu.stratosphere.pact.runtime.task.RegularPactTask;
 import eu.stratosphere.pact.runtime.task.TempDriver;
@@ -53,8 +54,9 @@ public class CompensatableDanglingPageRank {
         "test-inputs/danglingpagerank/adjacencylists";
     String outputPath = "file:///tmp/stratosphere/iterations";
     String confPath = PlayConstants.PLAY_DIR + "local-conf";
-    int memoryPerTask = 25;
-    int memoryForMatch = memoryPerTask;
+    int memoryPerMinorConsumer = 10;
+    int memoryPerMajorConsumer = 25;
+    int memoryForMatch = memoryPerMajorConsumer;
     int numIterations = 25;
     long numVertices = 5;
     long numDanglingVertices = 1;
@@ -63,21 +65,29 @@ public class CompensatableDanglingPageRank {
     int failingIteration = 2;
     double messageLoss = 0.75;
 
-    if (args.length == 14) {
+    String checkpointPath = null;
+    //String checkpointPath = "file:///tmp/checkpoints";
+
+    if (args.length >= 15) {
       degreeOfParallelism = Integer.parseInt(args[0]);
       numSubTasksPerInstance = Integer.parseInt(args[1]);
       pageWithRankInputPath = args[2];
       adjacencyListInputPath = args[3];
       outputPath = args[4];
       confPath = args[5];
-      memoryPerTask = Integer.parseInt(args[6]);
-      memoryForMatch = Integer.parseInt(args[7]);
-      numIterations = Integer.parseInt(args[8]);
-      numVertices = Long.parseLong(args[9]);
-      numDanglingVertices = Long.parseLong(args[10]);
-      failingWorkers = args[11];
-      failingIteration = Integer.parseInt(args[12]);
-      messageLoss = Double.parseDouble(args[13]);
+      memoryPerMinorConsumer = Integer.parseInt(args[6]);
+      memoryPerMajorConsumer = Integer.parseInt(args[7]);
+      memoryForMatch = Integer.parseInt(args[8]);
+      numIterations = Integer.parseInt(args[9]);
+      numVertices = Long.parseLong(args[10]);
+      numDanglingVertices = Long.parseLong(args[11]);
+      failingWorkers = args[12];
+      failingIteration = Integer.parseInt(args[13]);
+      messageLoss = Double.parseDouble(args[14]);
+
+      if (args.length == 16) {
+        checkpointPath = args[15];
+      }
     }
 
     JobGraph jobGraph = new JobGraph("CompensatableDanglingPageRank");
@@ -102,19 +112,19 @@ public class CompensatableDanglingPageRank {
     TaskConfig sortedPartitionedPageRankConfig = new TaskConfig(sortedPartitionedPageRank.getConfiguration());
     sortedPartitionedPageRankConfig.setDriver(SortingTempDriver.class);
     sortedPartitionedPageRankConfig.setStubClass(IdentityMap.class);
-    sortedPartitionedPageRankConfig.setMemorySize(memoryPerTask * JobGraphUtils.MEGABYTE);
-    sortedPartitionedPageRankConfig.setNumFilehandles(10);
+    sortedPartitionedPageRankConfig.setMemorySize(memoryPerMajorConsumer * JobGraphUtils.MEGABYTE);
+    sortedPartitionedPageRankConfig.setNumFilehandles(128);
     sortedPartitionedPageRankConfig.setComparatorFactoryForInput(PactRecordComparatorFactory.class, 0);
     PactRecordComparatorFactory.writeComparatorSetupToConfig(
         sortedPartitionedPageRankConfig.getConfigForInputParameters(0),
-        new int[] { 0 }, new Class[] { PactLong.class }, new boolean[] { true });
+        new int[] { 0 }, new Class[]{PactLong.class}, new boolean[]{true});
 
     JobTaskVertex head = JobGraphUtils.createTask(IterationHeadPactTask.class, "IterationHead", jobGraph,
         degreeOfParallelism, numSubTasksPerInstance);
     TaskConfig headConfig = new TaskConfig(head.getConfiguration());
     headConfig.setDriver(MapDriver.class);
     headConfig.setStubClass(CompensatingMap.class);
-    headConfig.setMemorySize(memoryPerTask * JobGraphUtils.MEGABYTE);
+    headConfig.setMemorySize(memoryPerMinorConsumer * JobGraphUtils.MEGABYTE);
     headConfig.setBackChannelMemoryFraction(1f);
     headConfig.setComparatorFactoryForOutput(PactRecordComparatorFactory.class, 0);
     PactRecordComparatorFactory.writeComparatorSetupToConfig(headConfig.getConfigForOutputParameters(0),
@@ -129,7 +139,7 @@ public class CompensatableDanglingPageRank {
     TaskConfig tempIntermediateConfig = new TaskConfig(tempIntermediate.getConfiguration());
     tempIntermediateConfig.setDriver(TempDriver.class);
     tempIntermediateConfig.setStubClass(IdentityMap.class);
-    tempIntermediateConfig.setMemorySize(memoryPerTask * JobGraphUtils.MEGABYTE);
+    tempIntermediateConfig.setMemorySize(memoryPerMinorConsumer * JobGraphUtils.MEGABYTE);
 
     JobTaskVertex intermediate = JobGraphUtils.createTask(IterationIntermediatePactTask.class,
         "IterationIntermediate", jobGraph, degreeOfParallelism, numSubTasksPerInstance);
@@ -139,15 +149,29 @@ public class CompensatableDanglingPageRank {
     PactRecordComparatorFactory.writeComparatorSetupToConfig(intermediateConfig.getConfigForInputParameters(0),
         new int[] { 0 }, new Class[] { PactLong.class }, new boolean[] { true });
     PactRecordComparatorFactory.writeComparatorSetupToConfig(intermediateConfig.getConfigForInputParameters(1),
-        new int[] { 0 }, new Class[] { PactLong.class }, new boolean[]{true});
-    intermediateConfig.setMemorySize(memoryForMatch * JobGraphUtils.MEGABYTE);
+        new int[] { 0 }, new Class[] { PactLong.class }, new boolean[] { true });
+    intermediateConfig.setMemorySize(memoryPerMajorConsumer * JobGraphUtils.MEGABYTE);
     intermediateConfig.setComparatorFactoryForOutput(PactRecordComparatorFactory.class, 0);
     PactRecordComparatorFactory.writeComparatorSetupToConfig(intermediateConfig.getConfigForOutputParameters(0),
-        new int[] { 0 }, new Class[] { PactLong.class }, new boolean[]{true});
+        new int[] { 0 }, new Class[] { PactLong.class }, new boolean[] { true });
     intermediateConfig.setStubParameter("pageRank.numVertices", String.valueOf(numVertices));
     intermediateConfig.setStubParameter("compensation.failingWorker", failingWorkers);
     intermediateConfig.setStubParameter("compensation.failingIteration", String.valueOf(failingIteration));
     intermediateConfig.setStubParameter("compensation.messageLoss", String.valueOf(messageLoss));
+
+    JobTaskVertex combiner = JobGraphUtils.createTask(IterationIntermediatePactTask.class, "Combiner", jobGraph,
+        degreeOfParallelism, numSubTasksPerInstance);
+    TaskConfig combinerConfig = new TaskConfig(combiner.getConfiguration());
+    combinerConfig.setDriver(CombineDriver.class);
+    combinerConfig.setStubClass(CombiningReducer.class);
+    combinerConfig.setLocalStrategy(TaskConfig.LocalStrategy.COMBININGSORT);
+    combinerConfig.setMemorySize(memoryForMatch / 2 * JobGraphUtils.MEGABYTE);
+    combinerConfig.setComparatorFactoryForInput(PactRecordComparatorFactory.class, 0);
+    PactRecordComparatorFactory.writeComparatorSetupToConfig(combinerConfig.getConfigForInputParameters(0),
+        new int[] { 0 }, new Class[] { PactLong.class }, new boolean[] { true });
+    combinerConfig.setComparatorFactoryForOutput(PactRecordComparatorFactory.class, 0);
+    PactRecordComparatorFactory.writeComparatorSetupToConfig(combinerConfig.getConfigForOutputParameters(0),
+        new int[]{0}, new Class[] { PactLong.class }, new boolean[] { true });
 
     JobTaskVertex tail = JobGraphUtils.createTask(IterationTailPactTask.class, "IterationTail", jobGraph,
         degreeOfParallelism, numSubTasksPerInstance);
@@ -159,14 +183,17 @@ public class CompensatableDanglingPageRank {
     PactRecordComparatorFactory.writeComparatorSetupToConfig(tailConfig.getConfigForInputParameters(0), new int[] { 0 },
         new Class[] { PactLong.class }, new boolean[] { true });
     PactRecordComparatorFactory.writeComparatorSetupToConfig(tailConfig.getConfigForInputParameters(1), new int[] { 0 },
-        new Class[]{PactLong.class}, new boolean[]{true});
-    tailConfig.setMemorySize(memoryPerTask * JobGraphUtils.MEGABYTE);
-    tailConfig.setNumFilehandles(10);
+        new Class[] { PactLong.class }, new boolean[] { true });
+    tailConfig.setMemorySize(memoryForMatch / 2 * JobGraphUtils.MEGABYTE);
+    tailConfig.setNumFilehandles(128);
+    tailConfig.setSimulateCheckpointsPath(checkpointPath);
+    tailConfig.setSimulateCheckpointsWriterClass(DanglingPageRankHdfsCheckpointWriter.class);
     tailConfig.setStubParameter("pageRank.numVertices", String.valueOf(numVertices));
     tailConfig.setStubParameter("pageRank.numDanglingVertices", String.valueOf(numDanglingVertices));
     tailConfig.setStubParameter("compensation.failingWorker", failingWorkers);
     tailConfig.setStubParameter("compensation.failingIteration", String.valueOf(failingIteration));
     tailConfig.setStubParameter("compensation.messageLoss", String.valueOf(messageLoss));
+    tailConfig.setSortSpillingTreshold(1.0f);
 
     JobOutputVertex sync = JobGraphUtils.createSync(jobGraph, degreeOfParallelism);
     TaskConfig syncConfig = new TaskConfig(sync.getConfiguration());
@@ -200,8 +227,15 @@ public class CompensatableDanglingPageRank {
 
     JobGraphUtils.connect(tempIntermediate, tail, ChannelType.INMEMORY, DistributionPattern.POINTWISE,
         ShipStrategyType.FORWARD);
-    JobGraphUtils.connect(intermediate, tail, ChannelType.NETWORK, DistributionPattern.BIPARTITE,
+
+    JobGraphUtils.connect(intermediate, combiner, ChannelType.INMEMORY, DistributionPattern.POINTWISE,
+        ShipStrategyType.FORWARD);
+    combinerConfig.setGateIterativeWithNumberOfEventsUntilInterrupt(0, 1);
+
+    JobGraphUtils.connect(combiner, tail, ChannelType.NETWORK, DistributionPattern.BIPARTITE,
         ShipStrategyType.PARTITION_HASH);
+//    JobGraphUtils.connect(intermediate, tail, ChannelType.NETWORK, DistributionPattern.BIPARTITE,
+//        ShipStrategyType.PARTITION_HASH);
     tailConfig.setGateIterativeWithNumberOfEventsUntilInterrupt(0, 1);
     tailConfig.setGateIterativeWithNumberOfEventsUntilInterrupt(1, degreeOfParallelism);
 
@@ -223,6 +257,7 @@ public class CompensatableDanglingPageRank {
     output.setVertexToShareInstancesWith(head);
     sync.setVertexToShareInstancesWith(head);
     tempIntermediate.setVertexToShareInstancesWith(head);
+    combiner.setVertexToShareInstancesWith(head);
 
     GlobalConfiguration.loadConfiguration(confPath);
     Configuration conf = GlobalConfiguration.getConfiguration();

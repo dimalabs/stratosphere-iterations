@@ -34,8 +34,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * a delegating {@link MutableObjectIterator} that interrupts the current thread when a given number of events occured.
- * This is necessary to repetitively read channels when executing iterative data flows. The wrapped iterator must return false
- * on interruption, see {@link eu.stratosphere.pact.runtime.task.util.ReaderInterruptionBehaviors}
+ * This is necessary to repetitively read channels when executing iterative data flows. The wrapped iterator must
+ * return false on interruption, see {@link eu.stratosphere.pact.runtime.task.util.ReaderInterruptionBehaviors}
  */
 public class InterruptingMutableObjectIterator<E> implements MutableObjectIterator<E>, EventListener {
 
@@ -54,7 +54,7 @@ public class InterruptingMutableObjectIterator<E> implements MutableObjectIterat
   private static final Log log = LogFactory.getLog(InterruptingMutableObjectIterator.class);
 
   public InterruptingMutableObjectIterator(MutableObjectIterator<E> delegate, int numberOfEventsUntilInterrupt,
-                                           String name, Terminable owningIterativeTask, int gateIndex) {
+      String name, Terminable owningIterativeTask, int gateIndex) {
     this(delegate, numberOfEventsUntilInterrupt, name, owningIterativeTask, gateIndex, null);
   }
   public InterruptingMutableObjectIterator(MutableObjectIterator<E> delegate, int numberOfEventsUntilInterrupt,
@@ -95,8 +95,8 @@ public class InterruptingMutableObjectIterator<E> implements MutableObjectIterat
 
   private void onTermination() {
     int numberOfEventsSeen = terminationEventCounter.incrementAndGet();
-    if (log.isInfoEnabled()) {
-      log.info("InterruptibleIterator of " + name + " on gate [" + gateIndex +"] received Termination event (" +
+    if (log.isDebugEnabled()) {
+      log.debug("InterruptibleIterator of " + name + " on gate [" + gateIndex +"] received Termination event (" +
           numberOfEventsSeen +")");
     }
 
@@ -109,8 +109,8 @@ public class InterruptingMutableObjectIterator<E> implements MutableObjectIterat
 
   private void onEndOfSuperstep() {
     int numberOfEventsSeen = endOfSuperstepEventCounter.incrementAndGet();
-    if (log.isInfoEnabled()) {
-      log.info("InterruptibleIterator of " + name + " on gate [" + gateIndex + "] received EndOfSuperstep event (" +
+    if (log.isDebugEnabled()) {
+      log.debug("InterruptibleIterator of " + name + " on gate [" + gateIndex + "] received EndOfSuperstep event (" +
           numberOfEventsSeen +")");
     }
 
@@ -121,8 +121,8 @@ public class InterruptingMutableObjectIterator<E> implements MutableObjectIterat
 
   private void onWorkerDoneEvent(WorkerDoneEvent workerDoneEvent) {
     int numberOfEventsSeen = workerDoneEventCounter.incrementAndGet();
-    if (log.isInfoEnabled()) {
-      log.info("InterruptibleIterator of " + name + " on gate [" + gateIndex + "] received WorkerDoneEvent event (" +
+    if (log.isDebugEnabled()) {
+      log.debug("InterruptibleIterator of " + name + " on gate [" + gateIndex + "] received WorkerDoneEvent event (" +
           numberOfEventsSeen +")");
     }
 
@@ -153,8 +153,8 @@ public class InterruptingMutableObjectIterator<E> implements MutableObjectIterat
 //      recordsRead++;
 //    } else {
 
-    if (!recordFound && log.isInfoEnabled()) {
-      log.info("InterruptibleIterator of " + name + " on gate [" + gateIndex + "] releases input");
+    if (!recordFound && log.isDebugEnabled()) {
+      log.debug("InterruptibleIterator of " + name + " on gate [" + gateIndex + "] releases input");
     }
     return recordFound;
   }

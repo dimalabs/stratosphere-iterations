@@ -25,7 +25,6 @@ import eu.stratosphere.nephele.jobgraph.JobOutputVertex;
 import eu.stratosphere.nephele.jobgraph.JobTaskVertex;
 import eu.stratosphere.pact.common.io.FileOutputFormat;
 import eu.stratosphere.pact.common.type.base.PactInteger;
-import eu.stratosphere.pact.common.type.base.PactString;
 import eu.stratosphere.pact.runtime.iterative.playing.JobGraphUtils;
 import eu.stratosphere.pact.runtime.iterative.playing.PlayConstants;
 import eu.stratosphere.pact.runtime.iterative.task.IterationHeadPactTask;
@@ -63,9 +62,9 @@ public class IterativeMapReduce {
         degreeOfParallelism, numSubTasksPerInstance);
     TaskConfig headConfig = new TaskConfig(head.getConfiguration());
     headConfig.setDriver(MapDriver.class);
-    headConfig.setStubClass(AppendTokenMapper.class);
+    headConfig.setStubClass(IdentityMapper.class);
     headConfig.setMemorySize(200 * JobGraphUtils.MEGABYTE);
-    headConfig.setBackChannelMemoryFraction(0.8f);
+    headConfig.setBackChannelMemoryFraction(1f);
     headConfig.setComparatorFactoryForOutput(PactRecordComparatorFactory.class, 0);
     PactRecordComparatorFactory.writeComparatorSetupToConfig(headConfig.getConfigForOutputParameters(0),
         new int[] { 0 }, new Class[] { PactInteger.class }, new boolean[] { true });
@@ -75,16 +74,16 @@ public class IterativeMapReduce {
     TaskConfig tailConfig = new TaskConfig(tail.getConfiguration());
     tailConfig.setLocalStrategy(TaskConfig.LocalStrategy.SORT);
     tailConfig.setDriver(ReduceDriver.class);
-    tailConfig.setStubClass(AppendTokenReducer.class);
+    tailConfig.setStubClass(IdentityReducer.class);
     PactRecordComparatorFactory.writeComparatorSetupToConfig(tailConfig.getConfigForInputParameters(0),
         new int[] { 0 }, new Class[] { PactInteger.class }, new boolean[] { true });
     tailConfig.setMemorySize(200 * JobGraphUtils.MEGABYTE);
-    tailConfig.setNumFilehandles(2);
+    tailConfig.setNumFilehandles(128);
     tailConfig.setGateIterativeWithNumberOfEventsUntilInterrupt(0, degreeOfParallelism);
 
     JobOutputVertex sync = JobGraphUtils.createSync(jobGraph, degreeOfParallelism);
     TaskConfig syncConfig = new TaskConfig(sync.getConfiguration());
-    syncConfig.setNumberOfIterations(5);
+    syncConfig.setNumberOfIterations(100);
 
     JobOutputVertex output = JobGraphUtils.createFileOutput(jobGraph, "FinalOutput", degreeOfParallelism,
         numSubTasksPerInstance);

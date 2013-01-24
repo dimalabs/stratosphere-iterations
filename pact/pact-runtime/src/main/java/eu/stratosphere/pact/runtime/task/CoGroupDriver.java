@@ -113,7 +113,7 @@ public class CoGroupDriver<IT1, IT2, OT> implements PactDriver<GenericCoGrouper<
 		
 		switch (ls) {
 			case SORT_BOTH_MERGE:
-				strategyMinMem = MIN_REQUIRED_MEMORY*2;
+				strategyMinMem = MIN_REQUIRED_MEMORY * 2;
 				break;
 			case SORT_FIRST_MERGE: 
 			case SORT_SECOND_MERGE: 
