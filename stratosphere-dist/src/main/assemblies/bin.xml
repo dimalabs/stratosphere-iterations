@@ -4,8 +4,11 @@
     <id>bin</id>
     <formats>
         <format>dir</format>
-<!--        <format>tar.gz</format>
-        <format>zip</format> -->
+        
+        <!--
+	<format>tar.gz</format>
+        <format>zip</format>
+        -->
     </formats>
 
     <includeBaseDirectory>true</includeBaseDirectory>
@@ -95,6 +98,19 @@
         	</includes>
         	<excludes>
           		<exclude>pact-examples-${project.version}.jar</exclude>
+        	</excludes>
+	    </fileSet>
+	    
+      	<fileSet>
+        <!-- copy jar files of pact4s job examples -->
+        	<directory>../pact4s/pact4s-examples/target</directory>
+        	<outputDirectory>examples/pact4s/</outputDirectory>
+        	<fileMode>0644</fileMode>
+        	<includes>
+          		<include>*.jar</include>
+        	</includes>
+        	<excludes>
+          		<exclude>pact4s-examples-${project.version}.jar</exclude>
         	</excludes>
 	    </fileSet>
     </fileSets>
