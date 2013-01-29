@@ -493,12 +493,50 @@
 			</plugins>
 			</build>
 		</profile>
+		<profile>
+            <id>Scala Project</id>
+            <activation>
+                <file>
+                    <exists>src/main/scala</exists>
+                </file>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>org.scala-lang</groupId>
+                    <artifactId>scala-library</artifactId>
+                    <version>2.9.2</version>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.scala-tools</groupId>
+                        <artifactId>maven-scala-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>compile</goal>
+                                    <goal>testCompile</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <jvmArgs>
+                                <jvmArg>-Xms64m</jvmArg>
+                                <jvmArg>-Xmx1024m</jvmArg>
+                            </jvmArgs>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
 	</profiles>
 
 
 	<modules>
 		<module>nephele</module>
 		<module>pact</module>
+		<module>pact4s</module>
 		<module>build-tools</module>
 		<module>stratosphere-dist</module>
 		<module>sopremo</module>

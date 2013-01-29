@@ -281,7 +281,7 @@ public final class PactRecord implements Value
 			throw new NullPointerException("The target object may not be null");
 		
 		// get offset and check for null
-		int offset = this.offsets[fieldNum];
+		final int offset = this.offsets[fieldNum];
 		if (offset == NULL_INDICATOR_OFFSET) {
 			return null;
 		}
@@ -859,7 +859,98 @@ public final class PactRecord implements Value
 		copyTo(rec);
 		return rec;
 	}
+	
+	/**
+	 * Bin-copies fields from a source record to this record. The following caveats apply:
+	 * 
+	 * If the source field is in a modified state, no binary representation will exist yet.
+	 * In that case, this method is equivalent to setField(..., source.getField(..., <class>)). 
+	 * In particular, if setValue is called on the source field Value instance, that change 
+	 * will propagate to this record.
+	 * 
+	 * If the source field has already been serialized, then the binary representation 
+	 * will be copied. Further modifications to the source field will not be observable 
+	 * via this record, but attempting to read the field from this record will cause it 
+	 * to be deserialized.
+	 * 
+	 * Finally, bin-copying a source field requires calling updateBinaryRepresentation
+	 * on this instance in order to reserve space in the binaryData array. If none
+	 * of the source fields are actually bin-copied, then updateBinaryRepresentation
+	 * won't be called. 
+	 *
+	 * @param sourceFieldNum
+	 * @param targetFieldNum
+	 * @param target
+	 */
+	public void copyFrom(final PactRecord source, final int[] sourcePositions, final int[] targetPositions) {
+		
+		final int[] sourceOffsets = source.offsets;
+		final int[] sourceLengths = source.lengths;
+		final byte[] sourceBuffer = source.binaryData;
+		final Value[] sourceFields = source.writeFields;
 
+		boolean anyFieldIsBinary = false;
+		int maxFieldNum = 0;
+		
+		for (int i = 0; i < sourcePositions.length; i++) {
+		
+			final int sourceFieldNum = sourcePositions[i];
+			final int sourceOffset = sourceOffsets[sourceFieldNum];
+			final int targetFieldNum = targetPositions[i];
+
+			maxFieldNum = Math.max(targetFieldNum, maxFieldNum);
+
+			if (sourceOffset == NULL_INDICATOR_OFFSET) {
+				// set null on existing field (new fields are null by default)
+				if (targetFieldNum < numFields) {
+					internallySetField(targetFieldNum, null);
+				}
+			} else if (sourceOffset != MODIFIED_INDICATOR_OFFSET) {
+				anyFieldIsBinary = true;
+			}
+		}
+		
+		if (numFields < maxFieldNum + 1)
+			setNumFields(maxFieldNum + 1);
+		
+		final int[] targetLengths = this.lengths;
+		final int[] targetOffsets = this.offsets;
+		
+		// reserve space in binaryData for the binary source fields
+		if (anyFieldIsBinary) {
+			
+			for (int i = 0; i < sourcePositions.length; i++) {
+				final int sourceFieldNum = sourcePositions[i];
+				final int sourceOffset = sourceOffsets[sourceFieldNum];
+				
+				if (sourceOffset != MODIFIED_INDICATOR_OFFSET && sourceOffset != NULL_INDICATOR_OFFSET) {
+					final int targetFieldNum = targetPositions[i];
+					targetLengths[targetFieldNum] = sourceLengths[sourceFieldNum];
+					internallySetField(targetFieldNum, RESERVE_SPACE);
+				}
+			}
+			
+			updateBinaryRepresenation();
+		}
+			
+		final byte[] targetBuffer = this.binaryData;
+
+		for (int i = 0; i < sourcePositions.length; i++) {
+			final int sourceFieldNum = sourcePositions[i];
+			final int sourceOffset = sourceOffsets[sourceFieldNum];
+			final int targetFieldNum = targetPositions[i];
+
+			if (sourceOffset == MODIFIED_INDICATOR_OFFSET) {
+				internallySetField(targetFieldNum, sourceFields[sourceFieldNum]);
+			} else if (sourceOffset != NULL_INDICATOR_OFFSET) {
+				// bin-copy
+				final int targetOffset = targetOffsets[targetFieldNum];
+				final int length = targetLengths[targetFieldNum];
+				System.arraycopy(sourceBuffer, sourceOffset, targetBuffer, targetOffset, length);
+			}
+		}
+	}
+	
 	// --------------------------------------------------------------------------------------------
 	
 	/**
@@ -929,12 +1020,26 @@ public final class PactRecord implements Value
 						continue;
 					
 					offsets[i] = offset;
-					if (co == MODIFIED_INDICATOR_OFFSET)
-						// serialize modified fields
-						this.writeFields[i].write(serializer);
-					else
+					if (co == MODIFIED_INDICATOR_OFFSET) {
+						
+						final Value writeField = this.writeFields[i];
+						
+						if (writeField == RESERVE_SPACE) {
+							// RESERVE_SPACE is a placeholder indicating lengths[i] bytes should be reserved
+							final int length = this.lengths[i];
+							
+							if (serializer.position >= serializer.memory.length - length - 1)
+								serializer.resize(length);
+							serializer.position += length;
+							
+						} else {
+							// serialize modified fields
+							this.writeFields[i].write(serializer);
+						}
+					} else {
 						// bin-copy unmodified fields
 						serializer.write(this.binaryData, co, this.lengths[i]);
+					}
 					
 					this.lengths[i] = serializer.position - offset;
 					offset = serializer.position;
@@ -1227,6 +1332,23 @@ public final class PactRecord implements Value
 	// ------------------------------------------------------------------------
 	//                Utility class for internal (de)serialization
 	// ------------------------------------------------------------------------
+	
+	/**
+	 * A special Value instance that doesn't actually (de)serialize anything,
+	 * but instead indicates that space should be reserved in the buffer.
+	 */
+	private static final Value RESERVE_SPACE = new Value() {
+
+		@Override
+		public void write(DataOutput out) throws IOException {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public void read(DataInput in) throws IOException {
+			throw new UnsupportedOperationException();
+		}		
+	};
 	
 	/**
 	 * Internal interface class to provide serialization for the data types.
