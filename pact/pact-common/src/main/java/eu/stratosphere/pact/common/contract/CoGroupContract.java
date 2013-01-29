@@ -59,6 +59,15 @@ public class CoGroupContract extends GenericCoGroupContract<CoGroupStub> impleme
 	 * Creates a Builder with the provided {@link CoGroupStub} implementation.
 	 * 
 	 * @param udf The {@link CoGroupStub} implementation for this CoGroup contract.
+	 */
+	public static Builder builder(Class<? extends CoGroupStub> udf) {
+		return new Builder(udf);
+	}
+
+	/**
+	 * Creates a Builder with the provided {@link CoGroupStub} implementation.
+	 * 
+	 * @param udf The {@link CoGroupStub} implementation for this CoGroup contract.
 	 * @param keyClass The class of the key data type.
 	 * @param keyColumn1 The position of the key in the first input's records.
 	 * @param keyColumn2 The position of the key in the second input's records.
@@ -72,7 +81,7 @@ public class CoGroupContract extends GenericCoGroupContract<CoGroupStub> impleme
 	 * The private constructor that only gets invoked from the Builder.
 	 * @param builder
 	 */
-	private CoGroupContract(Builder builder) {
+	public CoGroupContract(Builder builder) {
 		super(builder.udf, builder.getKeyColumnsArray1(), builder.getKeyColumnsArray2(), builder.name);
 		this.keyTypes = builder.getKeyClassesArray();
 		setFirstInputs(builder.inputs1);
@@ -179,6 +188,21 @@ public class CoGroupContract extends GenericCoGroupContract<CoGroupStub> impleme
 		private Ordering secondaryOrder1 = null;
 		private Ordering secondaryOrder2 = null;
 		private String name = DEFAULT_NAME;
+		
+		/**
+		 * Creates a Builder with the provided {@link CoGroupStub} implementation.
+		 * 
+		 * @param udf The {@link CoGroupStub} implementation for this CoGroup contract.
+		 */
+		private Builder(Class<? extends CoGroupStub> udf)
+		{
+			this.udf = udf;
+			this.keyClasses = new ArrayList<Class<? extends Key>>();
+			this.keyColumns1 = new ArrayList<Integer>();
+			this.keyColumns2 = new ArrayList<Integer>();
+			this.inputs1 = new ArrayList<Contract>();
+			this.inputs2 = new ArrayList<Contract>();
+		}
 		
 		/**
 		 * Creates a Builder with the provided {@link CoGroupStub} implementation.

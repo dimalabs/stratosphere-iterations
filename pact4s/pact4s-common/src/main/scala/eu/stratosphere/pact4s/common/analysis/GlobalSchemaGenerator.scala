@@ -19,6 +19,7 @@ import java.util.{ List => JList }
 
 import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact.common.contract._
+import eu.stratosphere.pact.generic.contract._
 
 trait GlobalSchemaGenerator {
 

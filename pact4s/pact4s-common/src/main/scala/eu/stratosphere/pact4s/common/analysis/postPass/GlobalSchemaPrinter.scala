@@ -19,6 +19,7 @@ import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts._
 
 import eu.stratosphere.pact.compiler.plan._
+import eu.stratosphere.pact.compiler.plan.candidate.OptimizedPlan
 
 object GlobalSchemaPrinter {
 
@@ -27,7 +28,7 @@ object GlobalSchemaPrinter {
   def printSchema(plan: OptimizedPlan): Unit = {
 
     println("### " + plan.getJobName + " ###")
-    plan.getDataSinks().foldLeft(Set[OptimizerNode]())(printSchema)
+    plan.getDataSinks.map(_.getSinkNode).foldLeft(Set[OptimizerNode]())(printSchema)
     println("####" + ("#" * plan.getJobName.length) + "####")
     println()
   }
@@ -40,12 +41,12 @@ object GlobalSchemaPrinter {
 
       case false => {
 
-        val children = node.getIncomingConnections.map(_.getSourcePact).toSet
+        val children = node.getIncomingConnections.map(_.getSource).toSet
         val newVisited = children.foldLeft(visited + node)(printSchema)
 
         node match {
 
-          case _: SinkJoiner | _: UnionNode | _: CombinerNode =>
+          case _: SinkJoiner | _: BinaryUnionNode =>
 
           case DataSinkNode(udf, input) => {
             printInfo(node, "Sink",

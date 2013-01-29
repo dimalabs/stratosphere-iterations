@@ -20,6 +20,7 @@ import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts._
 
 import eu.stratosphere.pact.compiler.plan._
+import eu.stratosphere.pact.compiler.plan.candidate.OptimizedPlan
 
 object AmbientFieldDetector {
 
@@ -27,7 +28,7 @@ object AmbientFieldDetector {
   import EdgeDependencySets.EdgeDependencySet
 
   def updateAmbientFields(plan: OptimizedPlan, edgeDependencies: Map[PactConnection, EdgeDependencySet], outputPositions: Map[Int, GlobalPos]): Unit = {
-    plan.getDataSinks().foldLeft(Set[OptimizerNode]())(updateAmbientFields(outputPositions, edgeDependencies))
+    plan.getDataSinks.map(_.getSinkNode).foldLeft(Set[OptimizerNode]())(updateAmbientFields(outputPositions, edgeDependencies))
   }
 
   private def updateAmbientFields(outputPositions: Map[Int, GlobalPos], edgeDependencies: Map[PactConnection, EdgeDependencySet])(visited: Set[OptimizerNode], node: OptimizerNode): Set[OptimizerNode] = {
@@ -39,7 +40,7 @@ object AmbientFieldDetector {
       case false => {
         node match {
 
-          case _: SinkJoiner | _: UnionNode | _: CombinerNode =>
+          case _: SinkJoiner | _: BinaryUnionNode =>
           case DataSinkNode(udf, input)                       =>
           case DataSourceNode(udf)                            =>
 
@@ -47,7 +48,7 @@ object AmbientFieldDetector {
 
             val leftProvides = edgeDependencies(leftInput).childProvides
             val rightProvides = edgeDependencies(rightInput).childProvides
-            val parentNeeds = edgeDependencies(node.getOutConns.head).childProvides
+            val parentNeeds = edgeDependencies(node.getOutgoingConnections.head).childProvides
             val writes = udf.outputFields.toIndexSet
 
             populateSets(udf.leftForwardSet, udf.leftDiscardSet, leftProvides, parentNeeds, writes, outputPositions)
@@ -58,7 +59,7 @@ object AmbientFieldDetector {
 
             val leftProvides = edgeDependencies(leftInput).childProvides
             val rightProvides = edgeDependencies(rightInput).childProvides
-            val parentNeeds = edgeDependencies(node.getOutConns.head).childProvides
+            val parentNeeds = edgeDependencies(node.getOutgoingConnections.head).childProvides
             val writes = udf.outputFields.toIndexSet
 
             populateSets(udf.leftForwardSet, udf.leftDiscardSet, leftProvides, parentNeeds, writes, outputPositions)
@@ -69,7 +70,7 @@ object AmbientFieldDetector {
 
             val leftProvides = edgeDependencies(leftInput).childProvides
             val rightProvides = edgeDependencies(rightInput).childProvides
-            val parentNeeds = edgeDependencies(node.getOutConns.head).childProvides
+            val parentNeeds = edgeDependencies(node.getOutgoingConnections.head).childProvides
             val writes = udf.outputFields.toIndexSet
 
             populateSets(udf.leftForwardSet, udf.leftDiscardSet, leftProvides, parentNeeds, writes, outputPositions)
@@ -79,7 +80,7 @@ object AmbientFieldDetector {
           case MapNode(udf, input) => {
 
             val inputProvides = edgeDependencies(input).childProvides
-            val parentNeeds = edgeDependencies(node.getOutConns.head).childProvides
+            val parentNeeds = edgeDependencies(node.getOutgoingConnections.head).childProvides
             val writes = udf.outputFields.toIndexSet
 
             populateSets(udf.forwardSet, udf.discardSet, inputProvides, parentNeeds, writes, outputPositions)
@@ -87,14 +88,14 @@ object AmbientFieldDetector {
 
           case ReduceNode(udf, _, input) => {
             val inputProvides = edgeDependencies(input).childProvides
-            val parentNeeds = edgeDependencies(node.getOutConns.head).childProvides
+            val parentNeeds = edgeDependencies(node.getOutgoingConnections.head).childProvides
             val writes = udf.outputFields.toIndexSet
 
             populateSets(udf.forwardSet, udf.discardSet, inputProvides, parentNeeds, writes, outputPositions)
           }
         }
 
-        node.getIncomingConnections.map(_.getSourcePact).foldLeft(visited + node)(updateAmbientFields(outputPositions, edgeDependencies))
+        node.getIncomingConnections.map(_.getSource).foldLeft(visited + node)(updateAmbientFields(outputPositions, edgeDependencies))
       }
     }
   }

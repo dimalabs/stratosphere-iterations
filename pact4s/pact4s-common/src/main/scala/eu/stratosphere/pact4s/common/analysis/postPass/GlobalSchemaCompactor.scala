@@ -20,6 +20,7 @@ import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts._
 
 import eu.stratosphere.pact.compiler.plan._
+import eu.stratosphere.pact.compiler.plan.candidate.OptimizedPlan
 
 object GlobalSchemaCompactor {
 
@@ -27,14 +28,14 @@ object GlobalSchemaCompactor {
 
   def compactSchema(plan: OptimizedPlan): Unit = {
 
-    val (_, conflicts) = plan.getDataSinks().foldLeft((Set[OptimizerNode](), Map[GlobalPos, Set[GlobalPos]]())) {
+    val (_, conflicts) = plan.getDataSinks.map(_.getSinkNode).foldLeft((Set[OptimizerNode](), Map[GlobalPos, Set[GlobalPos]]())) {
       case ((visited, conflicts), node) => findConflicts(node, visited, conflicts)
     }
 
     // Reset all position indexes before reassigning them 
     conflicts.keys.foreach { _.setIndex(Int.MinValue) }
 
-    plan.getDataSinks().foldLeft(Set[OptimizerNode]())(compactSchema(conflicts))
+    plan.getDataSinks.map(_.getSinkNode).foldLeft(Set[OptimizerNode]())(compactSchema(conflicts))
   }
 
   /**
@@ -85,7 +86,7 @@ object GlobalSchemaCompactor {
           }
         }
 
-        node.getIncomingConnections.map(_.getSourcePact).foldLeft((visited + node, newConflictsO)) {
+        node.getIncomingConnections.map(_.getSource).foldLeft((visited + node, newConflictsO)) {
           case ((visited, conflicts), node) => findConflicts(node, visited, conflicts)
         }
       }
@@ -104,7 +105,7 @@ object GlobalSchemaCompactor {
 
       case false => {
 
-        val newVisited = node.getIncomingConnections.map(_.getSourcePact).foldLeft(visited + node)(compactSchema(conflicts))
+        val newVisited = node.getIncomingConnections.map(_.getSource).foldLeft(visited + node)(compactSchema(conflicts))
 
         val outputFields = node.getUDF match {
           case None      => Seq[OutputField]()

@@ -18,7 +18,7 @@ import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact4s.common.stubs._
 
-import eu.stratosphere.pact.common.contract._
+import eu.stratosphere.pact.generic.contract._
 
 class RepeatOperator[SolutionItem: UDT](stepFunction: DataStream[SolutionItem] => DataStream[SolutionItem]) extends Serializable {
 
@@ -31,7 +31,7 @@ class RepeatOperator[SolutionItem: UDT](stepFunction: DataStream[SolutionItem] =
 
     override def createContract = {
 
-      val contract = new Iteration with Iterate4sContract[SolutionItem] {
+      val contract = new BulkIteration with Iterate4sContract[SolutionItem] {
         override val udf = new UDF0[SolutionItem]
       }
 
@@ -41,9 +41,9 @@ class RepeatOperator[SolutionItem: UDT](stepFunction: DataStream[SolutionItem] =
 
       val output = stepFunction(solutionInput)
 
-      contract.setInitialPartialSolution(initialSolution.getContract)
+      contract.setInput(initialSolution.getContract)
       contract.setNextPartialSolution(output.getContract)
-      contract.setNumberOfIteration(numIterations)
+      contract.setNumberOfIterations(numIterations)
 
       applyHints(contract)
       contract
@@ -59,7 +59,7 @@ class IterateOperator[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStrea
 
       val outer = this
 
-      val contract = new Iteration with Iterate4sContract[SolutionItem] {
+      val contract = new BulkIteration with Iterate4sContract[SolutionItem] {
         override val udf = new UDF0[SolutionItem]
       }
 
@@ -69,7 +69,7 @@ class IterateOperator[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStrea
 
       val (output, term) = stepFunction(solutionInput)
 
-      contract.setInitialPartialSolution(s0.getContract)
+      contract.setInput(s0.getContract)
       contract.setNextPartialSolution(output.getContract)
 
       if (term != null) contract.setTerminationCriterion(term.getContract)

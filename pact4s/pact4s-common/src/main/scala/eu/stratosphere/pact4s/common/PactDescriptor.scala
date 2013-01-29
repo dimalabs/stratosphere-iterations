@@ -20,7 +20,7 @@ import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.analysis.postPass._
 
 import eu.stratosphere.pact.common.plan._
-import eu.stratosphere.pact.compiler.plan.OptimizedPlan
+import eu.stratosphere.pact.compiler.plan.candidate.OptimizedPlan
 import eu.stratosphere.pact.compiler.postpass.OptimizerPostPass
 
 abstract class PactDescriptor[T <: PactProgram: Manifest] extends PlanAssembler

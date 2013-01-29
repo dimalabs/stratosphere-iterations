@@ -22,9 +22,14 @@ import scala.collection.JavaConversions._
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.analysis._
 
-import eu.stratosphere.pact.common.contract._
-import eu.stratosphere.pact.common.io._
-import eu.stratosphere.pact.common.generic.io._
+import eu.stratosphere.pact.common.contract.GenericDataSource
+import eu.stratosphere.pact.common.contract.GenericDataSink
+import eu.stratosphere.pact.generic.contract.AbstractPact
+import eu.stratosphere.pact.generic.contract.Contract
+import eu.stratosphere.pact.generic.contract.SingleInputContract
+import eu.stratosphere.pact.generic.contract.DualInputContract
+import eu.stratosphere.pact.generic.contract.WorksetIteration
+import eu.stratosphere.pact.generic.io.InputFormat
 
 trait Pact4sContract[Out] { this: Contract =>
 
@@ -45,8 +50,8 @@ trait Pact4sContract[Out] { this: Contract =>
     }
 
     this match {
-      case contract: AbstractPact[_]  => setKeys(contract.getKeyColumnNumbers)
-      case contract: WorksetIteration => setKeys(contract.getKeyColumnNumbers)
+      case contract: AbstractPact[_]  => setKeys(contract.getKeyColumns)
+      case contract: WorksetIteration => setKeys(contract.getKeyColumns)
       case _ if getKeys.size > 0      => throw new UnsupportedOperationException("Attempted to set keys on a contract that doesn't support them")
       case _                          =>
     }

@@ -14,17 +14,17 @@
 package eu.stratosphere.pact4s.common.contracts
 
 import eu.stratosphere.pact4s.common.analysis._
-import eu.stratosphere.pact.common.contract._
+import eu.stratosphere.pact.generic.contract._
 
-trait Iterate4sContract[SolutionItem] extends HigherOrder4sContract[SolutionItem] { this: Iteration =>
+trait Iterate4sContract[SolutionItem] extends HigherOrder4sContract[SolutionItem] { this: BulkIteration =>
 
 }
 
 object Iterate4sContract {
 
   def unapply(c: Iterate4sContract[_]) = {
-    val iter = c.asInstanceOf[Iteration]
-    Some((iter.getInitialPartialSolution(), iter.getNextPartialSolution(), Option(iter.getTerminationCriterion()), iter.getPartialSolution()))
+    val iter = c.asInstanceOf[BulkIteration]
+    Some((iter.getInputs.get(0), iter.getNextPartialSolution(), Option(iter.getTerminationCriterion()), iter.getPartialSolution()))
   }
 }
 

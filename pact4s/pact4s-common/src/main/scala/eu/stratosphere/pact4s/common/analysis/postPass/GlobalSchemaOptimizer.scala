@@ -13,7 +13,7 @@
 
 package eu.stratosphere.pact4s.common.analysis.postPass
 
-import eu.stratosphere.pact.compiler.plan.OptimizedPlan
+import eu.stratosphere.pact.compiler.plan.candidate.OptimizedPlan
 
 trait GlobalSchemaOptimizer {
 

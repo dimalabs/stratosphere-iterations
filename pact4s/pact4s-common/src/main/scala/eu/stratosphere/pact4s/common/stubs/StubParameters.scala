@@ -15,7 +15,7 @@ package eu.stratosphere.pact4s.common.stubs
 
 import java.io._
 
-import eu.stratosphere.pact.common.contract.Contract
+import eu.stratosphere.pact.generic.contract.Contract
 import eu.stratosphere.nephele.configuration.Configuration
 
 class StubParameters extends Serializable {

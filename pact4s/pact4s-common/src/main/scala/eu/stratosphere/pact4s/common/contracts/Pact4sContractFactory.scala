@@ -16,7 +16,7 @@ package eu.stratosphere.pact4s.common.contracts
 import scala.collection.mutable
 import scala.util.DynamicVariable
 
-import eu.stratosphere.pact.common.contract.Contract
+import eu.stratosphere.pact.generic.contract.Contract
 
 trait Pact4sContractFactory {
 

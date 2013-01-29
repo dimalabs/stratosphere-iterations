@@ -26,6 +26,7 @@ public class BulkIteration extends SingleInputContract<IterationPlaceHolderStub>
 	private static String DEFAULT_NAME = "<Unnamed Bulk Iteration>";
 	
 	private Contract iterationResult;
+	private Contract terminationCriterion;
 	
 	private final Contract inputPlaceHolder = new PartialSolutionPlaceHolder(this);
 	
@@ -73,11 +74,15 @@ public class BulkIteration extends SingleInputContract<IterationPlaceHolderStub>
 		return this.iterationResult;
 	}
 	
+	public Contract getTerminationCriterion() {
+		return this.terminationCriterion;
+	}
+	
 	/**
 	 * @param criterion
 	 */
 	public void setTerminationCriterion(Contract criterion) {
-		throw new UnsupportedOperationException("Termination criterion support is currently not implemented.");
+		this.terminationCriterion = criterion;
 	}
 	
 	/**
@@ -109,6 +114,10 @@ public class BulkIteration extends SingleInputContract<IterationPlaceHolderStub>
 			throw new Exception("No termination condition is set " +
 					"(neither fix number of iteration nor termination criterion).");
 		}
+		if (this.terminationCriterion != null) {
+			throw new UnsupportedOperationException("Termination criterion support is currently not implemented.");
+		}
+		
 //		if (this.terminationCriterion != null && this.numberOfIterations > 0) {
 //			throw new Exception("Termination condition is ambiguous. " +
 //				"Both a fix number of iteration and a termination criterion are set.");

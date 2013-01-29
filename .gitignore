@@ -7,9 +7,12 @@ target
 .classpath
 .project
 .settings
+.cache
+.metadata/*
 *.class
 filter.properties
 tmp/*
 pact/pact-tests/tmp/*
 *.iml
 .idea/*
+.DS_Store

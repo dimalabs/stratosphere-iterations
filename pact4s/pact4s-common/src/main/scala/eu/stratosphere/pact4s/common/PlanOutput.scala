@@ -19,9 +19,9 @@ import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts._
 
 import eu.stratosphere.pact.common.io.FileOutputFormat
-import eu.stratosphere.pact.common.generic.io.OutputFormat
 import eu.stratosphere.pact.common.contract.FileDataSink
 import eu.stratosphere.pact.common.contract.GenericDataSink
+import eu.stratosphere.pact.generic.io.OutputFormat
 
 class PlanOutput[In: UDT](val source: DataStream[In], val sink: DataSink[In]) extends Pact4sContractFactory with Serializable {
 

@@ -30,7 +30,7 @@ import eu.stratosphere.pact.common.type.PactRecord;
 */
 public abstract class Contract implements Visitable<Contract>
 {
-	protected final String name;					// the name of the contract instance. optional.
+	protected String name;					// the name of the contract instance. optional.
 
 	protected final Configuration parameters;		// the parameters that allow to parameterize the stub function
 
@@ -62,6 +62,16 @@ public abstract class Contract implements Visitable<Contract>
 	 */
 	public String getName() {
 		return this.name;
+	}
+	
+	/**
+	 * Sets the name of the contract instance. The name is only used to describe the contract instance
+	 * in logging output and graphical representations.
+	 * 
+	 * @param name The contract instance's name.
+	 */
+	public void setName(String name) {
+		this.name = name;
 	}
 
 	/**
@@ -163,6 +173,19 @@ public abstract class Contract implements Visitable<Contract>
 	 * @return The class with the user code.
 	 */
 	public abstract Class<?> getUserCodeClass();
+
+	/**
+     * Gets an annotation that pertains to the user code class. By default, this method will look for
+     * annotations statically present on the user code class. However, inheritors may override this
+     * behavior to provide annotations dynamically.
+     * 
+     * @param annotationClass
+     *        the Class object corresponding to the annotation type
+     * @return the annotation, or null if no annotation of the requested type was found
+     */
+    public <A extends Annotation> A getUserCodeAnnotation(Class<A> annotationClass) {
+        return this.getUserCodeClass().getAnnotation(annotationClass);
+    }	
 	
 	// --------------------------------------------------------------------------------------------
 	

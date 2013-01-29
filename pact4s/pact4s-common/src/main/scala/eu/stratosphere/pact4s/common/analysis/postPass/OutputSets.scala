@@ -19,6 +19,7 @@ import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts._
 
 import eu.stratosphere.pact.compiler.plan._
+import eu.stratosphere.pact.compiler.plan.candidate.OptimizedPlan
 
 object OutputSets {
 
@@ -26,7 +27,7 @@ object OutputSets {
 
   def computeOutputSets(plan: OptimizedPlan): (Map[OptimizerNode, Set[Int]], Map[Int, GlobalPos]) = {
     
-    val root = plan.getDataSinks.map(s => s: OptimizerNode).reduceLeft((n1, n2) => new SinkJoiner(n1, n2))
+    val root = plan.getDataSinks.map(s => s.getSinkNode: OptimizerNode).reduceLeft((n1, n2) => new SinkJoiner(n1, n2))
     val outputSets = computeOutputSets(Map[OptimizerNode, Set[GlobalPos]](), root)
     val outputPositions = outputSets(root).map(pos => (pos.getValue, pos)).toMap
     
@@ -41,7 +42,7 @@ object OutputSets {
 
       case false => {
 
-        val children = node.getIncomingConnections.map(_.getSourcePact).toSet
+        val children = node.getIncomingConnections.map(_.getSource).toSet
         val newOutputSets = children.foldLeft(outputSets)(computeOutputSets)
         
         val childOutputs = children.map(newOutputSets(_)).flatten

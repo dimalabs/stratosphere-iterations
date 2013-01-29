@@ -60,13 +60,8 @@ class FieldSet[+FieldType <: Field] private (private val fields: Seq[FieldType])
 
     override def iterator() = getIndexes.toIterator
     override def size() = getIndexes.length
-    override def isEmpty() = getIndexes.isEmpty
-    override def contains(value: Object) = getIndexes.contains(value)
-
-    override def add(value: java.lang.Integer): Boolean = throw new UnsupportedOperationException
-    override def remove(value: Object): Boolean = throw new UnsupportedOperationException
-    override def clear(): Unit = throw new UnsupportedOperationException
-    override def clone(): Object = this
+    override def add(value: java.lang.Integer): Unit = throw new UnsupportedOperationException
+    override def clone(): PactFieldSet = this
   }
 }
 

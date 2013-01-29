@@ -19,6 +19,7 @@ import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts._
 
 import eu.stratosphere.pact.compiler.plan._
+import eu.stratosphere.pact.compiler.plan.candidate.OptimizedPlan
 
 object EdgeDependencySets {
 
@@ -28,13 +29,13 @@ object EdgeDependencySets {
 
   def computeEdgeDependencySets(plan: OptimizedPlan, outputSets: Map[OptimizerNode, Set[Int]]): Map[PactConnection, EdgeDependencySet] = {
 
-    plan.getDataSinks().foldLeft(Map[PactConnection, EdgeDependencySet]())(computeEdgeDependencySets(outputSets))
+    plan.getDataSinks.map(_.getSinkNode).foldLeft(Map[PactConnection, EdgeDependencySet]())(computeEdgeDependencySets(outputSets))
   }
 
   private def computeEdgeDependencySets(outputSets: Map[OptimizerNode, Set[Int]])(edgeDependencySets: Map[PactConnection, EdgeDependencySet], node: OptimizerNode): Map[PactConnection, EdgeDependencySet] = {
 
     // breadth-first traversal: parentNeeds will be None if any parent has not yet been visited
-    val parentNeeds = node.getOutConns.foldLeft(Option(Set[Int]())) {
+    val parentNeeds = node.getOutgoingConnections().foldLeft(Option(Set[Int]())) {
       case (None, _)           => None
       case (Some(acc), parent) => edgeDependencySets.get(parent) map { acc ++ _.parentNeeds }
     }
@@ -49,7 +50,7 @@ object EdgeDependencySets {
 
     def updateEdges(needs: (PactConnection, Set[Int])*): Map[PactConnection, EdgeDependencySet] = {
 
-      val updParents = node.getOutConns.foldLeft(edgeDependencySets) { (edgeDependencySets, parent) =>
+      val updParents = node.getOutgoingConnections().foldLeft(edgeDependencySets) { (edgeDependencySets, parent) =>
         val entry = edgeDependencySets(parent)
         edgeDependencySets.updated(parent, entry.copy(childProvides = parentNeeds))
       }
@@ -57,7 +58,7 @@ object EdgeDependencySets {
       needs.foldLeft(updParents) {
         case (edgeDependencySets, (inConn, needs)) => {
           val updInConn = edgeDependencySets.updated(inConn, EdgeDependencySet(needs))
-          computeEdgeDependencySets(outputSets)(updInConn, inConn.getSourcePact)
+          computeEdgeDependencySets(outputSets)(updInConn, inConn.getSource)
         }
       }
     }
@@ -94,8 +95,8 @@ object EdgeDependencySets {
 
         val parentPreNeeds = parentNeeds -- writes
 
-        val parentLeftNeeds = parentPreNeeds.intersect(outputSets(leftInput.getSourcePact))
-        val parentRightNeeds = parentPreNeeds.intersect(outputSets(rightInput.getSourcePact))
+        val parentLeftNeeds = parentPreNeeds.intersect(outputSets(leftInput.getSource))
+        val parentRightNeeds = parentPreNeeds.intersect(outputSets(rightInput.getSource))
 
         val leftForwards = udf.leftForwardSet.map(_.getValue)
         val rightForwards = udf.rightForwardSet.map(_.getValue)
@@ -120,8 +121,8 @@ object EdgeDependencySets {
 
         val parentPreNeeds = parentNeeds -- writes
 
-        val parentLeftNeeds = parentPreNeeds.intersect(outputSets(leftInput.getSourcePact))
-        val parentRightNeeds = parentPreNeeds.intersect(outputSets(rightInput.getSourcePact))
+        val parentLeftNeeds = parentPreNeeds.intersect(outputSets(leftInput.getSource))
+        val parentRightNeeds = parentPreNeeds.intersect(outputSets(rightInput.getSource))
 
         val leftForwards = udf.leftForwardSet.map(_.getValue)
         val rightForwards = udf.rightForwardSet.map(_.getValue)
@@ -146,8 +147,8 @@ object EdgeDependencySets {
 
         val parentPreNeeds = parentNeeds -- writes
 
-        val parentLeftNeeds = parentPreNeeds.intersect(outputSets(leftInput.getSourcePact))
-        val parentRightNeeds = parentPreNeeds.intersect(outputSets(rightInput.getSourcePact))
+        val parentLeftNeeds = parentPreNeeds.intersect(outputSets(leftInput.getSource))
+        val parentRightNeeds = parentPreNeeds.intersect(outputSets(rightInput.getSource))
 
         val leftForwards = udf.leftForwardSet.map(_.getValue)
         val rightForwards = udf.rightForwardSet.map(_.getValue)
@@ -184,7 +185,7 @@ object EdgeDependencySets {
         updateEdges(input -> needs)
       }
 
-      case _: SinkJoiner | _: UnionNode | _: CombinerNode => {
+      case _: SinkJoiner | _: BinaryUnionNode => {
         updateEdges(node.getIncomingConnections.map(_ -> parentNeeds): _*)
       }
     }

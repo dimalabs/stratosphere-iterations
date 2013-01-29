@@ -23,10 +23,10 @@ import eu.stratosphere.pact4s.common.stubs._
 import eu.stratosphere.pact.common.contract.FileDataSource
 import eu.stratosphere.pact.common.contract.GenericDataSource
 import eu.stratosphere.pact.common.io._
-import eu.stratosphere.pact.common.generic.io._
 import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
 import eu.stratosphere.pact.common.`type`.base._
 import eu.stratosphere.pact.common.`type`.base.parser._
+import eu.stratosphere.pact.generic.io.InputFormat
 import eu.stratosphere.nephele.configuration.Configuration
 
 class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends DataStream[Out] with OutputHintable[Out] {

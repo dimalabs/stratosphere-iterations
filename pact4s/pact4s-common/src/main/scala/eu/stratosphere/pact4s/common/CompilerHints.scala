@@ -18,10 +18,10 @@ import scala.util.DynamicVariable
 import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts._
 
-import eu.stratosphere.pact.common.contract.Contract
 import eu.stratosphere.pact.common.contract.DataDistribution
 import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.pact.common.util.FieldSet
+import eu.stratosphere.pact.generic.contract.Contract
 
 trait Hintable extends Serializable {
 
