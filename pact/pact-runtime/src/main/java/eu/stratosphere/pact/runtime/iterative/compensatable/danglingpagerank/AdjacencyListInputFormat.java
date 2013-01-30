@@ -11,7 +11,7 @@ public class AdjacencyListInputFormat extends TextInputFormat {
   private static final Pattern SEPARATOR = Pattern.compile("[, \t]");
 
   private final PactLong vertexID = new PactLong();
-  private final PactLongArray adjacentVertices = new PactLongArray();
+  private final LongArrayView adjacentVertices = new LongArrayView();
 
   @Override
   public boolean readRecord(PactRecord target, byte[] bytes, int offset, int numBytes) {
@@ -28,7 +28,8 @@ public class AdjacencyListInputFormat extends TextInputFormat {
       indexes[n] = Long.parseLong(parts[n + 1]);
     }
 
-    adjacentVertices.set(indexes);
+    //TODO FIXME
+    //adjacentVertices.set(indexes);
 
     target.clear();
     target.addField(vertexID);
@@ -57,7 +58,7 @@ public class AdjacencyListInputFormat extends TextInputFormat {
 //      indexes[n] = Long.parseLong(parts[n + 1]);
 //    }
 //
-//    target.addField(new PactLongArray(indexes));
+//    target.addField(new LongArrayView(indexes));
 //
 //    return true;
 //  }

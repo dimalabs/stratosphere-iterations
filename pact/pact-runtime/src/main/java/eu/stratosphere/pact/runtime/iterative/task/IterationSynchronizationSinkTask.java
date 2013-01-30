@@ -121,7 +121,7 @@ public class IterationSynchronizationSinkTask extends AbstractOutputTask impleme
       readHeadEventChannel();
       long duration = System.currentTimeMillis() - iterationStartTime;
 
-      System.out.println(formatLogString("finishing iteration [" + currentIteration + "], took ;" + duration +"; ms"));
+      //System.out.println(formatLogString("finishing iteration [" + currentIteration + "], took ;" + duration +"; ms"));
 
       if (log.isInfoEnabled()) {
         log.info(formatLogString("finishing iteration [" + currentIteration + "], took ;" + duration +"; ms"));

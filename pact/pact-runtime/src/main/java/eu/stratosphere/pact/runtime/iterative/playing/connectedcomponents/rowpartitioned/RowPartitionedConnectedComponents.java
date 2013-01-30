@@ -47,6 +47,7 @@ import eu.stratosphere.pact.runtime.task.MapDriver;
 import eu.stratosphere.pact.runtime.task.ReduceDriver;
 import eu.stratosphere.pact.runtime.task.util.TaskConfig;
 
+@Deprecated
 public class RowPartitionedConnectedComponents {
 
   public static void main(String[] args) throws Exception {

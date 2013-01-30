@@ -34,7 +34,10 @@ public class CompensatableDotProductCoGroup extends CoGroupStub {
   private static final double BETA = 0.85;
 
   private final PactDouble newRank = new PactDouble();
-  private final BooleanValue newIsDangling = new BooleanValue();
+  private BooleanValue isDangling = new BooleanValue();
+
+  private PactLong vertexID = new PactLong();
+  private PactDouble doubleInstance = new PactDouble();
 
   @Override
   public void open(Configuration parameters) throws Exception {
@@ -72,28 +75,27 @@ public class CompensatableDotProductCoGroup extends CoGroupStub {
     long edges = 0;
     double summedRank = 0;
     while (partialRanks.hasNext()) {
-      summedRank += partialRanks.next().getField(1, PactDouble.class).getValue();
+      summedRank += partialRanks.next().getField(1, doubleInstance).getValue();
       edges++;
     }
 
     double rank = BETA * summedRank + dampingFactor + danglingRankFactor;
 
-    double currentRank = currentPageRank.getField(1, PactDouble.class).getValue();
-    boolean isDangling = currentPageRank.getField(2, BooleanValue.class).get();
+    double currentRank = currentPageRank.getField(1, doubleInstance).getValue();
+    isDangling = currentPageRank.getField(2, isDangling);
 
-    double danglingRankToAggregate = isDangling ? rank : 0;
-    long danglingVerticesToAggregate = isDangling ? 1 : 0;
+    double danglingRankToAggregate = isDangling.get() ? rank : 0;
+    long danglingVerticesToAggregate = isDangling.get() ? 1 : 0;
 
     double diff = Math.abs(currentRank - rank);
 
     aggregator.aggregate(diff, rank, danglingRankToAggregate, danglingVerticesToAggregate, 1, edges, summedRank);
 
     newRank.setValue(rank);
-    newIsDangling.set(isDangling);
 
-    accumulator.setField(0, currentPageRank.getField(0, PactLong.class));
+    accumulator.setField(0, currentPageRank.getField(0, vertexID));
     accumulator.setField(1, newRank);
-    accumulator.setField(2, newIsDangling);
+    accumulator.setField(2, isDangling);
 
     collector.collect(accumulator);
   }

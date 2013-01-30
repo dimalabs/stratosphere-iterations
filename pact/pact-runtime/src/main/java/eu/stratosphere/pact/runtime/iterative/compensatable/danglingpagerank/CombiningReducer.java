@@ -11,6 +11,8 @@ public class CombiningReducer extends ReduceStub {
 
   private final PactDouble agg = new PactDouble();
 
+  private PactDouble doubleInstance = new PactDouble();
+
   @Override
   public void reduce(Iterator<PactRecord> partialRanks, Collector<PactRecord> out) throws Exception {
 
@@ -19,7 +21,7 @@ public class CombiningReducer extends ReduceStub {
     PactRecord curr = null;
     while (partialRanks.hasNext()) {
       curr = partialRanks.next();
-      summedRank += curr.getField(1, PactDouble.class).getValue();
+      summedRank += curr.getField(1, doubleInstance).getValue();
     }
     agg.setValue(summedRank);
     curr.setField(1, agg);

@@ -41,6 +41,7 @@ import eu.stratosphere.pact.runtime.task.MapDriver;
 import eu.stratosphere.pact.runtime.task.ReduceDriver;
 import eu.stratosphere.pact.runtime.task.util.TaskConfig;
 
+@Deprecated
 public class ScopedPageRank {
 
   public static void main(String[] args) throws Exception {

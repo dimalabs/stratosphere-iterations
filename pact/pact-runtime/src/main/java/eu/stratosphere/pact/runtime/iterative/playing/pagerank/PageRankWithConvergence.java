@@ -40,6 +40,7 @@ import eu.stratosphere.pact.runtime.task.RegularPactTask;
 import eu.stratosphere.pact.runtime.task.TempDriver;
 import eu.stratosphere.pact.runtime.task.util.TaskConfig;
 
+@Deprecated
 public class PageRankWithConvergence {
 
   public static void main(String[] args) throws Exception {
