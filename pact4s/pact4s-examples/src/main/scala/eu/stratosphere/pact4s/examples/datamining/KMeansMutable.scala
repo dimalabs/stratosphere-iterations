@@ -67,16 +67,6 @@ class KMeansMutable(numIterations: Int, dataPointInput: String, clusterInput: St
 
   def sumPointSums = (dataPoints: Iterator[MutableTuple2[Int, PointSum]]) => dataPoints.reduce { (z, v) => z.copy(_2 = z._2 + v._2) }
 
-  clusterPoints.degreeOfParallelism(1)
-
-  val PointInputPattern = """(\d+)\|(\d+\.\d+)\|(\d+\.\d+)\|""".r
-
-  def parseInput = (line: String) => line match {
-    case PointInputPattern(id, x, y) => MutableTuple2(id.toInt, Point(x.toDouble, y.toDouble))
-  }
-
-  def formatOutput = (center: MutableTuple2[Int, Point]) => "%d|%.2f|%.2f|".format(center._1, center._2.x, center._2.y)
-
   case class MutableTuple2[A, B](var _1: A, var _2: B)
   
   case class Point(var x: Double, var y: Double) {
@@ -99,5 +89,15 @@ class KMeansMutable(numIterations: Int, dataPointInput: String, clusterInput: St
     // only contains two decimal places.
     private def round(d: Double) = math.round(d * 100.0) / 100.0;
   }
+  
+  def parseInput = (line: String) => {
+    val PointInputPattern = """(\d+)\|(\d+\.\d+)\|(\d+\.\d+)\|""".r
+    val PointInputPattern(id, x, y) = line
+    MutableTuple2(id.toInt, Point(x.toDouble, y.toDouble))
+  }
+
+  def formatOutput = (center: MutableTuple2[Int, Point]) => "%d|%.2f|%.2f|".format(center._1, center._2.x, center._2.y)
+
+  clusterPoints.degreeOfParallelism(1)
 }
 

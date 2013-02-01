@@ -31,11 +31,11 @@ class WordCountImmutable(textInput: String, wordsOutput: String) extends PactPro
   val words = input flatMap { _.toLowerCase().split("""\W+""") map { (_, 1) } }
   val counts = words groupBy { case (word, _) => word } combine { _ reduce addCounts }
 
-  counts neglects { case (word, _) => word }
-  counts preserves { case (word, _) => word } as { case (word, _) => word }
-
   override def outputs = output <~ counts
 
   def addCounts(w1: (String, Int), w2: (String, Int)) = (w1._1, w1._2 + w2._2)
   def formatOutput = (word: String, count: Int) => "%s %d".format(word, count)
+
+  counts neglects { case (word, _) => word }
+  counts preserves { case (word, _) => word } as { case (word, _) => word }
 }

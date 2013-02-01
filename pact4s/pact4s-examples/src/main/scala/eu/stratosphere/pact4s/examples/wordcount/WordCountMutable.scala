@@ -31,14 +31,13 @@ class WordCountMutable(textInput: String, wordsOutput: String) extends PactProgr
   val words = input flatMap { _.toLowerCase().split("""\W+""") map { WordWithCount(_, 1) } }
   val counts = words groupBy { case WordWithCount(word, _) => word } combine { _ reduce addCounts }
 
-  counts neglects { case WordWithCount(word, _) => word }
-  counts preserves { case WordWithCount(word, _) => word } as { case WordWithCount(word, _) => word }
-
   override def outputs = output <~ counts
 
   case class WordWithCount(var word: String, var count: Int)
-
   def addCounts(w1: WordWithCount, w2: WordWithCount) = WordWithCount(w1.word, w1.count + w2.count)
   def formatOutput(w: WordWithCount) = "%s %d".format(w.word, w.count)
+
+  counts neglects { case WordWithCount(word, _) => word }
+  counts preserves { case WordWithCount(word, _) => word } as { case WordWithCount(word, _) => word }
 }
 

@@ -50,6 +50,26 @@ class TPCHQuery3Immutable(ordersInput: String, lineItemsInput: String, ordersOut
 
   override def outputs = output <~ prioritizedOrders
 
+  case class Order(orderId: Int, status: Char, year: Int, month: Int, day: Int, orderPriority: String, shipPriority: Int)
+  case class LineItem(orderId: Int, extendedPrice: Double)
+  case class PrioritizedOrder(orderId: Int, shipPriority: Int, revenue: Double)
+  
+  def addRevenues(po1: PrioritizedOrder, po2: PrioritizedOrder) = po1.copy(revenue = po1.revenue + po2.revenue)
+
+  def parseOrder = (line: String) => {
+    val OrderInputPattern = """(\d+)\|[^\|]+\|([^\|])\|[^\|]+\|(\d\d\d\d)-(\d\d)-(\d\d)\|([^\|]+)\|[^\|]+\|(\d+)\|[^\|]+\|""".r
+    val OrderInputPattern(orderId, status, year, month, day, oPr, sPr) = line
+    Order(orderId.toInt, status(0), year.toInt, month.toInt, day.toInt, oPr, sPr.toInt)
+  }
+
+  def parseLineItem = (line: String) => {
+    val LineItemInputPattern = """(\d+)\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|(\d+\.\d\d)\|[^\|]+\|[^\|]+\|[^\|]\|[^\|]\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|""".r
+    val LineItemInputPattern(orderId, price) = line
+    LineItem(orderId.toInt, price.toDouble)
+  }
+
+  def formatOutput = (item: PrioritizedOrder) => "%d|%d|%.2f".format(item.orderId, item.shipPriority, item.revenue)
+  
   filteredOrders observes { o => (o.status, o.year, o.orderPriority) }
 
   prioritizedItems.left neglects { o => o }
@@ -66,23 +86,5 @@ class TPCHQuery3Immutable(ordersInput: String, lineItemsInput: String, ordersOut
   filteredOrders.avgBytesPerRecord(44).avgRecordsEmittedPerCall(0.05f).uniqueKey(_.orderId)
   prioritizedItems.avgBytesPerRecord(32)
   prioritizedOrders.avgBytesPerRecord(32).avgRecordsEmittedPerCall(1)
-
-  case class Order(orderId: Int, status: Char, year: Int, month: Int, day: Int, orderPriority: String, shipPriority: Int)
-  case class LineItem(orderId: Int, extendedPrice: Double)
-  case class PrioritizedOrder(orderId: Int, shipPriority: Int, revenue: Double)
-  def addRevenues(po1: PrioritizedOrder, po2: PrioritizedOrder) = po1.copy(revenue = po1.revenue + po2.revenue)
-
-  val OrderInputPattern = """(\d+)\|[^\|]+\|([^\|])\|[^\|]+\|(\d\d\d\d)-(\d\d)-(\d\d)\|([^\|]+)\|[^\|]+\|(\d+)\|[^\|]+\|""".r
-  val LineItemInputPattern = """(\d+)\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|(\d+\.\d\d)\|[^\|]+\|[^\|]+\|[^\|]\|[^\|]\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|[^\|]+\|""".r
-
-  def parseOrder = (line: String) => line match {
-    case OrderInputPattern(orderId, status, year, month, day, oPr, sPr) => Order(orderId.toInt, status(0), year.toInt, month.toInt, day.toInt, oPr, sPr.toInt)
-  }
-
-  def parseLineItem = (line: String) => line match {
-    case LineItemInputPattern(orderId, price) => LineItem(orderId.toInt, price.toDouble)
-  }
-
-  def formatOutput = (item: PrioritizedOrder) => "%d|%d|%.2f".format(item.orderId, item.shipPriority, item.revenue)
 }
 
