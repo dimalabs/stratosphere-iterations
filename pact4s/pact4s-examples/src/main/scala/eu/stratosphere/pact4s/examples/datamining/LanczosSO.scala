@@ -42,7 +42,7 @@ class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outp
       Seq(v0, v1)
   }
 
-  val (α, β, v) = splitαβv((stepI ^ m)(αʹβʹvʹ))
+  val (α, β, v) = splitαβv(stepI repeat (n = m, s0 = αʹβʹvʹ))
 
   val t = triDiag(α, β filter { _.col > 0 })
   val (q, d) = decompose(t)
@@ -78,7 +78,7 @@ class LanczosSO(k: Int, m: Int, ε: Double, inputA: String, inputB: String, outp
 
     val βᵢʹvᵢᐩʹʹ = (βᵢʹ map { x => BetaCell(0, 0, x): Cell }) union vᵢᐩʹʹ
 
-    val βᵢvᵢᐩʹ = (stepJ(i, v, q, normM(t)) ^ i)(βᵢʹvᵢᐩʹʹ)
+    val βᵢvᵢᐩʹ = stepJ(i, v, q, normM(t)) repeat (n = i, s0 = βᵢʹvᵢᐩʹʹ)
     val βᵢ = βᵢvᵢᐩʹ filter { _.isBeta } map { _.value }
     val vᵢᐩʹ = βᵢvᵢᐩʹ filter { _.isV }
 

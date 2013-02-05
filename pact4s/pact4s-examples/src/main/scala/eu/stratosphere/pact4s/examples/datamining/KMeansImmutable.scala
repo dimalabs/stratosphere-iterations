@@ -29,7 +29,7 @@ class KMeansImmutable(numIterations: Int, dataPointInput: String, clusterInput: 
   val clusterPoints = new DataSource(clusterInput, DelimetedDataSourceFormat(parseInput))
   val newClusterPoints = new DataSink(clusterOutput, DelimetedDataSinkFormat(formatOutput.tupled))
 
-  val finalCenters = (computeNewCenters ^ numIterations)(clusterPoints)
+  val finalCenters = computeNewCenters repeat (n = 3, s0 = clusterPoints)
 
   override def outputs = newClusterPoints <~ finalCenters
 
@@ -87,7 +87,7 @@ class KMeansImmutable(numIterations: Int, dataPointInput: String, clusterInput: 
     // only contains two decimal places.
     private def round(d: Double) = math.round(d * 100.0) / 100.0;
   }
-  
+
   def parseInput = (line: String) => {
     val PointInputPattern = """(\d+)\|(\d+\.\d+)\|(\d+\.\d+)\|""".r
     val PointInputPattern(id, x, y) = line
