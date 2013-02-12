@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package eu.stratosphere.pact4s.examples.datamining
+package eu.stratosphere.pact4s.tests.perf.plainScala
 
 import scala.collection.JavaConversions._
 import scala.math._
@@ -34,9 +34,9 @@ import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.pact.common.`type`.base.PactInteger
 import eu.stratosphere.pact.common.`type`.base.PactDouble
 
-class KMeansPlain extends PlanAssembler with PlanAssemblerDescription {
+class KMeans extends PlanAssembler with PlanAssemblerDescription {
 
-  import KMeansPlain._
+  import KMeans._
 
   override def getPlan(args: String*): Plan = {
     val delimeter = "\n"
@@ -72,7 +72,7 @@ class KMeansPlain extends PlanAssembler with PlanAssemblerDescription {
   override def getDescription() = "Parameters: [noSubStasks] [dataPoints] [clusterCenters] [output]"
 }
 
-object KMeansPlain {
+object KMeans {
 
   class ComputeDistance extends CrossStub {
 

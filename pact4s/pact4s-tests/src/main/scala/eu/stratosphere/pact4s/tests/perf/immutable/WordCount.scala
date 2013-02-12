@@ -11,19 +11,19 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package eu.stratosphere.pact4s.examples.wordcount
+package eu.stratosphere.pact4s.tests.perf.immutable
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
-class WordCountImmutableDescriptor extends PactDescriptor[WordCountImmutable] {
+class WordCountDescriptor extends PactDescriptor[WordCount] {
   override val name = "Word Count (Immutable)"
   override val parameters = "-input <file> -output <file>"
 
-  override def createInstance(args: Pact4sArgs) = new WordCountImmutable(args("input"), args("output"))
+  override def createInstance(args: Pact4sArgs) = new WordCount(args("input"), args("output"))
 }
 
-class WordCountImmutable(textInput: String, wordsOutput: String) extends PactProgram {
+class WordCount(textInput: String, wordsOutput: String) extends PactProgram {
 
   val input = new DataSource(textInput, DelimetedDataSourceFormat(identity[String] _))
   val output = new DataSink(wordsOutput, DelimetedDataSinkFormat(formatOutput.tupled))

@@ -11,19 +11,19 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package eu.stratosphere.pact4s.examples.datamining
+package eu.stratosphere.pact4s.tests.perf.immutable
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
-class KMeansImmutableDescriptor extends PactDescriptor[KMeansImmutable] {
-  override val name = "KMeans Iteration (Immutable)"
+class KMeansDescriptor extends PactDescriptor[KMeans] {
+  override val name = "KMeans (Immutable)"
   override val parameters = "[-numIterations <int:2>] -dataPoints <file> -clusterCenters <file> -output <file>"
 
-  override def createInstance(args: Pact4sArgs) = new KMeansImmutable(args("numIterations", "2").toInt, args("dataPoints"), args("clusterCenters"), args("output"))
+  override def createInstance(args: Pact4sArgs) = new KMeans(args("numIterations", "2").toInt, args("dataPoints"), args("clusterCenters"), args("output"))
 }
 
-class KMeansImmutable(numIterations: Int, dataPointInput: String, clusterInput: String, clusterOutput: String) extends PactProgram {
+class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, clusterOutput: String) extends PactProgram {
 
   val dataPoints = new DataSource(dataPointInput, DelimetedDataSourceFormat(parseInput))
   val clusterPoints = new DataSource(clusterInput, DelimetedDataSourceFormat(parseInput))

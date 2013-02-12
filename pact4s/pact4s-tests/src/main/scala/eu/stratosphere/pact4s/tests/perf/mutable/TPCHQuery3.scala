@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package eu.stratosphere.pact4s.examples.relational
+package eu.stratosphere.pact4s.tests.perf.mutable
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
@@ -31,14 +31,14 @@ import eu.stratosphere.pact4s.common.operators._
  *     AND o_orderpriority LIKE "Z%"
  *   GROUP BY l_orderkey, o_shippriority;
  */
-class TPCHQuery3ImmutableDescriptor extends PactDescriptor[TPCHQuery3Immutable] {
-  override val name = "TPCH Query 3 (Immutable)"
+class TPCHQuery3Descriptor extends PactDescriptor[TPCHQuery3] {
+  override val name = "TPCH Query 3 (Mutable)"
   override val parameters = "-orders <file> -lineItems <file> -output <file>"
 
-  override def createInstance(args: Pact4sArgs) = new TPCHQuery3Immutable(args("orders"), args("lineItems"), args("output"))
+  override def createInstance(args: Pact4sArgs) = new TPCHQuery3(args("orders"), args("lineItems"), args("output"))
 }
 
-class TPCHQuery3Immutable(ordersInput: String, lineItemsInput: String, ordersOutput: String, status: Char = 'F', minYear: Int = 1993, priority: String = "5") extends PactProgram {
+class TPCHQuery3(ordersInput: String, lineItemsInput: String, ordersOutput: String, status: Char = 'F', minYear: Int = 1993, priority: String = "5") extends PactProgram {
 
   val orders = new DataSource(ordersInput, DelimetedDataSourceFormat(parseOrder))
   val lineItems = new DataSource(lineItemsInput, DelimetedDataSourceFormat(parseLineItem))
@@ -50,11 +50,11 @@ class TPCHQuery3Immutable(ordersInput: String, lineItemsInput: String, ordersOut
 
   override def outputs = output <~ prioritizedOrders
 
-  case class Order(orderId: Int, status: Char, year: Int, month: Int, day: Int, orderPriority: String, shipPriority: Int)
-  case class LineItem(orderId: Int, extendedPrice: Double)
-  case class PrioritizedOrder(orderId: Int, shipPriority: Int, revenue: Double)
+  case class Order(var orderId: Int, var status: Char, var year: Int, var month: Int, var day: Int, var orderPriority: String, var shipPriority: Int)
+  case class LineItem(var orderId: Int, var extendedPrice: Double)
+  case class PrioritizedOrder(var orderId: Int, var shipPriority: Int, var revenue: Double)
   
-  def addRevenues(po1: PrioritizedOrder, po2: PrioritizedOrder) = po1.copy(revenue = po1.revenue + po2.revenue)
+  def addRevenues(po1: PrioritizedOrder, po2: PrioritizedOrder) = PrioritizedOrder(po1.orderId, po1.shipPriority, po1.revenue + po2.revenue)
 
   def parseOrder = (line: String) => {
     val OrderInputPattern = """(\d+)\|[^\|]+\|([^\|])\|[^\|]+\|(\d\d\d\d)-(\d\d)-(\d\d)\|([^\|]+)\|[^\|]+\|(\d+)\|[^\|]+\|""".r
@@ -69,7 +69,7 @@ class TPCHQuery3Immutable(ordersInput: String, lineItemsInput: String, ordersOut
   }
 
   def formatOutput = (item: PrioritizedOrder) => "%d|%d|%.2f".format(item.orderId, item.shipPriority, item.revenue)
-  
+
   filteredOrders observes { o => (o.status, o.year, o.orderPriority) }
 
   prioritizedItems.left neglects { o => o }

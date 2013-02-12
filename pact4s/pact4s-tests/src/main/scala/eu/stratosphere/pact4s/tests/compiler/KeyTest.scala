@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package eu.stratosphere.pact4s.examples.compilerTests
+package eu.stratosphere.pact4s.tests.compiler
 
 import eu.stratosphere.pact4s.common.analysis._
 

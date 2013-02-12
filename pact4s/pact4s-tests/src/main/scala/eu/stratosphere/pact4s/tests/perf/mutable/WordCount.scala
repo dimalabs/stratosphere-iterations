@@ -11,19 +11,19 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package eu.stratosphere.pact4s.examples.wordcount
+package eu.stratosphere.pact4s.tests.perf.mutable
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
-class WordCountMutableDescriptor extends PactDescriptor[WordCountMutable] {
+class WordCountDescriptor extends PactDescriptor[WordCount] {
   override val name = "Word Count (Mutable)"
   override val parameters = "-input <file> -output <file>"
 
-  override def createInstance(args: Pact4sArgs) = new WordCountMutable(args("input"), args("output"))
+  override def createInstance(args: Pact4sArgs) = new WordCount(args("input"), args("output"))
 }
 
-class WordCountMutable(textInput: String, wordsOutput: String) extends PactProgram {
+class WordCount(textInput: String, wordsOutput: String) extends PactProgram {
 
   val input = new DataSource(textInput, DelimetedDataSourceFormat(identity[String] _))
   val output = new DataSink(wordsOutput, DelimetedDataSinkFormat(formatOutput _))
@@ -34,6 +34,7 @@ class WordCountMutable(textInput: String, wordsOutput: String) extends PactProgr
   override def outputs = output <~ counts
 
   case class WordWithCount(var word: String, var count: Int)
+  
   def addCounts(w1: WordWithCount, w2: WordWithCount) = WordWithCount(w1.word, w1.count + w2.count)
   def formatOutput(w: WordWithCount) = "%s %d".format(w.word, w.count)
 

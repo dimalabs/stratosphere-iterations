@@ -1,0 +1,341 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <artifactId>pact4s</artifactId>
+    <groupId>eu.stratosphere</groupId>
+    <version>0.2</version>
+  </parent>
+
+  <artifactId>pact4s-tests</artifactId>
+  <name>pact4s-tests</name>
+  
+  <packaging>jar</packaging>
+
+  <dependencies>
+
+    <dependency>
+    	<groupId>eu.stratosphere</groupId>
+    	<artifactId>pact4s-common</artifactId>
+    	<version>${version}</version>
+    </dependency>
+  </dependencies>
+
+  <reporting>
+    <plugins>
+    </plugins>
+  </reporting>
+
+  <build>
+    <plugins>
+    
+      <plugin>
+        <groupId>org.scala-tools</groupId>
+        <artifactId>maven-scala-plugin</artifactId>
+        <configuration>
+          <compilerPlugins>
+            <compilerPlugin>
+              <groupId>eu.stratosphere</groupId>
+              <artifactId>pact4s-compiler</artifactId>
+              <version>0.2</version>
+            </compilerPlugin>
+          </compilerPlugins>
+          <args>
+            <arg>-P:pact4s:udtRecycling:on</arg>
+            <!--<arg>-P:pact4s:verbosity:debug</arg>-->
+          </args>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>compile</goal>
+              <goal>testCompile</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+        
+          <!-- KMeans -->
+          
+          <execution>
+            <id>KMeansPlainJava</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>KMeansPlainJava</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.plainJava.KMeans</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/plainJava/KMeans*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>KMeansPlainScala</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>KMeansPlainScala</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.plainScala.KMeans</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/plainScala/KMeans*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>KMeansImmutable</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>KMeansImmutable</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.immutable.KMeansDescriptor</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/immutable/KMeans*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>KMeansMutable</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>KMeansMutable</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.mutable.KMeansDescriptor</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/mutable/KMeans*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <!-- TPCHQuery3 -->
+
+          <execution>
+            <id>TPCHQuery3PlainJava</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>TPCHQuery3PlainJava</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.plainJava.TPCHQuery3</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/plainJava/TPCHQuery3*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>TPCHQuery3PlainScala</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>TPCHQuery3PlainScala</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.plainScala.TPCHQuery3</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/plainScala/TPCHQuery3*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>TPCHQuery3Immutable</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>TPCHQuery3Immutable</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.immutable.TPCHQuery3Descriptor</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/immutable/TPCHQuery3*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+          
+          <execution>
+            <id>TPCHQuery3Mutable</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>TPCHQuery3Mutable</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.mutable.TPCHQuery3Descriptor</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/mutable/TPCHQuery3*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+          
+          <!-- WordCount -->
+
+          <execution>
+            <id>WordCountPlainJava</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>WordCountPlainJava</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.plainJava.WordCount</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/plainJava/WordCount*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>WordCountPlainScala</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>WordCountPlainScala</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.plainScala.WordCount</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/plainScala/WordCount*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>WordCountImmutable</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>WordCountImmutable</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.immutable.WordCountDescriptor</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/immutable/WordCount*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>WordCountMutable</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>WordCountMutable</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.mutable.WordCountDescriptor</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/mutable/WordCount*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+          
+        </executions>
+      </plugin>
+      
+    </plugins>
+  </build>
+</project>
