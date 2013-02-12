@@ -21,7 +21,9 @@ import eu.stratosphere.pact.runtime.iterative.aggregate.SumLongAggregator;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-/** A workset iteration is by definition converged if no records have been updated in the solutionset */
+/**
+ * A workset iteration is by definition converged if no records have been updated in the solutionset
+ */
 public class SolutionsetEmptyConvergenceCriterion implements ConvergenceCriterion<PactLong> {
 
 	private static final Log log = LogFactory.getLog(SolutionsetEmptyConvergenceCriterion.class);
@@ -42,5 +44,4 @@ public class SolutionsetEmptyConvergenceCriterion implements ConvergenceCriterio
 
 		return updatedElements == 0;
 	}
-
 }

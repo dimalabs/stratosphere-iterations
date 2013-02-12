@@ -19,12 +19,14 @@ import eu.stratosphere.nephele.io.MutableReader;
 import eu.stratosphere.pact.common.stubs.Stub;
 import eu.stratosphere.pact.common.util.InstantiationUtil;
 import eu.stratosphere.pact.common.util.MutableObjectIterator;
+import eu.stratosphere.pact.generic.types.TypeSerializer;
 import eu.stratosphere.pact.runtime.iterative.event.EndOfSuperstepEvent;
 import eu.stratosphere.pact.runtime.iterative.event.TerminationEvent;
 import eu.stratosphere.pact.runtime.iterative.io.InterruptingMutableObjectIterator;
 import eu.stratosphere.pact.runtime.iterative.monitoring.IterationMonitoring;
 import eu.stratosphere.pact.runtime.task.PactDriver;
 import eu.stratosphere.pact.runtime.task.RegularPactTask;
+import eu.stratosphere.pact.runtime.task.ResettablePactDriver;
 import eu.stratosphere.pact.runtime.task.util.ReaderInterruptionBehavior;
 import eu.stratosphere.pact.runtime.task.util.ReaderInterruptionBehaviors;
 import org.apache.commons.logging.Log;
@@ -40,7 +42,7 @@ public abstract class AbstractIterativePactTask<S extends Stub, OT> extends Regu
 {
 	private static final Log log = LogFactory.getLog(AbstractIterativePactTask.class);
 	
-	private MutableObjectIterator<?>[] wrappedInputs;
+	private static final boolean REINSTANTIATE_STUB_PER_ITERATION = false;
 
 	private final AtomicBoolean terminationRequested = new AtomicBoolean(false);
 
@@ -51,15 +53,75 @@ public abstract class AbstractIterativePactTask<S extends Stub, OT> extends Regu
 	// --------------------------------------------------------------------------------------------
 	
 	@Override
-	public void invoke() throws Exception {
-		getTaskConfig().setStubParameter("pact.iterations.currentIteration", String.valueOf(currentIteration()));
-		super.invoke();
+	protected void initialize() throws Exception {
+		try {
+			this.driver.setup(this);
+		}
+		catch (Throwable t) {
+			throw new Exception("The pact driver setup for '" + this.getEnvironment().getTaskName() +
+				"' , caused an error: " + t.getMessage(), t);
+		}
+		
+		try {
+			final Class<? super S> userCodeFunctionType = this.driver.getStubType();
+			// if the class is null, the driver has no user code 
+			if (userCodeFunctionType != null && (this.stub == null || REINSTANTIATE_STUB_PER_ITERATION)) {
+				this.stub = initStub(userCodeFunctionType);
+			}
+		} catch (Exception e) {
+			throw new RuntimeException("Initializing the user code and the configuration failed" +
+				e.getMessage() == null ? "." : ": " + e.getMessage(), e);
+		}
+		
+		// check if the driver is resettable
+		if (this.driver instanceof ResettablePactDriver) {
+			final ResettablePactDriver<?, ?> resDriver = (ResettablePactDriver<?, ?>) this.driver;
+			// make sure that the according inputs are not reseted
+			for (int i = 0; i < resDriver.getNumberOfInputs(); i++) {
+				if (resDriver.isInputResettable(i)) {
+					excludeFromReset(i);
+				}
+			}
+			// initialize the repeatable driver
+			resDriver.initialize();
+		}
 	}
 	
 	@Override
-	protected void initInputStrategies() throws Exception {
-		super.initInputStrategies();
-		this.wrappedInputs = new MutableObjectIterator<?>[this.inputs.length];
+	public void run() throws Exception {
+		getTaskConfig().setStubParameter("pact.iterations.currentIteration", String.valueOf(currentIteration()));
+		
+		if (!inFirstIteration()) {
+			reinstantiateDriver();
+			resetAllInputs();
+		}
+		super.run();
+	}
+	
+	@Override
+	protected void closeLocalStrategiesAndCaches() {
+		super.closeLocalStrategiesAndCaches();
+		
+		if (this.driver instanceof ResettablePactDriver) {
+			final ResettablePactDriver<?, ?> resDriver = (ResettablePactDriver<?, ?>) this.driver;
+			try {
+				resDriver.teardown();
+			} catch (Throwable t) {
+				log.error("Error shutting down a resettable driver.", t);
+			}
+		}
+	}
+
+	/**
+	 * This method should be called at the end of each iterative task's run() method.
+	 * 
+	 * @throws Exception
+	 */
+	protected void shu() throws Exception {
+		if (this.driver instanceof ResettablePactDriver) {
+			final ResettablePactDriver<?, ?> resDriver = (ResettablePactDriver<?, ?>) this.driver;
+			resDriver.teardown();
+		}
 	}
 
 	@Override
@@ -67,44 +129,30 @@ public abstract class AbstractIterativePactTask<S extends Stub, OT> extends Regu
 		return getTaskConfig().isIterativeInputGate(inputGateIndex) ?
 			ReaderInterruptionBehaviors.RELEASE_ON_INTERRUPT : ReaderInterruptionBehaviors.EXCEPTION_ON_INTERRUPT;
 	}
-
+	
 	@Override
-	@SuppressWarnings("unchecked")
-	public <X> MutableObjectIterator<X> getInput(int inputIndex) {
-		if (this.wrappedInputs[inputIndex] != null) {
-			return (MutableObjectIterator<X>) this.wrappedInputs[inputIndex];
+	protected MutableObjectIterator<?> createInputIterator(int i, 
+		MutableReader<?> inputReader, TypeSerializer<?> serializer)
+	{
+		final MutableObjectIterator<?> inIter = super.createInputIterator(i, inputReader, serializer);
+		final int numberOfEventsUntilInterrupt = getTaskConfig().getNumberOfEventsUntilInterruptInIterativeGate(i);
+		
+		if (numberOfEventsUntilInterrupt == 0) {
+			// non iterative gate
+			return inIter;
 		}
-
-		if (this.config.isIterativeInputGate(inputIndex)) {
-			return wrapWithInterruptingIterator(inputIndex);
-		} else {
-			// cache the input to avoid repeated config lookups
-			MutableObjectIterator<X> input = super.getInput(inputIndex);
-			this.wrappedInputs[inputIndex] = input;
-			return input;
-		}
-	}
-
-	private <X> MutableObjectIterator<X> wrapWithInterruptingIterator(int inputIndex) {
-		int numberOfEventsUntilInterrupt = getTaskConfig().getNumberOfEventsUntilInterruptInIterativeGate(
-			inputIndex);
-
-		InterruptingMutableObjectIterator<X> interruptingIterator = new InterruptingMutableObjectIterator<X>(
-			super.<X>getInput(inputIndex), numberOfEventsUntilInterrupt, identifier(),
-			this, inputIndex);
-
-		MutableReader<?> inputReader = getReader(inputIndex);
+	
+		@SuppressWarnings({ "unchecked", "rawtypes" })
+		InterruptingMutableObjectIterator<?> interruptingIterator = new InterruptingMutableObjectIterator(
+			inIter, numberOfEventsUntilInterrupt, identifier(), this, i);
+	
 		inputReader.subscribeToEvent(interruptingIterator, EndOfSuperstepEvent.class);
 		inputReader.subscribeToEvent(interruptingIterator, TerminationEvent.class);
-
+	
 		if (log.isInfoEnabled()) {
-			log.info(formatLogString("wrapping input [" + inputIndex + 
-				"] with an interrupting iterator that waits " +
+			log.info(formatLogString("wrapping input [" + i + "] with an interrupting iterator that waits " +
 				"for [" + numberOfEventsUntilInterrupt + "] event(s)"));
 		}
-
-		this.wrappedInputs[inputIndex] = interruptingIterator;
-
 		return interruptingIterator;
 	}
 	
@@ -140,9 +188,22 @@ public abstract class AbstractIterativePactTask<S extends Stub, OT> extends Regu
 			getEnvironment().getCurrentNumberOfSubtasks() + ')';
 	}
 
-	protected void reinstantiateDriver() {
-		Class<? extends PactDriver<S, OT>> driverClass = this.config.getDriver();
-		this.driver = InstantiationUtil.instantiate(driverClass, PactDriver.class);
+	private void reinstantiateDriver() throws Exception {
+		if (this.driver instanceof ResettablePactDriver) {
+			final ResettablePactDriver<?, ?> resDriver = (ResettablePactDriver<?, ?>) this.driver;
+			resDriver.reset();
+		} else {
+			Class<? extends PactDriver<S, OT>> driverClass = this.config.getDriver();
+			this.driver = InstantiationUtil.instantiate(driverClass, PactDriver.class);
+			
+			try {
+				this.driver.setup(this);
+			}
+			catch (Throwable t) {
+				throw new Exception("The pact driver setup for '" + this.getEnvironment().getTaskName() +
+					"' , caused an error: " + t.getMessage(), t);
+			}
+		}
 	}
 
 	@Override
@@ -156,5 +217,11 @@ public abstract class AbstractIterativePactTask<S extends Stub, OT> extends Regu
 			log.info(formatLogString("requesting termination."));
 		}
 		this.terminationRequested.set(true);
+	}
+	
+	@Override
+	public void cancel() throws Exception {
+		requestTermination();
+		super.cancel();
 	}
 }

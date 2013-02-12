@@ -30,6 +30,9 @@ import org.junit.runners.Parameterized.Parameters;
 
 import eu.stratosphere.nephele.configuration.Configuration;
 import eu.stratosphere.nephele.jobgraph.JobGraph;
+import eu.stratosphere.pact.common.contract.CrossContract;
+import eu.stratosphere.pact.common.contract.GenericDataSink;
+import eu.stratosphere.pact.common.contract.ReduceContract;
 import eu.stratosphere.pact.common.plan.Plan;
 import eu.stratosphere.pact.compiler.PactCompiler;
 import eu.stratosphere.pact.compiler.plan.candidate.OptimizedPlan;
@@ -39,8 +42,6 @@ import eu.stratosphere.pact.test.util.TestBase;
 
 @RunWith(Parameterized.class)
 public class KMeansIterationITCase extends TestBase {
-
-	// KMeanDataGenerator kmdg = new KMeanDataGenerator(500, 10, 2);
 
 	private static final Log LOG = LogFactory.getLog(KMeansIterationITCase.class);
 
@@ -85,9 +86,9 @@ public class KMeansIterationITCase extends TestBase {
 			+ "2|83.92|60.45|25.17|\n" + "3|70.73|20.18|67.06|\n" + "4|22.51|47.19|86.23|\n" + "5|82.70|53.79|68.68|\n"
 			+ "6|29.74|19.17|59.16|";
 
-	String dataPath = null;
-	String clusterPath = null;
-	String resultPath = null;
+	protected String dataPath = null;
+	protected String clusterPath = null;
+	protected String resultPath = null;
 
 	public KMeansIterationITCase(Configuration config) {
 		super(config);
@@ -129,6 +130,8 @@ public class KMeansIterationITCase extends TestBase {
 				getFilesystemProvider().getURIPrefix()	+ dataPath, 
 				getFilesystemProvider().getURIPrefix() + clusterPath,  
 				getFilesystemProvider().getURIPrefix()	+ resultPath);
+		
+		setParameterToCross(plan, "INPUT_RIGHT_SHIP_STRATEGY", "SHIP_FORWARD");
 
 		PactCompiler pc = new PactCompiler();
 		OptimizedPlan op = pc.compile(plan);
@@ -319,5 +322,13 @@ public class KMeansIterationITCase extends TestBase {
 			return Math.sqrt(sqrdSum);
 		}
 
+	}
+	
+	public static void setParameterToCross(Plan p, String key, String value) {
+		GenericDataSink sink = p.getDataSinks().iterator().next();
+		ReduceContract reduce2 = (ReduceContract) sink.getInputs().get(0);
+		ReduceContract reduce1 = (ReduceContract) reduce2.getInputs().get(0);
+		CrossContract cross = (CrossContract) reduce1.getInputs().get(0);
+		cross.getParameters().setString(key, value);
 	}
 }

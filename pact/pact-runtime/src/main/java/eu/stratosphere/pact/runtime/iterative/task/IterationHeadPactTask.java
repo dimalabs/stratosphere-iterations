@@ -181,21 +181,26 @@ public class IterationHeadPactTask<X, S extends Stub, OT> extends AbstractIterat
 	}
 
 	@Override
-	public void invoke() throws Exception {
+	public void run() throws Exception {
 
 		final int workerIndex = getEnvironment().getIndexInSubtaskGroup();
 		final IterationContext iterationContext = IterationContext.instance();
 
-		/** used for receiving the current iteration result from iteration tail */
+		/* used for receiving the current iteration result from iteration tail */
 		BlockingBackChannel backChannel = initBackChannel();
 		SuperstepBarrier barrier = initSuperstepBarrier();
 		
 		this.partialSolutionInput = this.config.getIterationHeadPartialSolutionInputIndex();
 		this.solutionTypeSerializer = getInputSerializer(this.partialSolutionInput);
+		
+		// when we reset the inputs, do not reset this particular input!
+		excludeFromReset(this.partialSolutionInput);
 
 //		MutableHashTable hashJoin = config.usesWorkset() ? initHashJoin() : null;
+		
+		DataInputView superstepResult = null;
 
-		while (!terminationRequested()) {
+		while (this.running && !terminationRequested()) {
 
 			notifyMonitor(IterationMonitoring.Event.HEAD_STARTING);
 			if (log.isInfoEnabled()) {
@@ -206,10 +211,10 @@ public class IterationHeadPactTask<X, S extends Stub, OT> extends AbstractIterat
 
 			notifyMonitor(IterationMonitoring.Event.HEAD_PACT_STARTING);
 			if (!inFirstIteration()) {
-				reinstantiateDriver();
+				feedBackSuperstepResult(superstepResult);
 			}
 
-			super.invoke();
+			super.run();
 			notifyMonitor(IterationMonitoring.Event.HEAD_PACT_FINISHED);
 
 			EndOfSuperstepEvent endOfSuperstepEvent = new EndOfSuperstepEvent();
@@ -218,7 +223,7 @@ public class IterationHeadPactTask<X, S extends Stub, OT> extends AbstractIterat
 			sendEventToAllIterationOutputs(endOfSuperstepEvent);
 
 			// blocking call to wait for the result
-			DataInputView superstepResult = backChannel.getReadEndAfterSuperstepEnded();
+			superstepResult = backChannel.getReadEndAfterSuperstepEnded();
 			if (log.isInfoEnabled()) {
 				log.info(formatLogString("finishing iteration [" + currentIteration() + "]"));
 			}
@@ -261,8 +266,6 @@ public class IterationHeadPactTask<X, S extends Stub, OT> extends AbstractIterat
 					IterationContext.instance().setGlobalAggregate(workerIndex, globalAggregate);
 				}
 			}
-
-			feedBackSuperstepResult(superstepResult);
 		}
 
 		if (log.isInfoEnabled()) {
@@ -272,13 +275,12 @@ public class IterationHeadPactTask<X, S extends Stub, OT> extends AbstractIterat
 //		if (config.usesWorkset()) {
 //			streamOutFinalOutputWorkset(hashJoin);
 //		} else {
-			streamOutFinalOutputBulk();
+			streamOutFinalOutputBulk(new InputViewIterator<X>(superstepResult, this.solutionTypeSerializer));
 //		}
 	}
 
 
-	private void streamOutFinalOutputBulk() throws IOException, InterruptedException {
-		final MutableObjectIterator<X> results = getInput(this.partialSolutionInput);
+	private void streamOutFinalOutputBulk(MutableObjectIterator<X> results) throws IOException {
 		final Collector<X> out = this.finalOutputCollector;
 		final X record = this.solutionTypeSerializer.createInstance();
 		int recordsPut = 0;
