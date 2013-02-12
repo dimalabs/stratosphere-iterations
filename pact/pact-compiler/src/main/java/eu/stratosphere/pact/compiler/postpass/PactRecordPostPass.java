@@ -46,11 +46,14 @@ import eu.stratosphere.pact.runtime.plugable.pactrecord.PactRecordSerializerFact
 /**
  * 
  */
-public class PactRecordPostPass implements OptimizerPostPass
-{
-	/* (non-Javadoc)
-	 * @see eu.stratosphere.pact.compiler.OptimizerPostPass#postPass(eu.stratosphere.pact.compiler.plan.candidate.OptimizedPlan)
-	 */
+public class PactRecordPostPass implements OptimizerPostPass {
+	
+	private Map<Integer, Integer> repositioningMap;
+	
+	protected void setRepositioningMap(Map<Integer, Integer> repositioningMap) {
+		this.repositioningMap = repositioningMap;
+	}
+	
 	@Override
 	public void postPass(OptimizedPlan plan) {
 		for (SinkPlanNode sink : plan.getDataSinks()) {
@@ -413,6 +416,20 @@ public class PactRecordPostPass implements OptimizerPostPass
 	throws MissingFieldTypeInfoException
 	{
 		final int[] positions = fields.toArray();
+		final int[] reMappedPositions;
+		if (this.repositioningMap != null) {
+			reMappedPositions = new int[positions.length];
+			for (int i = 0; i < positions.length; i++) {
+				Integer n = this.repositioningMap.get(positions[i]);
+				if (n == null) {
+					throw new CompilerException("Did not find a re-mapped position for global field " + positions[i]);
+				}
+				reMappedPositions[i] = n;
+			}
+		} else {
+			reMappedPositions = positions;
+		}
+		
 		@SuppressWarnings("unchecked")
 		final Class<? extends Key>[] keyTypes = new Class[fields.size()];
 		

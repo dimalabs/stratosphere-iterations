@@ -110,8 +110,9 @@ class Pact4sInstantiationException(cause: Throwable) extends Exception("Could no
 class Pact4sPostPass extends PactRecordPostPass with GlobalSchemaOptimizer {
 
   override def postPass(plan: OptimizedPlan): Unit = {
-    super.postPass(plan);
     optimizeSchema(plan, plan.getPlanConfiguration().getBoolean("Pact4s::SchemaCompaction", true))
+    setRepositioningMap(null) // replace that
+    super.postPass(plan)
   }
 }
 
