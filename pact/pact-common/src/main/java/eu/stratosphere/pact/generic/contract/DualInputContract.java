@@ -30,6 +30,7 @@ public abstract class DualInputContract<T extends Stub> extends AbstractPact<T> 
 	 * The contract producing the first input.
 	 */
 	protected final List<Contract> input1 = new ArrayList<Contract>();
+	
 	/**
 	 * The contract producing the second input.
 	 */
@@ -115,7 +116,7 @@ public abstract class DualInputContract<T extends Stub> extends AbstractPact<T> 
 	}
 
 	/**
-	 * Connects the first inputs to the task wrapped in this contract
+	 * Connects the first inputs to the task wrapped in this contract.
 	 * 
 	 * @param inputs The contracts that is connected as the first inputs.
 	 */
@@ -124,7 +125,7 @@ public abstract class DualInputContract<T extends Stub> extends AbstractPact<T> 
 	}
 
 	/**
-	 * Connects the second inputs to the task wrapped in this contract
+	 * Connects the second inputs to the task wrapped in this contract.
 	 * 
 	 * @param inputs The contracts that is connected as the second inputs.
 	 */
@@ -133,9 +134,19 @@ public abstract class DualInputContract<T extends Stub> extends AbstractPact<T> 
 	}
 	
 	/**
-	 * Clears all previous connections and connects the first input to the task wrapped in this contract
+	 * Clears all previous connections and connects the first input to the task wrapped in this contract.
 	 * 
 	 * @param firstInput The contract that is connected as the first input.
+	 */
+	public void setFirstInput(Contract input) {
+		this.input1.clear();
+		this.input1.add(input);
+	}
+	
+	/**
+	 * Clears all previous connections and connects the first input to the tasks wrapped in this contracts.
+	 * 
+	 * @param firstInput The contracts that are connected as the first input.
 	 */
 	public void setFirstInput(Contract ... input) {
 		this.input1.clear();
@@ -143,11 +154,21 @@ public abstract class DualInputContract<T extends Stub> extends AbstractPact<T> 
 			this.input1.add(c);
 		}
 	}
-
+	
 	/**
-	 * Clears all previous connections and connects the second input to the task wrapped in this contract
+	 * Clears all previous connections and connects the second input to the task wrapped in this contract.
 	 * 
 	 * @param secondInput The contract that is connected as the second input.
+	 */
+	public void setSecondInput(Contract input) {
+		this.input2.clear();
+		this.input2.add(input);
+	}
+
+	/**
+	 * Clears all previous connections and connects the second input to the tasks wrapped in this contracts.
+	 * 
+	 * @param secondInput The contracts that are connected as the second input.
 	 */
 	public void setSecondInput(Contract ... input) {
 		this.input2.clear();

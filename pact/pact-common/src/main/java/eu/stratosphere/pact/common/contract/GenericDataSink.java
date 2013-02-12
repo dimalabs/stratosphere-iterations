@@ -131,8 +131,10 @@ public class GenericDataSink extends Contract
 	 * 
 	 * @param input the contract's input contract
 	 */
-	public void addInput(Contract input) {
-		this.input.add(input);
+	public void addInput(Contract ... input) {
+		for (Contract c : input) {
+			this.input.add(c);
+		}
 	}
 
 	/**
@@ -143,16 +145,29 @@ public class GenericDataSink extends Contract
 	public void addInputs(List<Contract> inputs) {
 		this.input.addAll(inputs);
 	}
-
+	
 	/**
-	 * Clears all previous connections and sets the given contract as
+	 * Clears all previous connections and sets the given contracts as
 	 * single input of this contract.
 	 * 
-	 * @param input		The contract will be set as input.
+	 * @param input The contracts that will be set as input.
 	 */
 	public void setInput(Contract input) {
 		this.input.clear();
 		this.input.add(input);
+	}
+
+	/**
+	 * Clears all previous connections and sets the given contracts as
+	 * single input of this contract.
+	 * 
+	 * @param input The contracts that will be set as input.
+	 */
+	public void setInput(Contract ... input) {
+		this.input.clear();
+		for (Contract c : input) {
+			this.input.add(c);
+		}
 	}
 	
 	/**

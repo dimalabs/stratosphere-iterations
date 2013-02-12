@@ -18,6 +18,7 @@ package eu.stratosphere.pact.generic.contract;
 import java.util.List;
 
 import eu.stratosphere.pact.common.plan.Visitor;
+import eu.stratosphere.pact.common.type.Key;
 import eu.stratosphere.pact.generic.stub.AbstractStub;
 
 /**
@@ -61,6 +62,23 @@ public class WorksetIteration extends DualInputContract<AbstractStub>
 	}
 	
 	public WorksetIteration(int[] keyPositions, String name) {
+		super(AbstractStub.class, name);
+		this.solutionSetKeyFields = keyPositions;
+	}
+	
+	public WorksetIteration(int keyPosition, Class<? extends Key> keyType) {
+		this(new int[] {keyPosition});
+	}
+	
+	public WorksetIteration(int[] keyPositions, Class<? extends Key>[] keyType) {
+		this(keyPositions, "<Unnamed Workset-Iteration>");
+	}
+
+	public WorksetIteration(int keyPosition, Class<? extends Key> keyType, String name) {
+		this(new int[] {keyPosition}, name);
+	}
+	
+	public WorksetIteration(int[] keyPositions, Class<? extends Key>[] keyType, String name) {
 		super(AbstractStub.class, name);
 		this.solutionSetKeyFields = keyPositions;
 	}

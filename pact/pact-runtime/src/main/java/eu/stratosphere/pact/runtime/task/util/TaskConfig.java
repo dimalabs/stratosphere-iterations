@@ -42,8 +42,8 @@ import eu.stratosphere.pact.runtime.task.chaining.ChainedDriver;
 /**
  * Configuration class which stores all relevant parameters required to set up the Pact tasks.
  */
-public class TaskConfig
-{	
+public class TaskConfig {
+	
 	// ------------------------------------ User Code ---------------------------------------------
 	
 	private static final String STUB_CLASS = "pact.stub.class";
@@ -180,6 +180,15 @@ public class TaskConfig
 	 */
 	public Configuration getConfiguration() {
 		return this.config;
+	}
+	
+	/**
+	 * Sets the class loader that loads the classes inside the configuration.
+	 * 
+	 * @param cl The class loader.
+	 */
+	public void setConfigClassLoader(ClassLoader cl) {
+		this.config.setClassLoader(cl);
 	}
 	
 	// --------------------------------------------------------------------------------------------
@@ -799,6 +808,19 @@ public class TaskConfig
 	}
 	
 	// --------------------------------------------------------------------------------------------
+	//                                    Object Methods
+	// --------------------------------------------------------------------------------------------
+	
+	/* (non-Javadoc)
+	 * @see java.lang.Object#toString()
+	 */
+	@Override
+	public String toString() {
+		return this.config.toString();
+	}
+	
+	
+	// --------------------------------------------------------------------------------------------
 	//                          Utility class for nested Configurations
 	// --------------------------------------------------------------------------------------------
 	
@@ -828,8 +850,7 @@ public class TaskConfig
 		 * @param backingConfig The configuration holding the actual config data.
 		 * @param prefix The prefix prepended to all config keys.
 		 */
-		public DelegatingConfiguration(Configuration backingConfig, String prefix)
-		{
+		public DelegatingConfiguration(Configuration backingConfig, String prefix) {
 			this.backingConfig = backingConfig;
 			this.prefix = prefix;
 		}
@@ -917,8 +938,7 @@ public class TaskConfig
 		}
 		
 		@Override
-		public Set<String> keySet()
-		{
+		public Set<String> keySet() {
 			final HashSet<String> set = new HashSet<String>();
 			final int prefixLen = this.prefix == null ? 0 : this.prefix.length();
 			
@@ -933,15 +953,18 @@ public class TaskConfig
 		// --------------------------------------------------------------------------------------------
 
 		@Override
-		public void read(DataInput in) throws IOException
-		{
+		public void setClassLoader(ClassLoader classLoader) {
+			throw new UnsupportedOperationException("This configuration does not allow to alter the class loader.");
+		}
+
+		@Override
+		public void read(DataInput in) throws IOException {
 			this.prefix = in.readUTF();
 			this.backingConfig.read(in);
 		}
 
 		@Override
-		public void write(DataOutput out) throws IOException
-		{
+		public void write(DataOutput out) throws IOException {
 			out.writeUTF(this.prefix);
 			this.backingConfig.write(out);
 		}
@@ -960,6 +983,11 @@ public class TaskConfig
 				return this.prefix.equals(other.prefix) && this.backingConfig.equals(other.backingConfig);
 			}
 			else return false;
+		}
+		
+		@Override
+		public String toString() {
+			return this.backingConfig.toString();
 		}
 	}
 }

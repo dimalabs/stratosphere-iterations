@@ -76,8 +76,7 @@ public class DataSinkTask<IT> extends AbstractOutputTask
 	 * {@inheritDoc}
 	 */
 	@Override
-	public void registerInputOutput()
-	{
+	public void registerInputOutput() {
 		if (LOG.isDebugEnabled())
 			LOG.debug(getLogString("Start registering input and output"));
 
@@ -95,8 +94,7 @@ public class DataSinkTask<IT> extends AbstractOutputTask
 	 * {@inheritDoc}
 	 */
 	@Override
-	public void invoke() throws Exception
-	{
+	public void invoke() throws Exception {
 		if (LOG.isInfoEnabled())
 			LOG.info(getLogString("Start PACT code"));
 		
@@ -180,8 +178,7 @@ public class DataSinkTask<IT> extends AbstractOutputTask
 	 * @see eu.stratosphere.nephele.template.AbstractInvokable#cancel()
 	 */
 	@Override
-	public void cancel() throws Exception
-	{
+	public void cancel() throws Exception {
 		this.taskCanceled = true;
 		OutputFormat<IT> format = this.format;
 		if (format != null) {
@@ -199,8 +196,7 @@ public class DataSinkTask<IT> extends AbstractOutputTask
 	 * 
 	 * @param cl The class-loader to be used to load the user code.
 	 */
-	public void setUserCodeClassLoader(ClassLoader cl)
-	{
+	public void setUserCodeClassLoader(ClassLoader cl) {
 		this.userCodeClassLoader = cl;
 	}
 
@@ -211,8 +207,7 @@ public class DataSinkTask<IT> extends AbstractOutputTask
 	 *         Throws if instance of OutputFormat implementation can not be
 	 *         obtained.
 	 */
-	private void initOutputFormat()
-	{
+	private void initOutputFormat() {
 		if (this.userCodeClassLoader == null) {
 			try {
 				this.userCodeClassLoader = LibraryCacheManager.getClassLoader(getEnvironment().getJobID());
@@ -222,6 +217,7 @@ public class DataSinkTask<IT> extends AbstractOutputTask
 		}
 		// obtain task configuration (including stub parameters)
 		this.config = new TaskConfig(getTaskConfiguration());
+		this.config.setConfigClassLoader(this.userCodeClassLoader);
 
 		// obtain stub implementation class
 		try {

@@ -89,12 +89,12 @@ trait GlobalSchemaGenerator {
 
       case contract @ WorksetIterate4sContract(s0, ws0, deltaS, newWS, placeholderS, placeholderWS) => {
 
-        val s0contract = proxies.getOrElse(s0, s0.asInstanceOf[Pact4sContract[_]])
-        val ws0contract = proxies.getOrElse(ws0, ws0.asInstanceOf[Pact4sContract[_]])
+        val s0contract = proxies.getOrElse(s0.get(0), s0.asInstanceOf[Pact4sContract[_]])
+        val ws0contract = proxies.getOrElse(ws0.get(0), ws0.asInstanceOf[Pact4sContract[_]])
         val newProxies = proxies + (placeholderS -> s0contract) + (placeholderWS -> ws0contract)
 
-        val freePos1 = globalizeContract(s0, Seq(contract.key.inputFields), proxies, fixedOutputs, freePos)
-        val freePos2 = globalizeContract(ws0, Seq(), proxies, None, freePos1)
+        val freePos1 = globalizeContract(s0.get(0), Seq(contract.key.inputFields), proxies, fixedOutputs, freePos)
+        val freePos2 = globalizeContract(ws0.get(0), Seq(), proxies, None, freePos1)
         val freePos3 = globalizeContract(deltaS, Seq(), newProxies, Some(s0contract.getUDF.outputFields), freePos2)
         val freePos4 = globalizeContract(newWS, Seq(), newProxies, Some(ws0contract.getUDF.outputFields), freePos3)
 

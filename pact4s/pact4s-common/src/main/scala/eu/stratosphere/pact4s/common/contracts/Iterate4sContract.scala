@@ -36,6 +36,6 @@ object WorksetIterate4sContract {
 
   def unapply(c: WorksetIterate4sContract[_, _, _]) = {
     val iter = c.asInstanceOf[WorksetIteration]
-    Some((iter.getInitialPartialSolution(), iter.getInitialWorkset(), iter.getPartialSolutionDelta(), iter.getNextWorkset(), iter.getPartialSolution(), iter.getWorkset()))
+    Some((iter.getInitialSolutionSet(), iter.getInitialWorkset(), iter.getSolutionSetDelta(), iter.getNextWorkset(), iter.getSolutionSet(), iter.getWorkset()))
   }
 }

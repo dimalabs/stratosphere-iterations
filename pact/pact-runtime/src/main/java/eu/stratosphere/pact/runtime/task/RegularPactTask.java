@@ -218,6 +218,7 @@ public class RegularPactTask<S extends Stub, OT> extends AbstractTask implements
 
 		// obtain task configuration (including stub parameters)
 		this.config = new TaskConfig(getTaskConfiguration());
+		this.config.setConfigClassLoader(this.userCodeClassLoader);
 
 		// now get the driver class, which drives the actual pact
 		final Class<? extends PactDriver<S, OT>> driverClass = this.config.getDriver();

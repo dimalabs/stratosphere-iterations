@@ -77,8 +77,10 @@ public abstract class SingleInputContract<T extends Stub> extends AbstractPact<T
 	 * 
 	 * @param input The contract will be set as input.
 	 */
-	public void addInput(Contract input) {
-		this.input.add(input);
+	public void addInput(Contract ... input) {
+		for (Contract c : input) {
+			this.input.add(c);
+		}
 	}
 	
 	/**
@@ -91,14 +93,27 @@ public abstract class SingleInputContract<T extends Stub> extends AbstractPact<T
 	}
 
 	/**
+	 * Clears all previous connections and sets the given contracts as
+	 * single input of this contract.
+	 * 
+	 * @param input The contracts that will be set as input.
+	 */
+	public void setInput(Contract input) {
+		this.input.clear();
+		this.input.add(input);
+	}
+	
+	/**
 	 * Clears all previous connections and sets the given contract as
 	 * single input of this contract.
 	 * 
 	 * @param input		The contract will be set as input.
 	 */
-	public void setInput(Contract input) {
+	public void setInput(Contract ... input) {
 		this.input.clear();
-		this.input.add(input);
+		for (Contract c : input) {
+			this.input.add(c);
+		}
 	}
 	
 	/**

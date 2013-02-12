@@ -90,24 +90,24 @@ class WorksetIterateOperator[SolutionItem: UDT, WorksetItem: UDT](stepFunction: 
       val keyTypes = implicitly[UDT[SolutionItem]].getKeySet(keyFields map { _.localPos })
       val keyPositions = keyFields map { _ => -1 } toArray
 
-      val contract = new WorksetIteration(keyTypes, keyPositions) with WorksetIterate4sContract[SolutionKey, SolutionItem, WorksetItem] {
+      val contract = new WorksetIteration(keyPositions, keyTypes) with WorksetIterate4sContract[SolutionKey, SolutionItem, WorksetItem] {
         override val key = s0.keySelector.copy()
         override val udf = new UDF0[SolutionItem]
       }
 
       val solutionInput = new DataStream[SolutionItem] {
-        override def createContract = contract.getPartialSolution()
+        override def createContract = contract.getSolutionSet()
       }
 
       val worksetInput = new DataStream[WorksetItem] {
         override def createContract = contract.getWorkset()
       }
 
-      contract.setInitialPartialSolution(s0.stream.getContract)
+      contract.setInitialSolutionSet(s0.stream.getContract)
       contract.setInitialWorkset(ws0.getContract)
 
       val (delta, nextWorkset) = stepFunction(solutionInput, worksetInput)
-      contract.setPartialSolutionDelta(delta.getContract)
+      contract.setSolutionSetDelta(delta.getContract)
       contract.setNextWorkset(nextWorkset.getContract)
 
       applyHints(contract)

@@ -71,8 +71,7 @@ public class DataSourceTask<OT> extends AbstractInputTask<InputSplit>
 	 * {@inheritDoc}
 	 */
 	@Override
-	public void registerInputOutput()
-	{
+	public void registerInputOutput() {
 		if (LOG.isDebugEnabled())
 			LOG.debug(getLogString("Start registering input and output"));
 
@@ -88,6 +87,7 @@ public class DataSourceTask<OT> extends AbstractInputTask<InputSplit>
 		
 		// obtain task configuration (including stub parameters)
 		this.config = new TaskConfig(getTaskConfiguration());
+		this.config.setConfigClassLoader(this.userCodeClassLoader);
 		
 		initInputFormat(this.userCodeClassLoader);
 		
@@ -106,8 +106,7 @@ public class DataSourceTask<OT> extends AbstractInputTask<InputSplit>
 	 * {@inheritDoc}
 	 */
 	@Override
-	public void invoke() throws Exception
-	{
+	public void invoke() throws Exception {
 		if (LOG.isInfoEnabled())
 			LOG.info(getLogString("Start PACT code"));
 		
