@@ -113,6 +113,20 @@
           		<exclude>pact4s-examples-${project.version}.jar</exclude>
         	</excludes>
 	    </fileSet>
+	    
+	    <fileSet>
+        <!-- copy jar files of pact4s perf tests -->
+        	<directory>../pact4s/pact4s-tests/target</directory>
+        	<outputDirectory>examples/pact4s/perfTests/</outputDirectory>
+        	<fileMode>0644</fileMode>
+        	<includes>
+          		<include>*.jar</include>
+        	</includes>
+        	<excludes>
+          		<exclude>pact4s-tests-${project.version}.jar</exclude>
+        	</excludes>
+	    </fileSet>
+	    
     </fileSets>
 
 </assembly>
