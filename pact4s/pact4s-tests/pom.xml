@@ -118,6 +118,28 @@
           </execution>
 
           <execution>
+            <id>KMeansSimNoKeySels</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>KMeansSimNoKeySels</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.simNoKeySels.KMeansDescriptor</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/simNoKeySels/KMeans*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+          
+          <execution>
             <id>KMeansImmutable</id>
             <phase>package</phase>
             <goals>
@@ -208,6 +230,28 @@
           </execution>
 
           <execution>
+            <id>TPCHQuery3SimNoKeySels</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>TPCHQuery3SimNoKeySels</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.simNoKeySels.TPCHQuery3Descriptor</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/simNoKeySels/TPCHQuery3*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+          
+          <execution>
             <id>TPCHQuery3Immutable</id>
             <phase>package</phase>
             <goals>
@@ -297,6 +341,28 @@
             </configuration>
           </execution>
 
+          <execution>
+            <id>WordCountSimNoKeySels</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+
+            <configuration>
+              <classifier>WordCountSimNoKeySels</classifier>
+
+              <archive>
+                <manifestEntries>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.simNoKeySels.WordCountDescriptor</Pact-Assembler-Class>
+                </manifestEntries>
+              </archive>
+
+              <includes>
+                <include>**/simNoKeySels/WordCount*.class</include>
+              </includes>
+            </configuration>
+          </execution>
+          
           <execution>
             <id>WordCountImmutable</id>
             <phase>package</phase>
