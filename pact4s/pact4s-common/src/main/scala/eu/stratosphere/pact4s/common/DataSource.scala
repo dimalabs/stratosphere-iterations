@@ -135,12 +135,16 @@ case class RecordDataSourceFormat[Out: UDT](val recordDelimeter: Option[String] 
 
   override def persistConfiguration(config: Configuration) {
 
-    val fields = udf.outputUDT.fieldTypes
+    val fields = udf.outputFields.filter(_.isUsed)
 
     config.setInteger(RecordInputFormat.NUM_FIELDS_PARAMETER, fields.length)
 
-    for (fieldNum <- 0 until fields.length)
-      config.setClass(RecordInputFormat.FIELD_PARSER_PARAMETER_PREFIX + fieldNum, fieldParserTypes(fields(fieldNum)))
+    for ((field, i) <- fields.zipWithIndex) {
+      val parser = fieldParserTypes(udf.outputUDT.fieldTypes(field.localPos))
+      config.setClass(RecordInputFormat.FIELD_PARSER_PARAMETER_PREFIX + i, parser)
+      config.setInteger(RecordInputFormat.TEXT_POSITION_PARAMETER_PREFIX + i, field.localPos)
+      config.setInteger(RecordInputFormat.RECORD_POSITION_PARAMETER_PREFIX + i, field.globalPos.getValue)
+    }
 
     if (recordDelimeter.isDefined)
       config.setString(RecordInputFormat.RECORD_DELIMITER_PARAMETER, recordDelimeter.get)
@@ -153,7 +157,8 @@ case class RecordDataSourceFormat[Out: UDT](val recordDelimeter: Option[String] 
     classOf[PactDouble] -> classOf[DecimalTextDoubleParser],
     classOf[PactInteger] -> classOf[DecimalTextIntParser],
     classOf[PactLong] -> classOf[DecimalTextLongParser],
-    classOf[PactString] -> classOf[VarLengthStringParser])
+    classOf[PactString] -> classOf[VarLengthStringParser]
+  )
 }
 
 case class TextDataSourceFormat(val charSetName: Option[String] = None) extends DataSourceFormat[String]()(UDT.StringUDT) {

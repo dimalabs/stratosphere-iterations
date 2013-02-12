@@ -29,7 +29,7 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
   val clusterPoints = new DataSource(clusterInput, DelimetedDataSourceFormat(parseInput))
   val newClusterPoints = new DataSink(clusterOutput, DelimetedDataSinkFormat(formatOutput.tupled))
 
-  val finalCenters = computeNewCenters repeat (n = 3, s0 = clusterPoints)
+  val finalCenters = computeNewCenters repeat (n = numIterations, s0 = clusterPoints)
 
   override def outputs = newClusterPoints <~ finalCenters
 
