@@ -16,20 +16,20 @@ package eu.stratosphere.pact4s.examples.datamining
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
-class KMeansImmutableDescriptor extends PactDescriptor[KMeansImmutable] {
+class KMeansDescriptor extends PactDescriptor[KMeans] {
   override val name = "KMeans Iteration (Immutable)"
   override val parameters = "[-numIterations <int:2>] -dataPoints <file> -clusterCenters <file> -output <file>"
 
-  override def createInstance(args: Pact4sArgs) = new KMeansImmutable(args("numIterations", "2").toInt, args("dataPoints"), args("clusterCenters"), args("output"))
+  override def createInstance(args: Pact4sArgs) = new KMeans(args("numIterations", "2").toInt, args("dataPoints"), args("clusterCenters"), args("output"))
 }
 
-class KMeansImmutable(numIterations: Int, dataPointInput: String, clusterInput: String, clusterOutput: String) extends PactProgram {
+class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, clusterOutput: String) extends PactProgram {
 
   val dataPoints = new DataSource(dataPointInput, DelimetedDataSourceFormat(parseInput))
   val clusterPoints = new DataSource(clusterInput, DelimetedDataSourceFormat(parseInput))
   val newClusterPoints = new DataSink(clusterOutput, DelimetedDataSinkFormat(formatOutput.tupled))
 
-  val finalCenters = (computeNewCenters ^ numIterations)(clusterPoints)
+  val finalCenters = computeNewCenters repeat (n = 3, s0 = clusterPoints)
 
   override def outputs = newClusterPoints <~ finalCenters
 
@@ -67,16 +67,6 @@ class KMeansImmutable(numIterations: Int, dataPointInput: String, clusterInput: 
 
   def sumPointSums = (dataPoints: Iterator[(Int, PointSum)]) => dataPoints.reduce { (z, v) => z.copy(_2 = z._2 + v._2) }
 
-  clusterPoints.degreeOfParallelism(1)
-
-  val PointInputPattern = """(\d+)\|(\d+\.\d+)\|(\d+\.\d+)\|""".r
-
-  def parseInput = (line: String) => line match {
-    case PointInputPattern(id, x, y) => id.toInt -> Point(x.toDouble, y.toDouble)
-  }
-
-  def formatOutput = (cid: Int, p: Point) => "%d|%.2f|%.2f|".format(cid, p.x, p.y)
-
   case class Point(x: Double, y: Double) {
     def computeEuclidianDistance(other: Point) = other match {
       case Point(x2, y2) => math.sqrt(math.pow(x - x2, 2) + math.pow(y - y2, 2))
@@ -97,5 +87,15 @@ class KMeansImmutable(numIterations: Int, dataPointInput: String, clusterInput: 
     // only contains two decimal places.
     private def round(d: Double) = math.round(d * 100.0) / 100.0;
   }
+
+  def parseInput = (line: String) => {
+    val PointInputPattern = """(\d+)\|(\d+\.\d+)\|(\d+\.\d+)\|""".r
+    val PointInputPattern(id, x, y) = line
+    (id.toInt, Point(x.toDouble, y.toDouble))
+  }
+
+  def formatOutput = (cid: Int, p: Point) => "%d|%.2f|%.2f|".format(cid, p.x, p.y)
+
+  clusterPoints.degreeOfParallelism(1)
 }
 

@@ -69,7 +69,7 @@ abstract class UDTSerializer[T] extends Serializable {
     throw new UDT.UDTSelectionFailedException("Invalid selection: " + sel)
   }
 
-  def getFieldIndex(selection: Seq[String]): List[Int]
+  def getFieldIndex(selection: Seq[String]): List[Int] = invalidSelection(selection)
   def serialize(item: T, record: PactRecord)
   def deserializeRecyclingOff(record: PactRecord): T
   def deserializeRecyclingOn(record: PactRecord): T

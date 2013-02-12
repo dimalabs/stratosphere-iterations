@@ -16,14 +16,14 @@ package eu.stratosphere.pact4s.examples.wordcount
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
-class WordCountImmutableDescriptor extends PactDescriptor[WordCountImmutable] {
+class WordCountDescriptor extends PactDescriptor[WordCount] {
   override val name = "Word Count (Immutable)"
   override val parameters = "-input <file> -output <file>"
 
-  override def createInstance(args: Pact4sArgs) = new WordCountImmutable(args("input"), args("output"))
+  override def createInstance(args: Pact4sArgs) = new WordCount(args("input"), args("output"))
 }
 
-class WordCountImmutable(textInput: String, wordsOutput: String) extends PactProgram {
+class WordCount(textInput: String, wordsOutput: String) extends PactProgram {
 
   val input = new DataSource(textInput, DelimetedDataSourceFormat(identity[String] _))
   val output = new DataSink(wordsOutput, DelimetedDataSinkFormat(formatOutput.tupled))
@@ -31,11 +31,11 @@ class WordCountImmutable(textInput: String, wordsOutput: String) extends PactPro
   val words = input flatMap { _.toLowerCase().split("""\W+""") map { (_, 1) } }
   val counts = words groupBy { case (word, _) => word } combine { _ reduce addCounts }
 
-  counts neglects { case (word, _) => word }
-  counts preserves { case (word, _) => word } as { case (word, _) => word }
-
   override def outputs = output <~ counts
 
   def addCounts(w1: (String, Int), w2: (String, Int)) = (w1._1, w1._2 + w2._2)
   def formatOutput = (word: String, count: Int) => "%s %d".format(word, count)
+
+  counts neglects { case (word, _) => word }
+  counts preserves { case (word, _) => word } as { case (word, _) => word }
 }

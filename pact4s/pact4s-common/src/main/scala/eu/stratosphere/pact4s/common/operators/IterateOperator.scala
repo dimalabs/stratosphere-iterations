@@ -25,9 +25,9 @@ class RepeatOperator[SolutionItem: UDT](stepFunction: DataStream[SolutionItem] =
   // This is undesirable for a huge number of iterations since it will cause
   // the job graph to explode. But until PACT iterations are fully implemented,
   // this will at least get small example programs up and running.
-  def ^(numIterations: Int): DataStream[SolutionItem] => DataStream[SolutionItem] = Function.chain(List.fill(numIterations)(stepFunction))
+  def repeat(n: Int, s0: DataStream[SolutionItem]): DataStream[SolutionItem] = Function.chain(List.fill(n)(stepFunction))(s0)
 
-  def iterateN(numIterations: Int) = (initialSolution: DataStream[SolutionItem]) => new DataStream[SolutionItem] with OutputHintable[SolutionItem] {
+  def chain(n: Int, s0: DataStream[SolutionItem]) = new DataStream[SolutionItem] with OutputHintable[SolutionItem] {
 
     override def createContract = {
 
@@ -41,9 +41,9 @@ class RepeatOperator[SolutionItem: UDT](stepFunction: DataStream[SolutionItem] =
 
       val output = stepFunction(solutionInput)
 
-      contract.setInput(initialSolution.getContract)
+      contract.setInput(s0.getContract)
       contract.setNextPartialSolution(output.getContract)
-      contract.setNumberOfIterations(numIterations)
+      contract.setNumberOfIterations(n)
 
       applyHints(contract)
       contract
