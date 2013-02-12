@@ -11,13 +11,13 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package eu.stratosphere.pact4s.tests.perf.immutable
+package eu.stratosphere.pact4s.tests.perf.simNoKeySels
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
 class WordCountDescriptor extends PactDescriptor[WordCount] {
-  override val name = "Word Count (Immutable)"
+  override val name = "Word Count (SimNoKeySels)"
   override val parameters = "-input <file> -output <file>"
 
   override def createInstance(args: Pact4sArgs) = new WordCount(args("input"), args("output"))
@@ -32,7 +32,7 @@ class WordCount(textInput: String, wordsOutput: String) extends PactProgram {
 
   val words = input flatMap { _.toLowerCase().split("\\W+") map { WordWithCount(_, 1) } }
   
-  val counts = words groupBy { _.word } combine { wcs =>
+  val counts = (words map { identity _ }) groupBy { _.word } combine { wcs =>
     
     var wc: WordWithCount = null
     var count = 0

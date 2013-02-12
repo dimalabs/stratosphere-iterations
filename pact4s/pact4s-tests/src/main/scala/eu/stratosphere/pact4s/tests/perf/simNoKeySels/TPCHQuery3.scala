@@ -11,13 +11,13 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package eu.stratosphere.pact4s.tests.perf.mutable
+package eu.stratosphere.pact4s.tests.perf.simNoKeySels
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
 class TPCHQuery3Descriptor extends PactDescriptor[TPCHQuery3] {
-  override val name = "TPCH Query 3 (Mutable)"
+  override val name = "TPCH Query 3 (SimNoKeySels)"
   override val parameters = "-orders <file> -lineItems <file> -output <file>"
 
   override def createInstance(args: Pact4sArgs) = new TPCHQuery3(args("orders"), args("lineItems"), args("output"))
@@ -33,9 +33,9 @@ class TPCHQuery3(ordersInput: String, lineItemsInput: String, ordersOutput: Stri
 
   val filteredOrders = orders filter { o => o.status == status && o.date.substring(0, 4).toInt > minYear && o.orderPriority.startsWith(priority) }
   
-  val prioritizedItems = filteredOrders join lineItems on { _.orderId } isEqualTo { _.orderId } map { (o, li) => PrioritizedOrder(o.orderId, o.shipPriority, li.extendedPrice) }
+  val prioritizedItems = (filteredOrders map { identity _ }) join (lineItems  map { identity _ }) on { _.orderId } isEqualTo { _.orderId } map { (o, li) => PrioritizedOrder(o.orderId, o.shipPriority, li.extendedPrice) }
   
-  val prioritizedOrders = prioritizedItems groupBy { pi => (pi.orderId, pi.shipPriority) } combine { pis =>
+  val prioritizedOrders = (prioritizedItems map { identity _ }) groupBy { pi => (pi.orderId, pi.shipPriority) } combine { pis =>
     
     var pi: PrioritizedOrder = null
     var revenue = 0d
@@ -78,8 +78,8 @@ class TPCHQuery3(ordersInput: String, lineItemsInput: String, ordersOutput: Stri
 }
 
 object TPCHQuery3 {
-  case class Order(var orderId: Long, var _1: String, var status: String, var _3: String, var date: String, var orderPriority: String, var _6: String, var shipPriority: String, var _8: String)
-  case class LineItem(var orderId: Long, var _1: String, var _2: String, var _3: String, var _4: String, var extendedPrice: Double, var _6: String, var _7: String, var _8: String, var _9: String, var _10: String, var _11: String, var _12: String, var _13: String, var _14: String, var _15: String)
-  case class PrioritizedOrder(var orderId: Long, var shipPriority: String, var revenue: Double)
+  case class Order(val orderId: Long, val _1: String, val status: String, val _3: String, val date: String, val orderPriority: String, val _6: String, val shipPriority: String, val _8: String)
+  case class LineItem(val orderId: Long, val _1: String, val _2: String, val _3: String, val _4: String, val extendedPrice: Double, val _6: String, val _7: String, val _8: String, val _9: String, val _10: String, val _11: String, val _12: String, val _13: String, val _14: String, val _15: String)
+  case class PrioritizedOrder(val orderId: Long, val shipPriority: String, val revenue: Double)
 }
 

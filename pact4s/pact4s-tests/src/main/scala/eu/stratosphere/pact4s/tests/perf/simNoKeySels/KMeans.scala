@@ -11,13 +11,13 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package eu.stratosphere.pact4s.tests.perf.mutable
+package eu.stratosphere.pact4s.tests.perf.simNoKeySels
 
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.operators._
 
 class KMeansDescriptor extends PactDescriptor[KMeans] {
-  override val name = "KMeans (Mutable)"
+  override val name = "KMeans (SimNoKeySels)"
   override val parameters = "[-numIterations <int:2>] -dataPoints <file> -clusterCenters <file> -output <file>"
 
   override def createInstance(args: Pact4sArgs) = new KMeans(args("numIterations", "2").toInt, args("dataPoints"), args("clusterCenters"), args("output"))
@@ -42,9 +42,9 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
       Distance(p.id, p.x, p.y, c.id, dist)
     }
 
-    val nearestCenters = distances groupBy { _.pid } combine { ds => ds.minBy(_.dist) } map { d => PointSum(d.cid, d.px, d.py, 1) }
+    val nearestCenters = (distances map { identity _ }) groupBy { _.pid } combine { ds => ds.minBy(_.dist) } map { d => PointSum(d.cid, d.px, d.py, 1) }
 
-    val newCenters = nearestCenters groupBy { _.id } combine { ds =>
+    val newCenters = (nearestCenters map { identity _ }) groupBy { _.id } combine { ds =>
 
       var p: PointSum = null
       var count = 0
@@ -85,7 +85,7 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
 }
 
 object KMeans {
-  case class Point(var id: Int, var x: Double, var y: Double)
-  case class Distance(var pid: Int, var px: Double, var py: Double, var cid: Int, var dist: Double)
-  case class PointSum(var id: Int, var xSum: Double, var ySum: Double, var count: Int)
+  case class Point(val id: Int, val x: Double, val y: Double)
+  case class Distance(val pid: Int, val px: Double, val py: Double, val cid: Int, val dist: Double)
+  case class PointSum(val id: Int, val xSum: Double, val ySum: Double, val count: Int)  
 }

@@ -38,22 +38,22 @@ public class WordCount implements PlanAssembler, PlanAssemblerDescription
 {
 	public static class TokenizeLine extends MapStub
 	{
-		private final PactRecord outputRecord = new PactRecord();
 		private final PactString line = new PactString();
 		private final PactString word = new PactString();
 		private final PactInteger one = new PactInteger(1);
+		private final PactRecord result = new PactRecord();
 
 		@Override
-		public void map(PactRecord record, Collector<PactRecord> collector)
+		public void map(PactRecord record, Collector<PactRecord> out)
 		{
-			record.getField(0, line);
+			String line = record.getField(0, this.line).getValue();
 
-			for (String w : line.getValue().toLowerCase().split("\\W+"))
+			for (String word : line.toLowerCase().split("\\W+"))
 			{
-				word.setValue(w);
-				this.outputRecord.setField(0, this.word);
-				this.outputRecord.setField(1, this.one);
-				collector.collect(this.outputRecord);
+				this.word.setValue(word);
+				this.result.setField(0, this.word);
+				this.result.setField(1, this.one);
+				out.collect(this.result);
 			}
 		}
 	}
@@ -63,23 +63,23 @@ public class WordCount implements PlanAssembler, PlanAssemblerDescription
 	@Combinable
 	public static class CountWords extends ReduceStub
 	{
-		private final PactInteger cnt = new PactInteger();
+		private final PactInteger count = new PactInteger();
 
 		@Override
 		public void reduce(Iterator<PactRecord> records, Collector<PactRecord> out) throws Exception
 		{
-			PactRecord element = null;
-			int sum = 0;
+			PactRecord next = null;
+			int count = 0;
 
 			while (records.hasNext()) {
-				element = records.next();
-				PactInteger i = element.getField(1, PactInteger.class);
-				sum += i.getValue();
+				next = records.next();
+				count += next.getField(1, this.count).getValue();
 			}
 
-			this.cnt.setValue(sum);
-			element.setField(1, this.cnt);
-			out.collect(element);
+			this.count.setValue(count);
+			next.setField(1, this.count);
+			
+			out.collect(next);
 		}
 
 		@Override
@@ -92,7 +92,7 @@ public class WordCount implements PlanAssembler, PlanAssemblerDescription
 	@Override
 	public Plan getPlan(String... args)
 	{
-		int numSubTasks   = (args.length > 0 ? Integer.parseInt(args[0]) : 1);
+		int numSubTasks  = (args.length > 0 ? Integer.parseInt(args[0]) : 1);
 		String dataInput = (args.length > 1 ? args[1] : "");
 		String output    = (args.length > 2 ? args[2] : "");
 
@@ -112,13 +112,13 @@ public class WordCount implements PlanAssembler, PlanAssemblerDescription
 			.field(PactString.class, 0)
 			.field(PactInteger.class, 1);
 
-		Plan plan = new Plan(out, "WordCount Example");
+		Plan plan = new Plan(out, "WordCount");
 		plan.setDefaultParallelism(numSubTasks);
 		return plan;
 	}
 
 	@Override
 	public String getDescription() {
-		return "Parameters: [noSubStasks] [input] [output]";
+		return "Parameters: [numSubStasks] [input] [output]";
 	}
 }

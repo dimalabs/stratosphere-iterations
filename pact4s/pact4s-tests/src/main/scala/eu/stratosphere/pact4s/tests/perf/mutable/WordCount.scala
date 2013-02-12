@@ -25,20 +25,33 @@ class WordCountDescriptor extends PactDescriptor[WordCount] {
 
 class WordCount(textInput: String, wordsOutput: String) extends PactProgram {
 
-  val input = new DataSource(textInput, DelimetedDataSourceFormat(identity[String] _))
-  val output = new DataSink(wordsOutput, DelimetedDataSinkFormat(formatOutput _))
+  import WordCount._
+  
+  val input = new DataSource(textInput, new TextDataSourceFormat("ASCII"))
+  val output = new DataSink(wordsOutput, new RecordDataSinkFormat[WordWithCount]("\n", " ", true))
 
-  val words = input flatMap { _.toLowerCase().split("""\W+""") map { WordWithCount(_, 1) } }
-  val counts = words groupBy { case WordWithCount(word, _) => word } combine { _ reduce addCounts }
+  val words = input flatMap { _.toLowerCase().split("\\W+") map { WordWithCount(_, 1) } }
+  
+  val counts = words groupBy { _.word } combine { wcs =>
+    
+    var wc: WordWithCount = null
+    var count = 0
+    
+    while (wcs.hasNext) {
+      wc = wcs.next
+      count += wc.count
+    }
+    
+    WordWithCount(wc.word, count)
+  }
 
   override def outputs = output <~ counts
 
-  case class WordWithCount(var word: String, var count: Int)
-  
-  def addCounts(w1: WordWithCount, w2: WordWithCount) = WordWithCount(w1.word, w1.count + w2.count)
-  def formatOutput(w: WordWithCount) = "%s %d".format(w.word, w.count)
+  counts neglects { wc => wc.word }
+  counts preserves { wc => wc.word } as { wc => wc.word }
+}
 
-  counts neglects { case WordWithCount(word, _) => word }
-  counts preserves { case WordWithCount(word, _) => word } as { case WordWithCount(word, _) => word }
+object WordCount {
+  case class WordWithCount(var word: String, var count: Int)
 }
 

@@ -25,29 +25,54 @@ class KMeansDescriptor extends PactDescriptor[KMeans] {
 
 class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, clusterOutput: String) extends PactProgram {
 
-  val dataPoints = new DataSource(dataPointInput, DelimetedDataSourceFormat(parseInput))
-  val clusterPoints = new DataSource(clusterInput, DelimetedDataSourceFormat(parseInput))
-  val newClusterPoints = new DataSink(clusterOutput, DelimetedDataSinkFormat(formatOutput.tupled))
+  import KMeans._
 
-  val finalCenters = computeNewCenters repeat (n = 3, s0 = clusterPoints)
+  val dataPoints = new DataSource(dataPointInput, new RecordDataSourceFormat[Point]("\n", "|"))
+  val clusterPoints = new DataSource(clusterInput, new RecordDataSourceFormat[Point]("\n", "|"))
+  val newClusterPoints = new DataSink(clusterOutput, new RecordDataSinkFormat[Point]("\n", "|", true))
+
+  val finalCenters = computeNewCenters repeat (n = numIterations, s0 = clusterPoints)
 
   override def outputs = newClusterPoints <~ finalCenters
 
-  def computeNewCenters = (centers: DataStream[(Int, Point)]) => {
+  def computeNewCenters = (centers: DataStream[Point]) => {
 
-    val distances = dataPoints cross centers map computeDistance
-    val nearestCenters = distances groupBy { case (pid, _) => pid } combine { ds => ds.minBy(_._2.distance) } map asPointSum.tupled
-    val newCenters = nearestCenters groupBy { case (cid, _) => cid } combine sumPointSums map { case (cid, pSum) => cid -> pSum.toPoint() }
+    val distances = dataPoints cross centers map { (p, c) =>
+      val dist = math.sqrt(math.pow(p.x - c.x, 2) + math.pow(p.y - c.y, 2))
+      Distance(p.id, p.x, p.y, c.id, dist)
+    }
 
-    distances.left neglects { case (pid, _) => pid }
-    distances.left preserves { dp => dp } as { case (pid, dist) => (pid, dist.dataPoint) }
-    distances.right neglects { case (cid, _) => cid }
-    distances.right preserves { case (cid, _) => cid } as { case (_, dist) => dist.clusterId }
+    val nearestCenters = distances groupBy { _.pid } combine { ds => ds.minBy(_.dist) } map { d => PointSum(d.cid, d.px, d.py, 1) }
 
-    nearestCenters neglects { case (pid, _) => pid }
+    val newCenters = nearestCenters groupBy { _.id } combine { ds =>
 
-    newCenters neglects { case (cid, _) => cid }
-    newCenters.preserves { case (cid, _) => cid } as { case (cid, _) => cid }
+      var p: PointSum = null
+      var count = 0
+      var xSum = 0d
+      var ySum = 0d
+
+      while (ds.hasNext) {
+        p = ds.next
+        count += p.count
+        xSum += p.xSum
+        ySum += p.ySum
+      }
+
+      PointSum(p.id, xSum, ySum, count)
+      
+    } map { ps =>
+      Point(ps.id, math.round(ps.xSum * 100.0) / 100.0, math.round(ps.ySum * 100.0) / 100.0)
+    }
+
+    distances.left neglects { p => p.id }
+    distances.left preserves { p => (p.id, p.x, p.y) } as { d => (d.pid, d.px, d.py) }
+    distances.right neglects { c => c.id }
+    distances.right preserves { c => c.id } as { d => d.cid }
+
+    nearestCenters neglects { case d => d.pid }
+
+    newCenters neglects { ps => ps.id }
+    newCenters.preserves { ps => ps.id } as { c => c.id }
 
     distances.avgBytesPerRecord(48)
     nearestCenters.avgBytesPerRecord(40)
@@ -56,46 +81,11 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
     newCenters
   }
 
-  def computeDistance = (p: (Int, Point), c: (Int, Point)) => {
-    val ((pid, dataPoint), (cid, clusterPoint)) = (p, c)
-    val distToCluster = dataPoint.computeEuclidianDistance(clusterPoint)
-
-    pid -> Distance(dataPoint, cid, distToCluster)
-  }
-
-  def asPointSum = (pid: Int, dist: Distance) => dist.clusterId -> PointSum(1, dist.dataPoint)
-
-  def sumPointSums = (dataPoints: Iterator[(Int, PointSum)]) => dataPoints.reduce { (z, v) => z.copy(_2 = z._2 + v._2) }
-
-  case class Point(x: Double, y: Double) {
-    def computeEuclidianDistance(other: Point) = other match {
-      case Point(x2, y2) => math.sqrt(math.pow(x - x2, 2) + math.pow(y - y2, 2))
-    }
-  }
-
-  case class Distance(dataPoint: Point, clusterId: Int, distance: Double)
-
-  case class PointSum(count: Int, pointSum: Point) {
-    def +(that: PointSum) = that match {
-      case PointSum(c, Point(x, y)) => PointSum(count + c, Point(x + pointSum.x, y + pointSum.y))
-    }
-
-    def toPoint() = Point(round(pointSum.x / count), round(pointSum.y / count))
-
-    // Rounding ensures that we get the same results in a multi-iteration run
-    // as we do in successive single-iteration runs, since the output format
-    // only contains two decimal places.
-    private def round(d: Double) = math.round(d * 100.0) / 100.0;
-  }
-
-  def parseInput = (line: String) => {
-    val PointInputPattern = """(\d+)\|(\d+\.\d+)\|(\d+\.\d+)\|""".r
-    val PointInputPattern(id, x, y) = line
-    (id.toInt, Point(x.toDouble, y.toDouble))
-  }
-
-  def formatOutput = (cid: Int, p: Point) => "%d|%.2f|%.2f|".format(cid, p.x, p.y)
-
   clusterPoints.degreeOfParallelism(1)
 }
 
+object KMeans {
+  case class Point(val id: Int, val x: Double, val y: Double)
+  case class Distance(val pid: Int, val px: Double, val py: Double, val cid: Int, val dist: Double)
+  case class PointSum(val id: Int, val xSum: Double, val ySum: Double, val count: Int)  
+}

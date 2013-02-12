@@ -41,8 +41,8 @@ class WordCount extends PlanAssembler with PlanAssemblerDescription {
   override def getPlan(args: String*): Plan = {
 
     val numSubTasks = if (args.length > 0) args(0).toInt else 1
-    val dataInput = if (args.length > 1) args(1) else ""
-    val output = if (args.length > 2) args(2) else ""
+    val dataInput   = if (args.length > 1) args(1) else ""
+    val output      = if (args.length > 2) args(2) else ""
 
     val source = new FileDataSource(classOf[TextInputFormat], dataInput, "Input Lines")
     source.setParameter(TextInputFormat.CHARSET_NAME, "ASCII")
@@ -60,57 +60,57 @@ class WordCount extends PlanAssembler with PlanAssemblerDescription {
       .field(classOf[PactString], 0)
       .field(classOf[PactInteger], 1)
 
-    val plan = new Plan(out, "WordCount Example")
+    val plan = new Plan(out, "WordCount")
     plan.setDefaultParallelism(numSubTasks)
     plan
   }
 
-  override def getDescription() = "Parameters: [noSubStasks] [input] [output]"
+  override def getDescription() = "Parameters: [numSubStasks] [input] [output]"
 }
 
 object WordCount {
 
   class TokenizeLine extends MapStub {
 
-    val outputRecord = new PactRecord()
-    val line = new PactString()
-    val word = new PactString()
-    val one = new PactInteger(1)
+    private val line = new PactString()
+    private val word = new PactString()
+    private val one = new PactInteger(1)
+    private val result = new PactRecord()
 
     override def map(record: PactRecord, out: Collector[PactRecord]) = {
 
-      record.getField(0, line)
+      val line = record.getField(0, this.line).getValue()
 
-      for (w <- line.getValue().toLowerCase().split("""\W+""")) {
-        word.setValue(w)
-        outputRecord.setField(0, word)
-        outputRecord.setField(1, one)
-        out.collect(outputRecord)
+      for (word <- line.toLowerCase().split("\\W+")) {
+        this.word.setValue(word)
+        this.result.setField(0, this.word)
+        this.result.setField(1, this.one)
+        out.collect(this.result)
       }
     }
   }
 
-  @Combinable
   @ConstantFields(fields = Array(0))
   @OutCardBounds(lowerBound = 1, upperBound = 1)
+  @Combinable
   class CountWords extends ReduceStub {
 
-    val cnt = new PactInteger()
+    private val count = new PactInteger()
 
     override def reduce(records: Iterator[PactRecord], out: Collector[PactRecord]) = {
 
-      var element: PactRecord = null
-      var sum = 0
+      var next: PactRecord = null
+      var count = 0
 
       while (records.hasNext()) {
-        element = records.next()
-        element.getField(1, cnt)
-        sum += cnt.getValue()
+        next = records.next()
+        count += next.getField(1, this.count).getValue()
       }
 
-      cnt.setValue(sum)
-      element.setField(1, cnt)
-      out.collect(element)
+      this.count.setValue(count)
+      next.setField(1, this.count)
+      
+      out.collect(next)
     }
 
     override def combine(records: Iterator[PactRecord], out: Collector[PactRecord]) = {
