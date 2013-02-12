@@ -55,6 +55,14 @@
               <goal>testCompile</goal>
             </goals>
           </execution>
+          <!-- Ensure maven builds Java source files inside src/main/scala -->
+          <execution>
+            <id>process-resources</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+          </execution>
         </executions>
       </plugin>
       
