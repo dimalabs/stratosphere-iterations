@@ -13,9 +13,16 @@
 
 package eu.stratosphere.pact4s.common.analysis.postPass
 
-import eu.stratosphere.pact.compiler.plan.candidate.OptimizedPlan
+import scala.collection.JavaConversions._
+
+import eu.stratosphere.pact4s.common.analysis._
+import eu.stratosphere.pact4s.common.contracts._
+
+import eu.stratosphere.pact.compiler.plan._
 
 trait GlobalSchemaOptimizer {
+
+  import Extractors._
 
   def optimizeSchema(plan: OptimizedPlan, compactSchema: Boolean): Unit = {
 
@@ -29,5 +36,29 @@ trait GlobalSchemaOptimizer {
     }
 
     GlobalSchemaPrinter.printSchema(plan)
+    
+    plan.getDataSinks().foldLeft(Set[OptimizerNode]())(persistConfiguration)
+  }
+
+  private def persistConfiguration(visited: Set[OptimizerNode], node: OptimizerNode): Set[OptimizerNode] = {
+
+    visited.contains(node) match {
+
+      case true => visited
+
+      case false => {
+
+        val children = node.getIncomingConnections.map(_.getSourcePact).toSet
+        val newVisited = children.foldLeft(visited + node)(persistConfiguration)
+
+        node.getPactContract match {
+
+          case c: Pact4sContract[_] => c.persistConfiguration(c.getParameters.getClassLoader)
+          case _                    =>
+        }
+
+        newVisited
+      }
+    }
   }
 }
