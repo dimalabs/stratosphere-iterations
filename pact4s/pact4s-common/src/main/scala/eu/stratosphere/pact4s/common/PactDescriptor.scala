@@ -14,17 +14,16 @@
 package eu.stratosphere.pact4s.common
 
 import java.lang.reflect.Constructor
-
 import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.analysis.postPass._
-
 import eu.stratosphere.pact.common.plan._
 import eu.stratosphere.pact.compiler.plan.candidate.OptimizedPlan
-import eu.stratosphere.pact.compiler.postpass.OptimizerPostPass
+import eu.stratosphere.pact4s.common.analysis.postPass.GlobalSchemaOptimizer
+import eu.stratosphere.pact.compiler.postpass.PactRecordPostPass
 
 abstract class PactDescriptor[T <: PactProgram: Manifest] extends PlanAssembler
-  with PlanAssemblerDescription with OptimizerPostPass
+  with PlanAssemblerDescription
   with GlobalSchemaGenerator with GlobalSchemaOptimizer {
 
   val name: String = implicitly[Manifest[T]].toString
@@ -45,14 +44,10 @@ abstract class PactDescriptor[T <: PactProgram: Manifest] extends PlanAssembler
 
     initGlobalSchema(sinks)
 
-    val plan = new Plan(sinks, name)
+    val plan = new Pact4sPlan(sinks, name)
     plan.setDefaultParallelism(args.defaultParallelism)
     plan.getPlanConfiguration().setBoolean("Pact4s::SchemaCompaction", args.schemaCompaction)
     plan
-  }
-
-  override def postPass(plan: OptimizedPlan): Unit = {
-    optimizeSchema(plan, plan.getPlanConfiguration().getBoolean("Pact4s::SchemaCompaction", true))
   }
 
   def createInstance(args: Pact4sArgs): T = {
@@ -110,4 +105,13 @@ object Pact4sArgs {
 }
 
 class Pact4sInstantiationException(cause: Throwable) extends Exception("Could not instantiate program.", cause)
+
+
+class Pact4sPostPass extends PactRecordPostPass with GlobalSchemaOptimizer {
+
+  override def postPass(plan: OptimizedPlan): Unit = {
+    super.postPass(plan);
+    optimizeSchema(plan, plan.getPlanConfiguration().getBoolean("Pact4s::SchemaCompaction", true))
+  }
+}
 

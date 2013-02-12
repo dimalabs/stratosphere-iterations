@@ -133,10 +133,10 @@ public class PactProgram {
 	 *         Thrown if an error occurred in the user-provided pact assembler. This may indicate
 	 *         missing parameters for generation.
 	 */
-	public void checkPlan() throws ProgramInvocationException, ErrorInPlanAssemblerException {
+	public void checkPlan(Plan p) throws ProgramInvocationException, ErrorInPlanAssemblerException {
 		// semantic context check of the generated plan
 		ContextChecker checker = new ContextChecker();
-		checker.check(getPlan());
+		checker.check(p);
 	}
 
 	/**
