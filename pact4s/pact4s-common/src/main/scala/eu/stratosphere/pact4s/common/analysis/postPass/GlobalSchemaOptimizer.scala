@@ -19,6 +19,7 @@ import eu.stratosphere.pact4s.common.analysis._
 import eu.stratosphere.pact4s.common.contracts._
 
 import eu.stratosphere.pact.compiler.plan._
+import eu.stratosphere.pact.compiler.plan.candidate.OptimizedPlan
 
 trait GlobalSchemaOptimizer {
 
@@ -37,7 +38,7 @@ trait GlobalSchemaOptimizer {
 
     GlobalSchemaPrinter.printSchema(plan)
     
-    plan.getDataSinks().foldLeft(Set[OptimizerNode]())(persistConfiguration)
+    plan.getDataSinks.map(_.getSinkNode).foldLeft(Set[OptimizerNode]())(persistConfiguration)
   }
 
   private def persistConfiguration(visited: Set[OptimizerNode], node: OptimizerNode): Set[OptimizerNode] = {
@@ -48,7 +49,7 @@ trait GlobalSchemaOptimizer {
 
       case false => {
 
-        val children = node.getIncomingConnections.map(_.getSourcePact).toSet
+        val children = node.getIncomingConnections.map(_.getSource).toSet
         val newVisited = children.foldLeft(visited + node)(persistConfiguration)
 
         node.getPactContract match {
