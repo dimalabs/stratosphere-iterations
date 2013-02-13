@@ -107,6 +107,11 @@
     		<artifactId>pact4s-examples</artifactId>
     		<version>${version}</version>
     	</dependency>
+        <dependency>
+    		<groupId>eu.stratosphere</groupId>
+    		<artifactId>pact4s-tests</artifactId>
+    		<version>${version}</version>
+    	</dependency>
     	<dependency>
     		<groupId>eu.stratosphere</groupId>
     		<artifactId>sopremo-common</artifactId>

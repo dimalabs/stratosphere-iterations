@@ -91,5 +91,6 @@
         <module>pact4s-common</module>
         <module>pact4s-compiler</module>
       	<module>pact4s-examples</module>
+      	<module>pact4s-tests</module>
     </modules>
 </project>
