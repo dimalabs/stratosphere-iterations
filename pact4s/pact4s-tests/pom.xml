@@ -85,7 +85,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.plainJava.KMeans</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.plainJava.KMeans</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -107,7 +107,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.plainScala.KMeans</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.plainScala.KMeans</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -129,7 +129,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.simNoKeySels.KMeansDescriptor</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.simNoKeySels.KMeansDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -151,7 +151,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.immutable.KMeansDescriptor</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.immutable.KMeansDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -173,7 +173,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.mutable.KMeansDescriptor</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.mutable.KMeansDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -197,7 +197,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.plainJava.TPCHQuery3</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.plainJava.TPCHQuery3</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -219,7 +219,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.plainScala.TPCHQuery3</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.plainScala.TPCHQuery3</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -241,7 +241,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.simNoKeySels.TPCHQuery3Descriptor</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.simNoKeySels.TPCHQuery3Descriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -263,7 +263,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.immutable.TPCHQuery3Descriptor</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.immutable.TPCHQuery3Descriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -285,7 +285,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.mutable.TPCHQuery3Descriptor</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.mutable.TPCHQuery3Descriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -309,7 +309,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.plainJava.WordCount</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.plainJava.WordCount</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -331,7 +331,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.plainScala.WordCount</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.plainScala.WordCount</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -353,7 +353,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.simNoKeySels.WordCountDescriptor</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.simNoKeySels.WordCountDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -375,7 +375,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.immutable.WordCountDescriptor</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.immutable.WordCountDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
@@ -397,7 +397,7 @@
 
               <archive>
                 <manifestEntries>
-                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.mutable.WordCountDescriptor</Pact-Assembler-Class>
+                  <Pact-Assembler-Class>eu.stratosphere.pact4s.tests.perf.mutable.WordCountDescriptor</Pact-Assembler-Class>
                 </manifestEntries>
               </archive>
 
