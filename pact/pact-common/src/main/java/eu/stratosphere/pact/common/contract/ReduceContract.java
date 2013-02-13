@@ -120,7 +120,7 @@ public class ReduceContract extends GenericReduceContract<ReduceStub> implements
 	 */
 	@Override
 	public boolean isCombinable() {
-		return super.isCombinable() || getUserCodeClass().getAnnotation(Combinable.class) != null;
+		return super.isCombinable() || getUserCodeAnnotation(Combinable.class) != null;
 	}
 	
 	/**

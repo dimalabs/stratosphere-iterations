@@ -175,17 +175,17 @@ public abstract class Contract implements Visitable<Contract>
 	public abstract Class<?> getUserCodeClass();
 
 	/**
-     * Gets an annotation that pertains to the user code class. By default, this method will look for
-     * annotations statically present on the user code class. However, inheritors may override this
-     * behavior to provide annotations dynamically.
-     * 
-     * @param annotationClass
-     *        the Class object corresponding to the annotation type
-     * @return the annotation, or null if no annotation of the requested type was found
-     */
-    public <A extends Annotation> A getUserCodeAnnotation(Class<A> annotationClass) {
-        return this.getUserCodeClass().getAnnotation(annotationClass);
-    }	
+	 * Gets an annotation that pertains to the user code class. By default, this method will look for
+	 * annotations statically present on the user code class. However, inheritors may override this
+	 * behavior to provide annotations dynamically.
+	 * 
+	 * @param annotationClass
+	 *        the Class object corresponding to the annotation type
+	 * @return the annotation, or null if no annotation of the requested type was found
+	 */
+	public <A extends Annotation> A getUserCodeAnnotation(Class<A> annotationClass) {
+		return this.getUserCodeClass().getAnnotation(annotationClass);
+	}	
 	
 	// --------------------------------------------------------------------------------------------
 	

@@ -16,7 +16,6 @@
 package eu.stratosphere.pact.compiler.postpass;
 
 import java.util.Iterator;
-import java.util.Map;
 
 import eu.stratosphere.pact.common.contract.GenericDataSink;
 import eu.stratosphere.pact.common.contract.Ordering;
@@ -48,12 +47,6 @@ import eu.stratosphere.pact.runtime.plugable.pactrecord.PactRecordSerializerFact
  */
 public class PactRecordPostPass implements OptimizerPostPass {
 	
-	private Map<Integer, Integer> repositioningMap;
-	
-	protected void setRepositioningMap(Map<Integer, Integer> repositioningMap) {
-		this.repositioningMap = repositioningMap;
-	}
-	
 	@Override
 	public void postPass(OptimizedPlan plan) {
 		for (SinkPlanNode sink : plan.getDataSinks()) {
@@ -78,10 +71,10 @@ public class PactRecordPostPass implements OptimizerPostPass {
 			
 			try {
 				if (partitioning != null) {
-					addOrderingToSchema(partitioning, schema);
+					addToSchema(partitioning.getFieldPositions(), sn.getSinkNode().getRemappedKeys(0), partitioning.getTypes(), schema);
 				}
 				if (sorting != null) {
-					addOrderingToSchema(sorting, schema);
+					addToSchema(sorting.getFieldPositions(), sn.getSinkNode().getRemappedKeys(0), sorting.getTypes(), schema);
 				}
 			} catch (ConflictingFieldTypeInfoException ex) {
 				throw new CompilerPostPassException("BUG: Conflicting information found when adding data sink types");
@@ -111,10 +104,7 @@ public class PactRecordPostPass implements OptimizerPostPass {
 			
 			// add the parent schema to the schema
 			try {
-				for (Map.Entry<Integer, Class<? extends Key>> entry : parentSchema) {
-					final Integer pos = entry.getKey();
-					schema.addType(pos, entry.getValue());
-				}
+				schema.addSchema(parentSchema);
 			} catch (ConflictingFieldTypeInfoException ex) {
 				throw new CompilerPostPassException("Conflicting key type information for field " + ex.getFieldNumber()
 					+ " in node '" + iterationNode.getPactContract().getName() + "' propagated from successor node. " +
@@ -136,10 +126,7 @@ public class PactRecordPostPass implements OptimizerPostPass {
 			// input and output schema need to be identical, so this is essentially a sanity check
 			KeySchema pss = (KeySchema) iterationNode.getPartialSolutionPlanNode().postPassHelper;
 			try {
-				for (Map.Entry<Integer, Class<? extends Key>> entry : pss) {
-					final Integer pos = entry.getKey();
-					schema.addType(pos, entry.getValue());
-				}
+				schema.addSchema(pss);
 			} catch (ConflictingFieldTypeInfoException ex) {
 				throw new CompilerPostPassException("Conflicting key type information for field " + ex.getFieldNumber()
 					+ " in node '" + iterationNode.getPactContract().getName() + "'. Contradicting types between the " +
@@ -173,10 +160,9 @@ public class PactRecordPostPass implements OptimizerPostPass {
 			// add the parent schema to the schema
 			final SingleInputNode optNode = sn.getSingleInputNode();
 			try {
-				for (Map.Entry<Integer, Class<? extends Key>> entry : parentSchema) {
-					final Integer pos = entry.getKey();
+				for (Integer pos : parentSchema) {
 					if (optNode.isFieldConstant(0, pos)) {
-						schema.addType(pos, entry.getValue());
+						schema.addType(pos, parentSchema.getRemappedPosition(pos), parentSchema.getType(pos));
 					}
 				}
 			} catch (ConflictingFieldTypeInfoException ex) {
@@ -199,10 +185,11 @@ public class PactRecordPostPass implements OptimizerPostPass {
 			}
 			final RecordContract recContract = (RecordContract) contract;
 			final int[] localPositions = contract.getKeyColumns(0);
+			final int[] remappedPositions = optNode.getRemappedKeys(0);
 			final Class<? extends Key>[] types = recContract.getKeyClasses();
 			try {
 				for (int i = 0; i < localPositions.length; i++) {
-					schema.addType(localPositions[i], types[i]);
+					schema.addType(localPositions[i], remappedPositions[i], types[i]);
 				}
 			} catch (ConflictingFieldTypeInfoException ex) {
 				throw new CompilerPostPassException("Conflicting key type information for field " + ex.getFieldNumber()
@@ -253,13 +240,12 @@ public class PactRecordPostPass implements OptimizerPostPass {
 			// add the parent schema to the schema
 			final TwoInputNode optNode = dn.getTwoInputNode();
 			try {
-				for (Map.Entry<Integer, Class<? extends Key>> entry : parentSchema) {
-					final Integer pos = entry.getKey();
+				for (Integer pos : parentSchema) {
 					if (optNode.isFieldConstant(0, pos)) {
-						schema1.addType(pos, entry.getValue());
+						schema1.addType(pos, parentSchema.getRemappedPosition(pos), parentSchema.getType(pos));
 					}
 					if (optNode.isFieldConstant(1, pos)) {
-						schema2.addType(pos, entry.getValue());
+						schema2.addType(pos, parentSchema.getRemappedPosition(pos), parentSchema.getType(pos));
 					}
 				}
 			} catch (ConflictingFieldTypeInfoException ex) {
@@ -283,6 +269,8 @@ public class PactRecordPostPass implements OptimizerPostPass {
 			final RecordContract recContract = (RecordContract) contract;
 			final int[] localPositions1 = contract.getKeyColumns(0);
 			final int[] localPositions2 = contract.getKeyColumns(1);
+			final int[] remappedPositions1 = optNode.getRemappedKeys(0);
+			final int[] remappedPositions2 = optNode.getRemappedKeys(1);
 			final Class<? extends Key>[] types = recContract.getKeyClasses();
 			
 			if (localPositions1.length != localPositions2.length) {
@@ -291,7 +279,7 @@ public class PactRecordPostPass implements OptimizerPostPass {
 			
 			try {
 				for (int i = 0; i < localPositions1.length; i++) {
-					schema1.addType(localPositions1[i], types[i]);
+					schema1.addType(localPositions1[i], remappedPositions1[i], types[i]);
 				}
 			} catch (ConflictingFieldTypeInfoException ex) {
 				throw new CompilerPostPassException("Conflicting key type information for field " + ex.getFieldNumber()
@@ -302,7 +290,7 @@ public class PactRecordPostPass implements OptimizerPostPass {
 			}
 			try {
 				for (int i = 0; i < localPositions2.length; i++) {
-					schema2.addType(localPositions2[i], types[i]);
+					schema2.addType(localPositions2[i], remappedPositions2[i], types[i]);
 				}
 			} catch (ConflictingFieldTypeInfoException ex) {
 				throw new CompilerPostPassException("Conflicting key type information for field " + ex.getFieldNumber()
@@ -367,10 +355,7 @@ public class PactRecordPostPass implements OptimizerPostPass {
 			
 			// add the parent schema to the schema
 			try {
-				for (Map.Entry<Integer, Class<? extends Key>> entry : parentSchema) {
-					final Integer pos = entry.getKey();
-					schema.addType(pos, entry.getValue());
-				}
+				schema.addSchema(parentSchema);
 			} catch (ConflictingFieldTypeInfoException ex) {
 				throw new CompilerPostPassException("Conflicting key type information for field " + ex.getFieldNumber()
 					+ " in the partial solution of iteration '" + 
@@ -404,36 +389,24 @@ public class PactRecordPostPass implements OptimizerPostPass {
 		traverse(channel.getSource(), schema);
 	}
 	
-	private void addOrderingToSchema(Ordering o, KeySchema schema) throws ConflictingFieldTypeInfoException {
-		for (int i = 0; i < o.getNumberOfFields(); i++) {
-			Integer pos = o.getFieldNumber(i);
-			Class<? extends Key> type = o.getType(i);
-			schema.addType(pos, type);
+	private void addToSchema(int[] positions, int[] mappedPositions, Class<? extends Key>[] types, KeySchema schema) throws ConflictingFieldTypeInfoException {
+		for (int i = 0; i < positions.length; i++) {
+			schema.addType(positions[i], mappedPositions[i], types[i]);
 		}
 	}
+	
 	
 	private PactRecordComparatorFactory createComparator(FieldList fields, boolean[] directions, KeySchema schema)
 	throws MissingFieldTypeInfoException
 	{
 		final int[] positions = fields.toArray();
-		final int[] reMappedPositions;
-		if (this.repositioningMap != null) {
-			reMappedPositions = new int[positions.length];
-			for (int i = 0; i < positions.length; i++) {
-				Integer n = this.repositioningMap.get(positions[i]);
-				if (n == null) {
-					throw new CompilerException("Did not find a re-mapped position for global field " + positions[i]);
-				}
-				reMappedPositions[i] = n;
-			}
-		} else {
-			reMappedPositions = positions;
-		}
-		
+	
+		final int[] finalPositions = new int[positions.length];
 		@SuppressWarnings("unchecked")
 		final Class<? extends Key>[] keyTypes = new Class[fields.size()];
 		
 		for (int i = 0; i < fields.size(); i++) {
+			finalPositions[i] = schema.getRemappedPosition(positions[i]);
 			Class<? extends Key> type = schema.getType(positions[i]);
 			if (type == null) {
 				throw new MissingFieldTypeInfoException(i);
@@ -441,6 +414,6 @@ public class PactRecordPostPass implements OptimizerPostPass {
 				keyTypes[i] = type;
 			}
 		}
-		return new PactRecordComparatorFactory(positions, keyTypes, directions);
+		return new PactRecordComparatorFactory(finalPositions, keyTypes, directions);
 	}
 }

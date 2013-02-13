@@ -111,7 +111,6 @@ class Pact4sPostPass extends PactRecordPostPass with GlobalSchemaOptimizer {
 
   override def postPass(plan: OptimizedPlan): Unit = {
     optimizeSchema(plan, plan.getPlanConfiguration().getBoolean("Pact4s::SchemaCompaction", true))
-    setRepositioningMap(null) // replace that
     super.postPass(plan)
   }
 }

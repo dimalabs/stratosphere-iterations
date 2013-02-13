@@ -56,7 +56,7 @@ public class GenericReduceContract<T extends GenericReducer<?, ?>> extends Singl
 	 * @return True, if the ReduceContract is combinable, false otherwise.
 	 */
 	public boolean isCombinable() {
-		return getUserCodeClass().getAnnotation(Combinable.class) != null;
+		return getUserCodeAnnotation(Combinable.class) != null;
 	}
 	
 	/**

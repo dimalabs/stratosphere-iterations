@@ -16,10 +16,10 @@ package eu.stratosphere.pact4s.common.analysis
 import scala.collection.JavaConversions._
 import scala.util.DynamicVariable
 import java.util.{ List => JList }
-
 import eu.stratosphere.pact4s.common.contracts._
 import eu.stratosphere.pact.common.contract._
 import eu.stratosphere.pact.generic.contract._
+import eu.stratosphere.pact.compiler.plan.OptimizerNode
 
 trait GlobalSchemaGenerator {
 
@@ -53,7 +53,7 @@ trait GlobalSchemaGenerator {
         val freePos1 = globalizeContract(contract4s, proxies, fixedOutputs, freePos)
 
         eliminateNoOps(contract4s)
-        contract4s.persistConfiguration(this.getClass.getClassLoader)
+        contract4s.persistConfiguration(None)
 
         freePos1
       }

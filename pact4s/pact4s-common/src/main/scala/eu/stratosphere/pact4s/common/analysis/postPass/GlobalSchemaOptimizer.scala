@@ -54,7 +54,7 @@ trait GlobalSchemaOptimizer {
 
         node.getPactContract match {
 
-          case c: Pact4sContract[_] => c.persistConfiguration(c.getParameters.getClassLoader)
+          case c: Pact4sContract[_] => c.persistConfiguration(Some(node))
           case _                    =>
         }
 

@@ -16,12 +16,9 @@ package eu.stratosphere.pact4s.common.contracts
 import java.lang.annotation.Annotation
 import java.util.{ Collection => JCollection }
 import java.util.{ List => JList }
-
 import scala.collection.JavaConversions._
-
 import eu.stratosphere.pact4s.common._
 import eu.stratosphere.pact4s.common.analysis._
-
 import eu.stratosphere.pact.common.contract.GenericDataSource
 import eu.stratosphere.pact.common.contract.GenericDataSink
 import eu.stratosphere.pact.generic.contract.AbstractPact
@@ -30,28 +27,30 @@ import eu.stratosphere.pact.generic.contract.SingleInputContract
 import eu.stratosphere.pact.generic.contract.DualInputContract
 import eu.stratosphere.pact.generic.contract.WorksetIteration
 import eu.stratosphere.pact.generic.io.InputFormat
+import eu.stratosphere.pact.compiler.plan.OptimizerNode
 
 trait Pact4sContract[Out] { this: Contract =>
 
   def getUDF: UDF[Out]
   def getKeys: Seq[KeySelector[_]] = Seq()
 
-  def persistConfiguration(classLoader: ClassLoader): Unit = {
-
-    this.getParameters().setClassLoader(classLoader)
+  def persistConfiguration(optimizerNode : Option[OptimizerNode]): Unit = {
 
     def setKeys(getKeyColumnNumbers: Int => Array[Int]): Unit = {
       for ((key, inputNum) <- getKeys.zipWithIndex) {
         val source = key.selectedFields.toSerializerIndexArray
         val target = getKeyColumnNumbers(inputNum)
         assert(source.length == target.length, "Attempt to write " + source.length + " key indexes to an array of size " + target.length)
+        
         System.arraycopy(source, 0, target, 0, source.length)
       }
     }
 
     this match {
-      case contract: AbstractPact[_]  => setKeys(contract.getKeyColumns)
-      case contract: WorksetIteration => setKeys(contract.getKeyColumns)
+      case contract: AbstractPact[_]  => {
+        val getKeyArray = optimizerNode map { node => node.getRemappedKeys _ } getOrElse { contract.getKeyColumns _ } 
+        setKeys(getKeyArray)
+      }
       case _ if getKeys.size > 0      => throw new UnsupportedOperationException("Attempted to set keys on a contract that doesn't support them")
       case _                          =>
     }

@@ -25,32 +25,50 @@ import eu.stratosphere.pact.common.type.Value;
 /**
  * Class encapsulating a schema map (int column position -> column type) and a reference counter.
  */
-abstract class AbstractTypeSchema<T extends Value> implements Iterable<Map.Entry<Integer, Class<? extends T>>>
-{
+abstract class AbstractTypeSchema<T extends Value> implements Iterable<Integer> {
+	
 	private final Map<Integer, Class<? extends T>> schema;
+	
+	private final Map<Integer, Integer> reMapping;	
 	
 	private int numConnectionsThatContributed;
 	
 	
 	public AbstractTypeSchema() {
 		this.schema = new HashMap<Integer, Class<? extends T>>();
+		this.reMapping = new HashMap<Integer, Integer>();
 	}
 	
+	public void addSchema(AbstractTypeSchema<T> otherSchema) throws ConflictingFieldTypeInfoException {
+		for (Map.Entry<Integer, Class<? extends T>> entry : otherSchema.schema.entrySet()) {
+			Class<? extends T> previous = this.schema.put(entry.getKey(), entry.getValue());
+			if (previous != null && previous != entry.getValue()) {
+				throw new ConflictingFieldTypeInfoException(entry.getKey(), previous, entry.getValue());
+			}
+		}
+		
+		this.reMapping.putAll(otherSchema.reMapping);
+	}
 	
-	public void addType(Integer key, Class<? extends T> type) throws ConflictingFieldTypeInfoException 
+	public void addType(Integer key, Integer reMappedKey, Class<? extends T> type) throws ConflictingFieldTypeInfoException 
 	{
 		Class<? extends T> previous = this.schema.put(key, type);
 		if (previous != null && previous != type) {
 			throw new ConflictingFieldTypeInfoException(key, previous, type);
 		}
+		this.reMapping.put(key, reMappedKey);
 	}
 	
 	public Class<? extends T> getType(Integer field) {
 		return this.schema.get(field);
 	}
 	
-	public Iterator<Entry<Integer, Class<? extends T>>> iterator() {
-		return this.schema.entrySet().iterator();
+	public Integer getRemappedPosition(Integer key) {
+		return this.reMapping.get(key);
+	}
+	
+	public Iterator<Integer> iterator() {
+		return this.schema.keySet().iterator();
 	}
 	
 	public int getNumConnectionsThatContributed() {
