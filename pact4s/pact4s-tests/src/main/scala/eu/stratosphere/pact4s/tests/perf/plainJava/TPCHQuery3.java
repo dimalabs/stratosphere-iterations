@@ -188,7 +188,7 @@ public class TPCHQuery3 implements PlanAssembler, PlanAssemblerDescription {
 			.recordDelimiter('\n').fieldDelimiter('|')
 			.field(PactLong.class, 0)
 			.field(PactInteger.class, 1)
-			.field(PactDouble.class, 5);
+			.field(PactDouble.class, 2);
 
 		Plan plan = new Plan(result, "TPCH Q3");
 		plan.setDefaultParallelism(numSubTasks);

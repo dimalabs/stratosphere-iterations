@@ -102,7 +102,7 @@ class TPCHQuery3 extends PlanAssembler with PlanAssemblerDescription {
 			.recordDelimiter('\n').fieldDelimiter('|')
 			.field(classOf[PactLong], 0)
 			.field(classOf[PactInteger], 1)
-			.field(classOf[PactDouble], 5)
+			.field(classOf[PactDouble], 2)
 
 		val plan = new Plan(result, "TPCH Q3")
 		plan.setDefaultParallelism(numSubTasks)
