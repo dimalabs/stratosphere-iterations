@@ -61,7 +61,7 @@ class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, c
       PointSum(p.id, xSum, ySum, count)
       
     } map { ps =>
-      Point(ps.id, math.round(ps.xSum * 100.0) / 100.0, math.round(ps.ySum * 100.0) / 100.0)
+      Point(ps.id, math.round((ps.xSum / ps.count) * 100.0) / 100.0, math.round((ps.ySum / ps.count) * 100.0) / 100.0)
     }
 
     distances.left neglects { p => p.id }
