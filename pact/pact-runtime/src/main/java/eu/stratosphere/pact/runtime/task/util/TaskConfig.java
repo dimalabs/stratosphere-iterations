@@ -956,6 +956,11 @@ public class TaskConfig {
 		public void setClassLoader(ClassLoader classLoader) {
 			throw new UnsupportedOperationException("This configuration does not allow to alter the class loader.");
 		}
+		
+		@Override
+		public ClassLoader getClassLoader() {
+			return this.backingConfig.getClassLoader();
+		}
 
 		@Override
 		public void read(DataInput in) throws IOException {

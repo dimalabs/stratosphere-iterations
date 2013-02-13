@@ -26,8 +26,10 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -38,9 +40,11 @@ import java.util.regex.Pattern;
 import eu.stratosphere.pact.common.plan.Plan;
 import eu.stratosphere.pact.common.plan.PlanAssembler;
 import eu.stratosphere.pact.common.plan.PlanAssemblerDescription;
+import eu.stratosphere.pact.common.plan.Visitor;
 import eu.stratosphere.pact.compiler.PactCompiler;
 import eu.stratosphere.pact.compiler.plan.DataSinkNode;
 import eu.stratosphere.pact.contextcheck.ContextChecker;
+import eu.stratosphere.pact.generic.contract.Contract;
 
 /**
  * This class encapsulates most of the plan related functions. Based on the given jar file,
@@ -120,7 +124,9 @@ public class PactProgram {
 	 *         missing parameters for generation.
 	 */
 	public Plan getPlan() throws ProgramInvocationException, ErrorInPlanAssemblerException {
-		return createPlanFromJar(assemblerClass, args);
+		Plan p = createPlanFromJar(assemblerClass, args);
+		p.accept(new ClassLoadSetter(assemblerClass.getClassLoader()));
+		return p;
 	}
 
 	/**
@@ -474,5 +480,27 @@ public class PactProgram {
 		}
 
 		// TODO: Check if proper JAR file
+	}
+	
+	private static final class ClassLoadSetter implements Visitor<Contract> {
+
+		private final Set<Contract> seenBefore = new HashSet<Contract>();
+		
+		private final ClassLoader cl;
+		
+		
+		public ClassLoadSetter(ClassLoader cl) {
+			this.cl = cl;
+		}
+
+		@Override
+		public boolean preVisit(Contract visitable) {
+			return this.seenBefore.add(visitable);
+		}
+
+		@Override
+		public void postVisit(Contract visitable) {
+			visitable.getParameters().setClassLoader(this.cl);
+		}
 	}
 }

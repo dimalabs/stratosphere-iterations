@@ -1148,15 +1148,15 @@ public class RegularPactTask<S extends Stub, OT> extends AbstractTask implements
 				}
 
 				// get the configuration for the task
-				final TaskConfig chainedStubConf = config.getChainedStubConfig(i);
+				final TaskConfig chainedTaskConf = config.getChainedStubConfig(i);
 				final String taskName = config.getChainedTaskName(i);
 
 				if (i == numChained -1) {
 					// last in chain, instantiate the output collector for this task
-					previous = getOutputCollector(nepheleTask, chainedStubConf, cl, eventualOutputs, chainedStubConf.getNumOutputs());
+					previous = getOutputCollector(nepheleTask, chainedTaskConf, cl, eventualOutputs, chainedTaskConf.getNumOutputs());
 				}
 
-				ct.setup(chainedStubConf, taskName, nepheleTask, cl, previous);
+				ct.setup(chainedTaskConf, taskName, nepheleTask, cl, previous);
 				chainedTasksTarget.add(0, ct);
 
 				previous = ct;
