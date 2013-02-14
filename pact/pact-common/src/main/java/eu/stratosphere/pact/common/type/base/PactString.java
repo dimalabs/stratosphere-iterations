@@ -213,6 +213,26 @@ public class PactString implements Key, NormalizableKey, CharSequence, CopyableV
 	}
 	
 	/**
+	 * Sets the value of the PactString to a substring of the given value.
+	 * 
+	 * @param value The new string value (as a character array).
+	 * @param offset The position to start the substring.
+	 * @param len The length of the substring.
+	 */
+	public void setValue(char[] chars, int offset, int len) {
+		if (chars == null)
+			throw new NullPointerException();
+		
+		if (offset < 0 || len < 0 || offset > chars.length - len)
+			throw new IndexOutOfBoundsException();
+
+		ensureSize(len);
+		System.arraycopy(chars, offset, this.value, 0, len);
+		this.len = len;
+		this.hashCode = 0;
+	}
+	
+	/**
 	 * Sets the value of this <code>PactString</code>, assuming that the binary data is ASCII coded. The n-th character of the
 	 * <code>PactString</code> corresponds directly to the n-th byte in the given array after the offset.
 	 * 

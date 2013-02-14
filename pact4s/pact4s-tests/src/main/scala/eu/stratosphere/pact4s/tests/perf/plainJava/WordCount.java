@@ -33,9 +33,75 @@ import eu.stratosphere.pact.common.stubs.StubAnnotation.OutCardBounds;
 import eu.stratosphere.pact.common.type.PactRecord;
 import eu.stratosphere.pact.common.type.base.PactInteger;
 import eu.stratosphere.pact.common.type.base.PactString;
+import eu.stratosphere.pact.common.util.MutableObjectIterator;
 
 public class WordCount implements PlanAssembler, PlanAssemblerDescription
 {
+	public static final class AsciiUtils
+	{
+		private AsciiUtils() {}
+
+		public static void toLowerCase(PactString string)
+		{
+			final char[] chars = string.getCharArray();
+			final int len = string.length();
+			
+			for (int i = 0; i < len; i++) {
+				chars[i] = Character.toLowerCase(chars[i]);
+			}
+		}
+
+		public static void replaceNonWordChars(PactString string, char replacement)
+		{
+			final char[] chars = string.getCharArray();
+			final int len = string.length();
+			
+			for (int i = 0; i < len; i++) {
+				final char c = chars[i];
+				if (!(Character.isLetter(c) || Character.isDigit(c) || c == '_')) {
+					chars[i] = replacement;
+				}
+			}
+		}
+
+		public static final class WhitespaceTokenizer implements MutableObjectIterator<PactString>
+		{		
+			private PactString toTokenize;
+			private int pos;
+			private int limit;
+			
+			public WhitespaceTokenizer() {}
+			
+			public void setStringToTokenize(PactString string)
+			{
+				this.toTokenize = string;
+				this.pos = 0;
+				this.limit = string.length();
+			}
+			
+			@Override
+			public boolean next(PactString target)
+			{
+				final char[] data = this.toTokenize.getCharArray();
+				final int limit = this.limit;
+				int pos = this.pos;
+				
+				for (; pos < limit && Character.isWhitespace(data[pos]); pos++);
+				
+				if (pos >= limit) {
+					this.pos = pos;
+					return false;
+				}
+				
+				final int start = pos;
+				for (; pos < limit && !Character.isWhitespace(data[pos]); pos++);
+				this.pos = pos;
+				target.setValue(this.toTokenize, start, pos - start);
+				return true;
+			}
+		}
+	}
+
 	public static class TokenizeLine extends MapStub
 	{
 		private final PactString line = new PactString();
@@ -43,14 +109,19 @@ public class WordCount implements PlanAssembler, PlanAssemblerDescription
 		private final PactInteger one = new PactInteger(1);
 		private final PactRecord result = new PactRecord();
 
+		private final AsciiUtils.WhitespaceTokenizer tokenizer = new AsciiUtils.WhitespaceTokenizer();
+
 		@Override
 		public void map(PactRecord record, Collector<PactRecord> out)
 		{
-			String line = record.getField(0, this.line).getValue();
-
-			for (String word : line.toLowerCase().split("\\W+"))
+			PactString line = record.getField(0, this.line);
+			
+			AsciiUtils.replaceNonWordChars(line, ' ');
+			AsciiUtils.toLowerCase(line);		
+			this.tokenizer.setStringToTokenize(line);
+			
+			while (tokenizer.next(this.word))
 			{
-				this.word.setValue(word);
 				this.result.setField(0, this.word);
 				this.result.setField(1, this.one);
 				out.collect(this.result);

@@ -26,22 +26,22 @@ class WordCountDescriptor extends PactDescriptor[WordCount] {
 class WordCount(textInput: String, wordsOutput: String) extends PactProgram {
 
   import WordCount._
-  
-  val input = new DataSource(textInput, new TextDataSourceFormat("ASCII"))
+
+  val input = new DataSource(textInput, new DenotationDataSourceFormat("ASCII"))
   val output = new DataSink(wordsOutput, new RecordDataSinkFormat[WordWithCount]("\n", " ", true))
 
-  val words = input flatMap { _.toLowerCase().split("\\W+") map { WordWithCount(_, 1) } }
-  
+  val words = input flatMap { _.toAlphaNumeric.toLowerCase.tokens map { WordWithCount(_, 1) } }
+
   val counts = (words map { identity _ }) groupBy { _.word } combine { wcs =>
-    
+
     var wc: WordWithCount = null
     var count = 0
-    
+
     while (wcs.hasNext) {
       wc = wcs.next
       count += wc.count
     }
-    
+
     WordWithCount(wc.word, count)
   }
 
@@ -52,5 +52,139 @@ class WordCount(textInput: String, wordsOutput: String) extends PactProgram {
 }
 
 object WordCount {
-  case class WordWithCount(val word: String, val count: Int)
+
+  case class WordWithCount(val word: Denotation, val count: Int)
+
+  import eu.stratosphere.pact4s.common.analysis.UDT
+  import eu.stratosphere.pact4s.common.analysis.UDTSerializer
+
+  import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
+  import eu.stratosphere.pact.common.`type`.base.PactString
+  import eu.stratosphere.pact.common.`type`.PactRecord
+  import eu.stratosphere.pact.common.io.TextInputFormat
+  import eu.stratosphere.nephele.configuration.Configuration
+
+  case class Denotation(val chars: Array[Char], val start: Int, val length: Int) {
+
+    def toAlphaNumeric() = {
+      var pos = start
+      val limit = length
+
+      while (pos < length) {
+        val c = chars(pos)
+        if (!(Character.isLetter(c) || Character.isDigit(c) || c == '_')) {
+          chars(pos) = ' '
+        }
+        pos = pos + 1
+      }
+
+      this
+    }
+
+    def toLowerCase() = {
+      var pos = start
+      val limit = length
+
+      while (pos < length) {
+        chars(pos) = Character.toLowerCase(chars(pos))
+        pos = pos + 1
+      }
+
+      this
+    }
+
+    def tokens = new Traversable[Denotation] {
+      def foreach[T](f: Denotation => T): Unit = {
+
+        var pos = start
+        val limit = length
+
+        while (pos < limit) {
+
+          while (pos < limit && Character.isWhitespace(chars(pos))) {
+            pos = pos + 1
+          }
+
+          if (pos < limit) {
+
+            val begin = pos
+
+            while (pos < limit && !Character.isWhitespace(chars(pos))) {
+              pos = pos + 1
+            }
+
+            f(Denotation(chars, begin, pos - begin))
+          }
+        }
+      }
+    }
+
+    override def toString() = new String(chars, start, length)
+  }
+
+  implicit def denotationUDT = new UDT[Denotation] {
+
+    override val fieldTypes = Array[Class[_ <: PactValue]](classOf[PactString])
+
+    override def createSerializer(indexMap: Array[Int]) = new UDTSerializer[Denotation] {
+
+      private val index = indexMap(0)
+
+      @transient private var pactField = new PactString()
+
+      override def getFieldIndex(selection: Seq[String]): List[Int] = selection match {
+        case Seq() => List(index)
+        case _ => invalidSelection(selection)
+      }
+
+      override def serialize(item: Denotation, record: PactRecord) = {
+        if (index >= 0) {
+          pactField.setValue(item.chars, item.start, item.length)
+          record.setField(index, pactField)
+        }
+      }
+
+      override def deserializeRecyclingOff(record: PactRecord): Denotation = {
+        if (index >= 0) {
+          val field = record.getField(index, pactField)
+          val length = field.length
+          val chars = new Array[Char](length)
+          System.arraycopy(field.getCharArray, 0, chars, 0, length)
+          Denotation(chars, 0, length)
+        } else {
+          null
+        }
+      }
+
+      override def deserializeRecyclingOn(record: PactRecord): Denotation = {
+        if (index >= 0) {
+          val field = record.getField(index, pactField)
+          val chars = field.getCharArray
+          Denotation(chars, 0, field.length)
+        } else {
+          null
+        }
+      }
+
+      private def readObject(in: java.io.ObjectInputStream) = {
+        in.defaultReadObject()
+        pactField = new PactString()
+      }
+    }
+  }
+
+  case class DenotationDataSourceFormat(val charSetName: Option[String] = None) extends DataSourceFormat[Denotation] {
+
+    def this(charSetName: String) = this(Some(charSetName))
+
+    override val stub = classOf[TextInputFormat]
+
+    override def persistConfiguration(config: Configuration) {
+      if (charSetName.isDefined)
+        config.setString(TextInputFormat.CHARSET_NAME, charSetName.get)
+
+      config.setInteger(TextInputFormat.FIELD_POS, udf.outputFields(0).globalPos.getValue)
+    }
+  }
 }
+

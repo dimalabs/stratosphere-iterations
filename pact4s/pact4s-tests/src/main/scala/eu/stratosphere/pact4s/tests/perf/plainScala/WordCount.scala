@@ -33,6 +33,7 @@ import eu.stratosphere.pact.common.stubs.StubAnnotation.OutCardBounds;
 import eu.stratosphere.pact.common.`type`.PactRecord
 import eu.stratosphere.pact.common.`type`.base.PactInteger
 import eu.stratosphere.pact.common.`type`.base.PactString
+import eu.stratosphere.pact.common.util.MutableObjectIterator;
 
 class WordCount extends PlanAssembler with PlanAssemblerDescription {
 
@@ -41,8 +42,8 @@ class WordCount extends PlanAssembler with PlanAssemblerDescription {
   override def getPlan(args: String*): Plan = {
 
     val numSubTasks = if (args.length > 0) args(0).toInt else 1
-    val dataInput   = if (args.length > 1) args(1) else ""
-    val output      = if (args.length > 2) args(2) else ""
+    val dataInput = if (args.length > 1) args(1) else ""
+    val output = if (args.length > 2) args(2) else ""
 
     val source = new FileDataSource(classOf[TextInputFormat], dataInput, "Input Lines")
     source.setParameter(TextInputFormat.CHARSET_NAME, "ASCII")
@@ -54,7 +55,7 @@ class WordCount extends PlanAssembler with PlanAssemblerDescription {
       .input(mapper).name("Count Words").build()
 
     val out = new FileDataSink(classOf[RecordOutputFormat], output, reducer, "Word Counts");
-    
+
     RecordOutputFormat.configureRecordFormat(out).lenient(true)
       .recordDelimiter('\n').fieldDelimiter(' ')
       .field(classOf[PactString], 0)
@@ -70,6 +71,70 @@ class WordCount extends PlanAssembler with PlanAssemblerDescription {
 
 object WordCount {
 
+  object AsciiUtils {
+    def toLowerCase(string: PactString) = {
+      val chars = string.getCharArray
+      val len = string.length
+      var i = 0
+
+      while (i < len) {
+        chars(i) = Character.toLowerCase(chars(i))
+        i = i + 1
+      }
+    }
+
+    def replaceNonWordChars(string: PactString, replacement: Char) = {
+      val chars = string.getCharArray
+      val len = string.length
+      var i = 0
+
+      while (i < len) {
+        val c = chars(i)
+        if (!(Character.isLetter(c) || Character.isDigit(c) || c == '_')) {
+          chars(i) = replacement
+        }
+        i = i + 1
+      }
+    }
+
+    final class WhitespaceTokenizer extends MutableObjectIterator[PactString] {
+      private var toTokenize: PactString = _
+      private var pos: Int = _
+      private var limit: Int = _
+
+      def setStringToTokenize(string: PactString) = {
+        this.toTokenize = string
+        this.pos = 0
+        this.limit = string.length
+      }
+
+      override def next(target: PactString): Boolean = {
+        val data = this.toTokenize.getCharArray
+        val limit = this.limit
+        var pos = this.pos
+
+        while (pos < limit && Character.isWhitespace(data(pos))) {
+          pos = pos + 1
+        }
+
+        val hasNext = pos < limit
+
+        if (hasNext) {
+
+          val start = pos
+          while (pos < limit && !Character.isWhitespace(data(pos))) {
+            pos = pos + 1
+          }
+
+          target.setValue(this.toTokenize, start, pos - start)
+        }
+
+        this.pos = pos
+        hasNext
+      }
+    }
+  }
+
   class TokenizeLine extends MapStub {
 
     private val line = new PactString()
@@ -77,12 +142,17 @@ object WordCount {
     private val one = new PactInteger(1)
     private val result = new PactRecord()
 
+    private val tokenizer = new AsciiUtils.WhitespaceTokenizer()
+
     override def map(record: PactRecord, out: Collector[PactRecord]) = {
 
-      val line = record.getField(0, this.line).getValue()
+      val line = record.getField(0, this.line)
 
-      for (word <- line.toLowerCase().split("\\W+")) {
-        this.word.setValue(word)
+      AsciiUtils.replaceNonWordChars(line, ' ')
+      AsciiUtils.toLowerCase(line)
+      this.tokenizer.setStringToTokenize(line)
+
+      while (tokenizer.next(this.word)) {
         this.result.setField(0, this.word)
         this.result.setField(1, this.one)
         out.collect(this.result)
@@ -109,7 +179,7 @@ object WordCount {
 
       this.count.setValue(count)
       next.setField(1, this.count)
-      
+
       out.collect(next)
     }
 
