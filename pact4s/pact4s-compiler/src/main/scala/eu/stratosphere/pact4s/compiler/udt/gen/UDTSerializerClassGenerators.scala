@@ -102,8 +102,7 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
       val fieldsAndInits = descFields map {
 
         case OpaqueDescriptor(id, tpe, ref) => {
-          val take = Apply(Select(Select(This(udtSerClassSym), iterName), "take"), List(Select(ref(), "numFields")))
-          val arr = Apply(TypeApply(Select(take, "toArray"), List(TypeTree(definitions.IntClass.tpe))), List(Select(Select(Ident("reflect"), "Manifest"), "Int")))
+          val arr = Apply(Select(ref(), "mkIndexMap"), List(Select(This(udtSerClassSym), iterName)))
           val idxField = mkVal(udtSerClassSym, prefix + "Idx" + id, Flags.PRIVATE, true, intArrayTpe) { _ => arr }
 
           val serField = mkVar(udtSerClassSym, prefix + "Ser" + id, Flags.PRIVATE, false, mkUdtSerializerOf(tpe)) { _ => mkNull }
@@ -294,11 +293,16 @@ trait UDTSerializerClassGenerators extends UDTSerializeMethodGenerators with UDT
 
       def mkSetField(fieldId: Int, record: Tree): Tree = mkSetField(fieldId, record, mkSelectWrapper(fieldId))
       def mkSetField(fieldId: Int, record: Tree, wrapper: Tree): Tree = Apply(Select(record, "setField"), List(mkSelectIdx(fieldId), wrapper))
-      def mkGetFieldInto(fieldId: Int, record: Tree): Tree = mkGetFieldInto(fieldId, record, mkSelectWrapper(fieldId))
-      def mkGetFieldInto(fieldId: Int, record: Tree, wrapper: Tree): Tree = Apply(Select(record, "getFieldInto"), List(mkSelectIdx(fieldId), wrapper))
-
+      
       def mkSetValue(fieldId: Int, value: Tree): Tree = mkSetValue(mkSelectWrapper(fieldId), value)
       def mkSetValue(wrapper: Tree, value: Tree): Tree = Apply(Select(wrapper, "setValue"), List(value))
+
+      def mkGetField(fieldId: Int, record: Tree): Tree = mkGetField(fieldId, record, mkSelectWrapper(fieldId))
+      def mkGetField(fieldId: Int, record: Tree, wrapper: Tree): Tree = Apply(Select(record, "getField"), List(mkSelectIdx(fieldId), wrapper))
+      
+      def mkGetFieldValue(fieldId: Int, record: Tree): Tree = mkGetFieldValue(fieldId, record, mkSelectWrapper(fieldId))
+      def mkGetFieldValue(fieldId: Int, record: Tree, wrapper: Tree): Tree = Apply(Select(mkGetField(fieldId, record, wrapper), "getValue"), List())
+      
       def mkGetValue(fieldId: Int): Tree = mkGetValue(mkSelectWrapper(fieldId))
       def mkGetValue(wrapper: Tree): Tree = Apply(Select(wrapper, "getValue"), List())
 

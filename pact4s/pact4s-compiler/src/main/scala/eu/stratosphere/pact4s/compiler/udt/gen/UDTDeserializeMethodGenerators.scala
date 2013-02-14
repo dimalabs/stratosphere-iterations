@@ -48,45 +48,46 @@ trait UDTDeserializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClas
 
       case PrimitiveDescriptor(id, _, default, _) => {
         val chk = env.mkChkIdx(id)
-        val des = env.mkGetFieldInto(id, source)
-        val get = env.mkGetValue(id)
+        val get = env.mkGetFieldValue(id, source)
 
-        Seq(mkIf(chk, Block(des, get), default))
+        Seq(mkIf(chk, get, default))
       }
 
       case BoxedPrimitiveDescriptor(id, tpe, _, _, box, _) => {
-        val des = env.mkGetFieldInto(id, source)
-        val chk = mkAnd(env.mkChkIdx(id), des)
-        val get = box(env.mkGetValue(id))
+        val chk = mkAnd(env.mkChkIdx(id), env.mkNotIsNull(id, source))
+        val get = box(env.mkGetFieldValue(id, source))
 
         Seq(mkIf(chk, get, mkNull))
       }
 
       case list @ ListDescriptor(id, tpe, _, cbf, _, elem) => {
-        val chk = mkAnd(env.mkChkIdx(id), env.mkNotIsNull(id, source))
+        
+        val listTpe = env.listImpls(id)
+        val buildTpe = appliedType(builderClass.tpe, List(elem.tpe, tpe))
 
-        val (init, list) = env.reentrant match {
-
-          // This is a bit conservative, but avoids runtime checks
-          // and/or even more specialized deserialize() methods to
-          // track whether it's safe to reuse the list variable.
-          case true => {
-            val listTpe = env.listImpls(id)
-            val list = mkVal(env.methodSym, "list" + id, 0, false, listTpe) { _ => New(TypeTree(listTpe), List(List())) }
-            (list, Ident(list.symbol))
-          }
-
-          case false => {
-            val clear = Apply(Select(env.mkSelectWrapper(id), "clear"), List())
-            (clear, env.mkSelectWrapper(id))
-          }
+        val init: Seq[Tree] = env.reentrant match {
+          case true  => Seq()
+          case false => Seq(Apply(Select(env.mkSelectWrapper(id), "clear"), List()))
         }
 
-        val buildTpe = appliedType(builderClass.tpe, List(elem.tpe, tpe))
-        val build = mkVal(env.methodSym, "b" + id, 0, false, buildTpe) { _ => Apply(Select(cbf(), "apply"), List()) }
-        val des = env.mkGetFieldInto(id, source, list)
-        val body = genDeserializeList(elem, list, Ident(build.symbol), env.copy(allowRecycling = false, chkNull = true), scope)
-        val stats = init +: des +: build +: body
+        val list = mkVal(env.methodSym, "list" + id, 0, false, listTpe) { _ =>
+          val wrapper = env.reentrant match {
+            
+            // This is a bit conservative, but avoids runtime checks
+            // and/or even more specialized deserialize() methods to
+            // track whether it's safe to reuse the list variable.
+            case true => New(TypeTree(listTpe), List(List()))
+            
+            case false => env.mkSelectWrapper(id)
+          }
+          
+          env.mkGetField(id, source, wrapper)
+        }
+
+        val chk = mkAnd(env.mkChkIdx(id), env.mkNotIsNull(id, source))
+        val build = mkVal(env.methodSym, "b" + id, 0, false, buildTpe) { _ => Apply(Select(cbf(), "apply"), List()) }       
+        val body = genDeserializeList(elem, Ident(list.symbol), Ident(build.symbol), env.copy(allowRecycling = false, chkNull = true), scope)
+        val stats = init ++ (list +: build +: body)
 
         Seq(mkIf(chk, Block(stats: _*), mkNull))
       }
@@ -165,11 +166,10 @@ trait UDTDeserializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClas
           }
         }
 
-        val chk = env.mkChkIdx(tagField.desc.id)
-        val des = env.mkGetFieldInto(tagField.desc.id, source)
-        val get = env.mkGetValue(tagField.desc.id)
+        val chk = mkAnd(env.mkChkIdx(tagField.desc.id), env.mkNotIsNull(tagField.desc.id, source))
+        val get = env.mkGetFieldValue(tagField.desc.id, source)
 
-        Seq(mkIf(chk, Block((stats :+ des :+ Match(get, cases)): _*), mkNull))
+        Seq(mkIf(chk, Block((stats :+ Match(get, cases)): _*), mkNull))
       }
 
       case OpaqueDescriptor(id, tpe, _) if env.allowRecycling => Seq(Apply(Select(env.mkSelectSerializer(id), "deserializeRecyclingOn"), List(source)))
@@ -177,11 +177,13 @@ trait UDTDeserializeMethodGenerators { this: Pact4sPlugin with UDTSerializerClas
 
       case RecursiveDescriptor(id, tpe, refId) => {
         val chk = mkAnd(env.mkChkIdx(id), env.mkNotIsNull(id, source))
-        val rec = mkVal(env.methodSym, "record" + id, 0, false, pactRecordClass.tpe) { _ => New(TypeTree(pactRecordClass.tpe), List(List())) }
-        val get = env.mkGetFieldInto(id, source, Ident(rec.symbol))
+        val rec = mkVal(env.methodSym, "record" + id, 0, false, pactRecordClass.tpe) { _ =>
+          val wrapper = New(TypeTree(pactRecordClass.tpe), List(List()))
+          env.mkGetField(id, source, wrapper)
+        }
         val des = env.mkCallDeserialize(refId, Ident(rec.symbol))
 
-        Seq(mkIf(chk, Block(rec, get, des), mkNull))
+        Seq(mkIf(chk, Block(rec, des), mkNull))
       }
 
       case _ => Seq(mkNull)

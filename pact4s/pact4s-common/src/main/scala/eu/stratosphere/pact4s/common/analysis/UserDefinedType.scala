@@ -41,6 +41,16 @@ trait UDT[T] extends Serializable {
     ser.init()
     ser
   }
+  
+  def mkIndexMap(iter: Iterator[Int]): Array[Int] = {
+    val indexMap = new Array[Int](numFields)
+    var i = 0
+    while (i < indexMap.length) {
+      indexMap(i) = iter.next
+      i = i + 1
+    }
+    indexMap
+  }
 
   @transient private var defaultSerializer: UDTSerializer[T] = null
 
@@ -116,8 +126,7 @@ object UDT extends UDTLowPriorityImplicits {
 
       override def deserializeRecyclingOff(record: PactRecord): String = {
         if (index >= 0) {
-          record.getFieldInto(index, pactField)
-          pactField.getValue()
+          record.getField(index, pactField).getValue()
         } else {
           null
         }
@@ -125,8 +134,7 @@ object UDT extends UDTLowPriorityImplicits {
 
       override def deserializeRecyclingOn(record: PactRecord): String = {
         if (index >= 0) {
-          record.getFieldInto(index, pactField)
-          pactField.getValue()
+          record.getField(index, pactField).getValue()
         } else {
           null
         }
