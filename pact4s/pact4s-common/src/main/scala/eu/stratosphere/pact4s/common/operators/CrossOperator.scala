@@ -34,14 +34,13 @@ class CrossOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) extends Serializ
 
         val builder = Cross4sContract.newBuilderFor(mapFunction).input1(leftInput.getContract).input2(rightInput.getContract)
 
-        val contract = new CrossContract(builder) with Cross4sContract[LeftIn, RightIn, Out] {
+        new CrossContract(builder) with Cross4sContract[LeftIn, RightIn, Out] {
 
           override val udf = new UDF2[LeftIn, RightIn, Out]
           override val userCode = mapFunction
+          
+          override def persistHints() = applyHints(this)
         }
-
-        applyHints(contract)
-        contract
       }
     }
   }

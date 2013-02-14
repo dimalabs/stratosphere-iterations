@@ -22,7 +22,14 @@ trait Pact4sContractFactory {
 
   protected def createContract: Contract
 
-  def getContract: Contract = Pact4sContractFactory.currentEnv.value.getContractFor(this, createContract)
+  private def initContract: Contract = {
+    createContract match {
+      case contract: Pact4sContract[_] => contract.persistHints(); contract
+      case contract => contract
+    }
+  }
+
+  def getContract: Contract = Pact4sContractFactory.currentEnv.value.getContractFor(this, initContract)
 }
 
 object Pact4sContractFactory {

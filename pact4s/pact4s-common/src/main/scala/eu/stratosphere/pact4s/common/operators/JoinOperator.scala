@@ -41,16 +41,15 @@ class JoinOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) extends Serializa
             val keyTypes = implicitly[UDT[LeftIn]].getKeySet(leftKeySelector.selectedFields map { _.localPos })
             keyTypes.foreach { builder.keyField(_, -1, -1) } // global indexes haven't been computed yet...
 
-            val contract = new MatchContract(builder) with Join4sContract[Key, LeftIn, RightIn, Out] {
+            new MatchContract(builder) with Join4sContract[Key, LeftIn, RightIn, Out] {
 
               override val leftKey = leftKeySelector.copy()
               override val rightKey = rightKeySelector.copy()
               override val udf = new UDF2[LeftIn, RightIn, Out]
               override val userCode = mapFunction
-            }
 
-            applyHints(contract)
-            contract
+              override def persistHints() = applyHints(this)
+            }
           }
         }
       }

@@ -63,7 +63,7 @@ trait OutputHintable[Out] extends Hintable {
 
       if (pactFieldSets == null)
         pactFieldSets = collection.mutable.Map[Pact4sContract[_], RefreshableFieldSet]()
-      
+
       val keyCopy = key.copy
       contract.getUDF.attachOutputsToInputs(keyCopy.inputFields)
       val keySet = keyCopy.selectedFields.toIndexSet
@@ -123,11 +123,9 @@ trait OutputHintable[Out] extends Hintable {
       val fieldSet = card.getPactFieldSet(contract)
 
       if (card.isUnique) {
-        val fieldSets = hints.getUniqueFields
-        if (fieldSets == null)
-          hints.setUniqueField(fieldSet)
-        else
-          fieldSets.add(fieldSet)
+        if (hints.getUniqueFields == null)
+          hints.setUniqueField(new java.util.HashSet[PactFieldSet]())
+        hints.getUniqueFields.add(fieldSet)
       }
 
       card.distinctCount.foreach(hints.setDistinctCount(fieldSet, _))
@@ -199,7 +197,10 @@ trait OneInputHintable[In, Out] extends InputHintable[In, Out] with OutputHintab
     super.applyHints(contract)
 
     val udf = contract.getUDF.asInstanceOf[UDF1[In, Out]]
-    applyInputHints(udf.markInputFieldUnread _, udf.markFieldCopied _)
+    
+    if (!udf.outputFields.isGlobalized) {
+      applyInputHints(udf.markInputFieldUnread _, udf.markFieldCopied _)
+    }
   }
 }
 
@@ -222,8 +223,11 @@ trait TwoInputHintable[LeftIn, RightIn, Out] extends OutputHintable[Out] {
     super.applyHints(contract)
 
     val udf = contract.getUDF.asInstanceOf[UDF2[LeftIn, RightIn, Out]]
-    left.applyInputHints(udf)
-    right.applyInputHints(udf)
+
+    if (!udf.outputFields.isGlobalized) {
+      left.applyInputHints(udf)
+      right.applyInputHints(udf)
+    }
   }
 }
 

@@ -28,18 +28,17 @@ class PlanOutput[In: UDT](val source: DataStream[In], val sink: DataSink[In]) ex
   override def createContract = {
 
     val uri = getUri(sink.url)
-    val contract = uri.getScheme match {
+    
+    uri.getScheme match {
 
       case "file" | "hdfs" => new FileDataSink(sink.format.stub.asInstanceOf[Class[FileOutputFormat]], uri.toString, source.getContract) with DataSink4sContract[In] {
 
         override val udf = sink.format.udf
 
+        override def persistHints() = sink.applyHints(this)
         override def persistConfiguration() = sink.format.persistConfiguration(this.getParameters())
       }
     }
-
-    sink.applyHints(contract)
-    contract
   }
 
   private def getUri(url: String) = {

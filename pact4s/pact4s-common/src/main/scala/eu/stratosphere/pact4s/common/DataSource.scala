@@ -34,12 +34,14 @@ class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends D
   override def createContract = {
 
     val uri = getUri(url)
-    val contract = uri.getScheme match {
+    
+    uri.getScheme match {
 
       case "file" | "hdfs" => new FileDataSource(format.stub.asInstanceOf[Class[FileInputFormat]], uri.toString) with DataSource4sContract[Out] {
 
         override val udf = format.udf
 
+        override def persistHints() = applyHints(this)
         override def persistConfiguration() = format.persistConfiguration(this.getParameters())
       }
 
@@ -47,12 +49,10 @@ class DataSource[Out: UDT](url: String, format: DataSourceFormat[Out]) extends D
 
         override val udf = format.udf
 
+        override def persistHints() = applyHints(this)
         override def persistConfiguration() = format.persistConfiguration(this.getParameters())
       }
     }
-
-    applyHints(contract)
-    contract
   }
 
   private def getUri(url: String) = {

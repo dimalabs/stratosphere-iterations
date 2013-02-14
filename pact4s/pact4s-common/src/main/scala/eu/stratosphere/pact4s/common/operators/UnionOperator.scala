@@ -40,16 +40,15 @@ class UnionOperator[T: UDT](firstInput: DataStream[T]) extends Serializable {
 
       val builder = Union4sContract.newBuilder.inputs(firstInputs ++ secondInputs)
 
-      val contract = new MapContract(builder) with Union4sContract[T] {
+      new MapContract(builder) with Union4sContract[T] {
 
         // Union is a no-op placeholder that reads nothing and writes nothing.
         // Its udf's outputFields specifies the write location for the union's 
         // children and the read location for its parent.
         override val udf = new UDF0[T]
-      }
 
-      applyHints(contract)
-      contract
+        override def persistHints() = applyHints(this)
+      }
     }
   }
 }

@@ -83,16 +83,15 @@ class ReduceOperator[In: UDT](input: DataStream[In]) extends Serializable {
       val keyTypes = implicitly[UDT[In]].getKeySet(keySelector.selectedFields map { _.localPos })
       keyTypes.foreach { builder.keyField(_, -1) } // global indexes haven't been computed yet...
 
-      val contract = new ReduceContract(builder) with Reduce4sContract[Key, In, Out] {
+      new ReduceContract(builder) with Reduce4sContract[Key, In, Out] {
 
         override val key = keySelector.copy()
         override val udf = new UDF1[In, Out]
         override val userCombineCode = combineFunction
         override val userReduceCode = reduceFunction
-      }
 
-      applyHints(contract)
-      contract
+        override def persistHints() = applyHints(this)
+      }
     }
   }
 }

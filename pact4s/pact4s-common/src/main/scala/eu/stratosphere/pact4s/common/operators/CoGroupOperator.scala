@@ -35,22 +35,21 @@ class CoGroupOperator[LeftIn: UDT](leftInput: DataStream[LeftIn]) extends Serial
         private def createStream[Out: UDT](mapFunction: Either[(Iterator[LeftIn], Iterator[RightIn]) => Out, (Iterator[LeftIn], Iterator[RightIn]) => Iterator[Out]]) = new DataStream[Out] with TwoInputHintable[LeftIn, RightIn, Out] {
 
           override def createContract = {
-
+            
             val builder = CoGroup4sContract.newBuilderFor(mapFunction).input1(leftInput.getContract).input2(rightInput.getContract)
 
             val keyTypes = implicitly[UDT[LeftIn]].getKeySet(leftKeySelector.selectedFields map { _.localPos })
             keyTypes.foreach { builder.keyField(_, -1, -1) } // global indexes haven't been computed yet...
 
-            val contract = new CoGroupContract(builder) with CoGroup4sContract[Key, LeftIn, RightIn, Out] {
+            new CoGroupContract(builder) with CoGroup4sContract[Key, LeftIn, RightIn, Out] {
 
               override val leftKey = leftKeySelector.copy()
               override val rightKey = rightKeySelector.copy()
               override val udf = new UDF2[LeftIn, RightIn, Out]
               override val userCode = mapFunction
+              
+              override def persistHints() = applyHints(this)
             }
-
-            applyHints(contract)
-            contract
           }
         }
       }

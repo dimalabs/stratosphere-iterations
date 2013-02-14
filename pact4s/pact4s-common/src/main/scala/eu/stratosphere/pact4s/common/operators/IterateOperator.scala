@@ -33,6 +33,8 @@ class RepeatOperator[SolutionItem: UDT](stepFunction: DataStream[SolutionItem] =
 
       val contract = new BulkIteration with Iterate4sContract[SolutionItem] {
         override val udf = new UDF0[SolutionItem]
+        
+        override def persistHints() = applyHints(this)
       }
 
       val solutionInput = new DataStream[SolutionItem] {
@@ -45,7 +47,6 @@ class RepeatOperator[SolutionItem: UDT](stepFunction: DataStream[SolutionItem] =
       contract.setNextPartialSolution(output.getContract)
       contract.setNumberOfIterations(n)
 
-      applyHints(contract)
       contract
     }
   }
@@ -57,10 +58,10 @@ class IterateOperator[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStrea
 
     override def createContract = {
 
-      val outer = this
-
       val contract = new BulkIteration with Iterate4sContract[SolutionItem] {
         override val udf = new UDF0[SolutionItem]
+        
+        override def persistHints() = applyHints(this)
       }
 
       val solutionInput = new DataStream[SolutionItem] {
@@ -74,7 +75,6 @@ class IterateOperator[SolutionItem: UDT, DeltaItem: UDT](stepFunction: DataStrea
 
       if (term != null) contract.setTerminationCriterion(term.getContract)
 
-      applyHints(contract)
       contract
     }
   }
@@ -92,7 +92,9 @@ class WorksetIterateOperator[SolutionItem: UDT, WorksetItem: UDT](stepFunction: 
 
       val contract = new WorksetIteration(keyPositions, keyTypes) with WorksetIterate4sContract[SolutionKey, SolutionItem, WorksetItem] {
         override val key = s0.keySelector.copy()
-        override val udf = new UDF0[SolutionItem]
+        override val udf = new UDF0[SolutionItem]     
+        
+        override def persistHints() = applyHints(this)
       }
 
       val solutionInput = new DataStream[SolutionItem] {
@@ -110,7 +112,6 @@ class WorksetIterateOperator[SolutionItem: UDT, WorksetItem: UDT](stepFunction: 
       contract.setSolutionSetDelta(delta.getContract)
       contract.setNextWorkset(nextWorkset.getContract)
 
-      applyHints(contract)
       contract
     }
   }

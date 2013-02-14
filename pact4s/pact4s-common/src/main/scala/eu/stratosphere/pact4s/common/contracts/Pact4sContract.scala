@@ -33,28 +33,31 @@ trait Pact4sContract[Out] { this: Contract =>
 
   def getUDF: UDF[Out]
   def getKeys: Seq[KeySelector[_]] = Seq()
+  
+  def persistHints(): Unit
 
-  def persistConfiguration(optimizerNode : Option[OptimizerNode]): Unit = {
-
-    def setKeys(getKeyColumnNumbers: Int => Array[Int]): Unit = {
-      for ((key, inputNum) <- getKeys.zipWithIndex) {
-        val source = key.selectedFields.toSerializerIndexArray
-        val target = getKeyColumnNumbers(inputNum)
-        assert(source.length == target.length, "Attempt to write " + source.length + " key indexes to an array of size " + target.length)
-        
-        System.arraycopy(source, 0, target, 0, source.length)
-      }
-    }
+  def persistConfiguration(optimizerNode: Option[OptimizerNode]): Unit = {
 
     this match {
-      case contract: AbstractPact[_]  => {
-        val getKeyArray = optimizerNode map { node => node.getRemappedKeys _ } getOrElse { contract.getKeyColumns _ } 
-        setKeys(getKeyArray)
+      
+      case contract: AbstractPact[_] => {
+        
+        for ((key, inputNum) <- getKeys.zipWithIndex) {
+          
+          val source = key.selectedFields.toSerializerIndexArray
+          val target = optimizerNode map { _.getRemappedKeys(inputNum) } getOrElse { contract.getKeyColumns(inputNum) }
+
+          assert(source.length == target.length, "Attempt to write " + source.length + " key indexes to an array of size " + target.length)
+          System.arraycopy(source, 0, target, 0, source.length)
+        }
       }
-      case _ if getKeys.size > 0      => throw new UnsupportedOperationException("Attempted to set keys on a contract that doesn't support them")
-      case _                          =>
+      
+      case _ if getKeys.size > 0 => throw new UnsupportedOperationException("Attempted to set keys on a contract that doesn't support them")
+      
+      case _ =>
     }
 
+    this.persistHints()
     this.persistConfiguration()
   }
 
@@ -118,8 +121,8 @@ object NoOp4sContract {
   def unapply(contract: Contract): Option[Seq[Contract]] = contract match {
     case _: NoOp4sContract[_] => contract match {
       case c: SingleInputContract[_] => Some(c.getInputs())
-      case c: DualInputContract[_]   => Some(c.getFirstInputs() ++ c.getSecondInputs())
-      case _                         => Some(Seq())
+      case c: DualInputContract[_] => Some(c.getFirstInputs() ++ c.getSecondInputs())
+      case _ => Some(Seq())
     }
     case _ => None
   }

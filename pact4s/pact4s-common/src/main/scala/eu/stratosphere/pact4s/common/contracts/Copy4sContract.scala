@@ -23,17 +23,15 @@ trait Copy4sContract[In] extends Pact4sOneInputContract[In, In] { this: MapContr
 
   override def annotations = Seq(
     Annotations.getConstantFields(udf.getForwardIndexArray),
-    Annotations.getOutCardBounds(Annotations.CARD_INPUTCARD, Annotations.CARD_INPUTCARD)
-  )
+    Annotations.getOutCardBounds(Annotations.CARD_INPUTCARD, Annotations.CARD_INPUTCARD))
 
   override def persistConfiguration() = {
 
     val stubParameters = CopyParameters(
       udf.inputFields.toSerializerIndexArray,
       udf.outputFields.toSerializerIndexArray,
-      udf.getDiscardIndexArray.filter(_ < udf.getOutputLength), 
-      udf.getOutputLength
-    )
+      udf.getDiscardIndexArray.filter(_ < udf.getOutputLength),
+      udf.getOutputLength)
     stubParameters.persist(this)
   }
 }
@@ -44,11 +42,13 @@ object Copy4sContract {
 
   def apply[In](source: Pact4sContract[In]): Copy4sContract[In] = {
     new MapContract(Copy4sContract.newBuilder.input(source)) with Copy4sContract[In] {
-      
+
       override val udf = new UDF1[In, In]()(source.getUDF.outputUDT, source.getUDF.outputUDT)
-      
-      this.setName("Copy " + source.getName())
-      this.getCompilerHints().setAvgBytesPerRecord(source.getCompilerHints().getAvgBytesPerRecord())
+
+      override def persistHints() = {
+        this.setName("Copy " + source.getName())
+        this.getCompilerHints().setAvgBytesPerRecord(source.getCompilerHints().getAvgBytesPerRecord())
+      }
     }
   }
 

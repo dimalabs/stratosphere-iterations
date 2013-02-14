@@ -42,14 +42,13 @@ class MapOperator[In: UDT](input: DataStream[In]) extends Serializable {
 
       val builder = Map4sContract.newBuilderFor(mapFunction).input(input.getContract)
 
-      val contract = new MapContract(builder) with Map4sContract[In, Out] {
+      new MapContract(builder) with Map4sContract[In, Out] {
 
         override val udf = new UDF1[In, Out]
         override val userCode = mapFunction
+        
+        override def persistHints() = applyHints(this)
       }
-
-      applyHints(contract)
-      contract
     }
   }
 }
