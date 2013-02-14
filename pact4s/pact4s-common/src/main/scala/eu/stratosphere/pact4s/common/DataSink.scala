@@ -141,12 +141,15 @@ case class RecordDataSinkFormat[In: UDT](val recordDelimeter: Option[String] = N
 
   override def persistConfiguration(config: Configuration) {
 
-    val fields = udf.inputUDT.fieldTypes
+    val fields = udf.inputFields.filter(_.isUsed)
 
     config.setInteger(RecordOutputFormat.NUM_FIELDS_PARAMETER, fields.length)
 
-    for (fieldNum <- 0 until fields.length)
-      config.setClass(RecordOutputFormat.FIELD_TYPE_PARAMETER_PREFIX + fieldNum, fields(fieldNum))
+    for ((field, i) <- fields.zipWithIndex) {
+      val tpe = udf.inputUDT.fieldTypes(field.localPos)
+      config.setClass(RecordOutputFormat.FIELD_TYPE_PARAMETER_PREFIX + i, tpe)
+      config.setInteger(RecordOutputFormat.RECORD_POSITION_PARAMETER_PREFIX + i, field.globalPos.getValue)
+    }
 
     if (recordDelimeter.isDefined)
       config.setString(RecordOutputFormat.RECORD_DELIMITER_PARAMETER, recordDelimeter.get)

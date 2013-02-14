@@ -170,6 +170,8 @@ case class TextDataSourceFormat(val charSetName: Option[String] = None) extends 
   override def persistConfiguration(config: Configuration) {
     if (charSetName.isDefined)
       config.setString(TextInputFormat.CHARSET_NAME, charSetName.get)
+      
+    config.setInteger(TextInputFormat.FIELD_POS, udf.outputFields(0).globalPos.getValue)
   }
 }
 
