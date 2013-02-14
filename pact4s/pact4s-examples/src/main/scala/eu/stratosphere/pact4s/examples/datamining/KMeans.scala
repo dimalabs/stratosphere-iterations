@@ -18,9 +18,9 @@ import eu.stratosphere.pact4s.common.operators._
 
 class KMeansDescriptor extends PactDescriptor[KMeans] {
   override val name = "KMeans Iteration"
-  override val parameters = "[-numIterations <int:2>] -dataPoints <file> -clusterCenters <file> -output <file>"
+  override val parameters = "[-numIterations <int:2>] -dataPoints <file> -initialCenters <file> -output <file>"
 
-  override def createInstance(args: Pact4sArgs) = new KMeans(args("numIterations", "2").toInt, args("dataPoints"), args("clusterCenters"), args("output"))
+  override def createInstance(args: Pact4sArgs) = new KMeans(args("numIterations", "2").toInt, args("dataPoints"), args("initialCenters"), args("output"))
 }
 
 class KMeans(numIterations: Int, dataPointInput: String, clusterInput: String, clusterOutput: String) extends PactProgram {
