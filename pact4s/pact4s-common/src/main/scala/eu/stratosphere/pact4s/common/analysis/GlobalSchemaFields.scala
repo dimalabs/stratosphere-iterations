@@ -13,9 +13,6 @@
 
 package eu.stratosphere.pact4s.common.analysis
 
-import eu.stratosphere.pact.common.`type`.{ Value => PactValue }
-import eu.stratosphere.pact.common.util.{ FieldSet => PactFieldSet }
-
 abstract sealed class Field extends Serializable {
   val localPos: Int
   val globalPos: GlobalPos
@@ -42,7 +39,6 @@ class FieldSet[+FieldType <: Field] private (private val fields: Seq[FieldType])
     new FieldSet[FieldType](selection map apply) {
       override def setGlobalized() = outer.setGlobalized()
       override def isGlobalized = outer.isGlobalized
-      override val pactFieldSet = outer.pactFieldSet
     }
   }
 
@@ -52,17 +48,6 @@ class FieldSet[+FieldType <: Field] private (private val fields: Seq[FieldType])
   } toArray
 
   def toIndexSet: Set[Int] = fields.filter(_.isUsed).map(_.globalPos.getValue).toSet
-
-  protected val pactFieldSet = new PactFieldSet with Serializable {
-    import scala.collection.JavaConversions._
-
-    private def getIndexes = toIndexSet.toSeq.map(i => i: java.lang.Integer)
-
-    override def iterator() = getIndexes.toIterator
-    override def size() = getIndexes.length
-    override def add(value: java.lang.Integer): Unit = throw new UnsupportedOperationException
-    override def clone(): PactFieldSet = this
-  }
 }
 
 object FieldSet {
@@ -74,8 +59,6 @@ object FieldSet {
   def newOutputSet[T: UDT](): FieldSet[OutputField] = newOutputSet(implicitly[UDT[T]].numFields)
 
   implicit def toSeq[FieldType <: Field](fieldSet: FieldSet[FieldType]): Seq[FieldType] = fieldSet.fields
-
-  implicit def toPactFieldSet(fieldSet: FieldSet[_]): PactFieldSet = fieldSet.pactFieldSet
 }
 
 class GlobalPos extends Serializable {

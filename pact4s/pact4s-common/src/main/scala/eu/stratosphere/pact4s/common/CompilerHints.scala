@@ -20,7 +20,7 @@ import eu.stratosphere.pact4s.common.contracts._
 
 import eu.stratosphere.pact.common.contract.DataDistribution
 import eu.stratosphere.pact.common.`type`.PactRecord
-import eu.stratosphere.pact.common.util.FieldSet
+import eu.stratosphere.pact.common.util.{ FieldSet => PactFieldSet }
 import eu.stratosphere.pact.generic.contract.Contract
 
 trait Hintable extends Serializable {
@@ -47,7 +47,32 @@ object Hintable {
 
 trait OutputHintable[Out] extends Hintable {
 
-  private case class KeyCardinality(key: KeySelector[_ <: Function1[Out, _]], isUnique: Boolean, distinctCount: Option[Long], avgNumRecords: Option[Float])
+  private case class KeyCardinality(key: KeySelector[_ <: Function1[Out, _]], isUnique: Boolean, distinctCount: Option[Long], avgNumRecords: Option[Float]) {
+
+    private class RefreshableFieldSet extends PactFieldSet {
+      def refresh(indexes: Set[Int]) = {
+        this.collection.clear()
+        for (index <- indexes)
+          this.add(index)
+      }
+    }
+
+    @transient private var pactFieldSets = collection.mutable.Map[Pact4sContract[_], RefreshableFieldSet]()
+
+    def getPactFieldSet(contract: Pact4sContract[_]): PactFieldSet = {
+
+      if (pactFieldSets == null)
+        pactFieldSets = collection.mutable.Map[Pact4sContract[_], RefreshableFieldSet]()
+      
+      val keyCopy = key.copy
+      contract.getUDF.attachOutputsToInputs(keyCopy.inputFields)
+      val keySet = keyCopy.selectedFields.toIndexSet
+
+      val fieldSet = pactFieldSets.getOrElseUpdate(contract, new RefreshableFieldSet())
+      fieldSet.refresh(keySet)
+      fieldSet
+    }
+  }
 
   private var _degreeOfParallelism: Option[Int] = None
   private var _avgBytesPerRecord: Option[Float] = None
@@ -88,37 +113,25 @@ trait OutputHintable[Out] extends Hintable {
     _avgBytesPerRecord.foreach(hints.setAvgBytesPerRecord)
     _avgRecordsEmittedPerCall.foreach(hints.setAvgRecordsEmittedPerStubCall)
 
-    hints.setUniqueField(null: java.util.Set[FieldSet])
-    hints.getDistinctCounts().clear()
-    hints.getAvgNumRecordsPerDistinctFields().clear()
-
-    val udf = contract.getUDF.asInstanceOf[UDF[Out]]
+    if (hints.getUniqueFields != null)
+      hints.getUniqueFields.clear()
+    hints.getDistinctCounts.clear()
+    hints.getAvgNumRecordsPerDistinctFields.clear()
 
     _cardinalities.foreach { card =>
 
-      val keyFieldSet: FieldSet = {
-        val copy = card.key.copy()
-        udf.attachOutputsToInputs(copy.inputFields)
-        copy.selectedFields
+      val fieldSet = card.getPactFieldSet(contract)
+
+      if (card.isUnique) {
+        val fieldSets = hints.getUniqueFields
+        if (fieldSets == null)
+          hints.setUniqueField(fieldSet)
+        else
+          fieldSets.add(fieldSet)
       }
 
-      card match {
-
-        case card @ KeyCardinality(_, true, distinctCount, None) => {
-          val fieldSets = hints.getUniqueFields()
-          if (fieldSets == null)
-            hints.setUniqueField(keyFieldSet)
-          else
-            fieldSets.add(keyFieldSet)
-
-          distinctCount.foreach(hints.setDistinctCount(keyFieldSet, _))
-        }
-
-        case card @ KeyCardinality(_, false, distinctCount, avgNumRecords) => {
-          distinctCount.foreach(hints.setDistinctCount(keyFieldSet, _))
-          avgNumRecords.foreach(hints.setAvgNumRecordsPerDistinctFields(keyFieldSet, _))
-        }
-      }
+      card.distinctCount.foreach(hints.setDistinctCount(fieldSet, _))
+      card.avgNumRecords.foreach(hints.setAvgNumRecordsPerDistinctFields(fieldSet, _))
     }
   }
 }
@@ -156,7 +169,7 @@ trait InputHintable[In, Out] extends Serializable {
           // selected fields are unread
           case false => fieldSet
           // selected fields are read => all other fields are unread
-          case true  => unread.fields.inputFields.map(_.localPos).toSet.diff(fieldSet)
+          case true => unread.fields.inputFields.map(_.localPos).toSet.diff(fieldSet)
         }
 
         unreadFields.foreach(markUnread(_))
