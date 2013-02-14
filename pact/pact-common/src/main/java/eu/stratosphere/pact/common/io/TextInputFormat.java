@@ -37,6 +37,8 @@ public class TextInputFormat extends DelimitedInputFormat
 {
 	public static final String CHARSET_NAME = "textformat.charset";
 	
+	public static final String FIELD_POS = "textformat.pos";
+	
 	public static final String DEFAULT_CHARSET_NAME = "UTF-8";
 	
 	private static final Log LOG = LogFactory.getLog(TextInputFormat.class);
@@ -49,6 +51,8 @@ public class TextInputFormat extends DelimitedInputFormat
 	protected ByteBuffer byteWrapper;
 	
 	protected boolean ascii;
+	
+	protected int pos;
 	
 	
 	// --------------------------------------------------------------------------------------------
@@ -73,6 +77,9 @@ public class TextInputFormat extends DelimitedInputFormat
 			this.decoder = Charset.forName(charsetName).newDecoder();
 			this.byteWrapper = ByteBuffer.allocate(1);
 		}
+		
+		// get the field position to write in the record
+		this.pos = parameters.getInteger(FIELD_POS, 0);
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -110,7 +117,7 @@ public class TextInputFormat extends DelimitedInputFormat
 		}
 		
 		target.clear();
-		target.addField(str);
+		target.setField(this.pos, str);
 		return true;
 	}
 }
