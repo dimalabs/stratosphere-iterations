@@ -104,16 +104,23 @@ trait UDTDescriptors { this: Pact4sPlugin =>
 
   case class OpaqueDescriptor(id: Int, tpe: Type, ref: () => Tree) extends UDTDescriptor {
 
-    private val refString = ref().toString
+    // Use tree's string representation along with the set of symbols it contains 
+    // to approximate structural hashing and equality, since Tree doesn't provide 
+    // an implementation of these methods.
+    private val refSignature = {
+      val tree = ref()
+      val str = tree.toString
+      val syms = tree.filter(_.hasSymbolWhich(_ ne NoSymbol)).map(_.symbol).toSet
+      
+      (str, syms)
+    }
 
     override val isPrimitiveProduct = true
     override def flatten = Seq(this)
 
-    // Use string representation of Trees to approximate structural hashing and
-    // equality, since Tree doesn't provide an implementation of these methods.
-    override def hashCode() = (id, tpe, refString).hashCode()
+    override def hashCode() = (id, tpe, refSignature).hashCode()
     override def equals(that: Any) = that match {
-      case that @ OpaqueDescriptor(thatId, thatTpe, _) => (id, tpe, refString).equals((thatId, thatTpe, that.refString))
+      case that @ OpaqueDescriptor(thatId, thatTpe, _) => (id, tpe, refSignature).equals((thatId, thatTpe, that.refSignature))
       case _ => false
     }
   }
