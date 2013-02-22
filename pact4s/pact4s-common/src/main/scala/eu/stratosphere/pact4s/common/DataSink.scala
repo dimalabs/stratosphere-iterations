@@ -133,7 +133,7 @@ object DelimetedDataSinkFormat {
   private def maybeDelim(delim: String) = if (delim == null) None else Some(delim)
 }
 
-case class RecordDataSinkFormat[In: UDT](val recordDelimeter: Option[String] = None, val fieldDelimeter: Option[String] = None, val lenient: Option[Boolean]) extends DataSinkFormat[In] {
+case class RecordDataSinkFormat[In: UDT](val recordDelimeter: Option[String] = None, val fieldDelimeter: Option[String] = None, val lenient: Option[Boolean] = None) extends DataSinkFormat[In] {
 
   def this(recordDelimeter: String, fieldDelimeter: String, lenient: Boolean) = this(Some(recordDelimeter), Some(fieldDelimeter), Some(lenient))
 

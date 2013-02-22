@@ -47,7 +47,8 @@ object Copy4sContract {
 
       override def persistHints() = {
         this.setName("Copy " + source.getName())
-        this.getCompilerHints().setAvgBytesPerRecord(source.getCompilerHints().getAvgBytesPerRecord())
+        if (source.getCompilerHints().getAvgBytesPerRecord() >= 0)
+          this.getCompilerHints().setAvgBytesPerRecord(source.getCompilerHints().getAvgBytesPerRecord())
       }
     }
   }

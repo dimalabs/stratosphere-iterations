@@ -152,7 +152,7 @@ trait GlobalSchemaGenerator {
           val input = inputs.get(idx)
           val input4s = proxies.getOrElse(input, input.asInstanceOf[Pact4sContract[_]])
 
-          if (input4s.getUDF.outputFields.isGlobalized) {
+          if (input4s.getUDF.outputFields.isGlobalized || input4s.getUDF.outputFields.exists(_.globalPos.isReference)) {
             inputs.set(idx, Copy4sContract(input4s))
           }
         }
